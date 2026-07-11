@@ -9,3 +9,4 @@ psutil
 pypdf
 python-docx
 openpyxl
+pillow
