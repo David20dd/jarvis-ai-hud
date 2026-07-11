@@ -14,11 +14,11 @@ import time
 import urllib.parse
 import io
 
-# IMPORTS SEGUROS CON FALLBACK
+# LIBRERÍA DE PROCESAMIENTO DE PDFS Y RENDERIZADO VISUAL
 try:
-    import pypdf
+    import fitz  # PyMuPDF
 except ImportError:
-    pypdf = None
+    fitz = None
 
 try:
     import docx
@@ -59,7 +59,8 @@ PROMPT_SISTEMA = {
         "1. Responde con elegancia, precisión brillante y naturalidad. Dirígete al usuario como 'señor' o 'Cristian'.\n"
         "2. Si el usuario te pide abrir un sitio web o reproducir/buscar contenido (como películas en Netflix, videos en YouTube o música en Spotify), "
         "invoca INMEDIATAMENTE la herramienta 'abrir_sitio_web' pasando la plataforma en 'url' y el título exacto en 'busqueda'. Confirma brevemente que estás desplegando el enlace.\n"
-        "3. REGLA DE HERRAMIENTAS: Una vez recibida la confirmación de la herramienta, genera tu respuesta final sin bucles ni demoras."
+        "3. Tienes acceso completo a documentos y tareas. Si recibes ejercicios de matemáticas o álgebra, resuélvelos paso a paso con máxima claridad y precisión.\n"
+        "4. REGLA DE HERRAMIENTAS: Una vez recibida la confirmación de la herramienta, genera tu respuesta final sin bucles ni demoras."
     )
 }
 
@@ -80,7 +81,7 @@ def obtener_historial_sesion(session_id: str):
     return SESIONES_MEMORIA[session_id]["messages"]
 
 
-# --- PROCESADOR DE ARCHIVOS MULTIFORMATO SEGURO ---
+# --- PROCESADOR MULTIMODAL CON CONVERSIÓN VISUAL DE PDFS ---
 def procesar_archivo_adjunto(file_b64: str = None, file_name: str = None) -> tuple[str, str]:
     if not file_b64:
         return 'none', ""
@@ -95,11 +96,11 @@ def procesar_archivo_adjunto(file_b64: str = None, file_name: str = None) -> tup
         file_bytes = base64.b64decode(encoded)
         ext = os.path.splitext(file_name.lower())[1] if file_name else ""
 
-        # 1. IMÁGENES
+        # 1. IMÁGENES DIRECTAS
         if ext in ['.jpg', '.jpeg', '.png', '.webp', '.gif'] or 'image/' in header:
             return 'image', file_b64
 
-        # 2. AUDIOS
+        # 2. AUDIOS CON GROQ WHISPER
         if ext in ['.mp3', '.wav', '.m4a', '.ogg', '.flac', '.webm'] or 'audio/' in header:
             try:
                 buffer = io.BytesIO(file_bytes)
@@ -113,45 +114,47 @@ def procesar_archivo_adjunto(file_b64: str = None, file_name: str = None) -> tup
             except Exception as e:
                 return 'text_context', f"\n\n[AVISO AUDIO '{file_name}']: {str(e)}\n"
 
-        # 3. PDF
-        if (ext == '.pdf' or 'application/pdf' in header) and pypdf:
+        # 3. DOCUMENTOS PDF (LECTURA DE TEXTO + RENDERIZADO VISUAL PARA ESCANEOS)
+        if (ext == '.pdf' or 'application/pdf' in header) and fitz:
             try:
-                reader = pypdf.PdfReader(io.BytesIO(file_bytes))
-                texto = ""
-                for i, page in enumerate(reader.pages[:10]):
-                    t = page.extract_text()
-                    if t: texto += f"\n--- Página {i+1} ---\n" + t
-                
-                if not texto.strip():
-                    for page in reader.pages[:3]:
-                        if hasattr(page, 'images') and len(page.images) > 0:
-                            img_obj = page.images[0]
-                            img_b64 = base64.b64encode(img_obj.data).decode('utf-8')
-                            mime = "image/jpeg" if img_obj.name.endswith(".jpg") else "image/png"
-                            return 'image', f"data:{mime};base64,{img_b64}"
+                doc = fitz.open(stream=file_bytes, filetype="pdf")
+                texto_digital = ""
 
-                if not texto.strip():
-                    return 'text_context', f"\n\n[AVISO PDF '{file_name}']: PDF sin texto digital.\n"
+                for page_num in range(min(len(doc), 10)):
+                    p = doc[page_num]
+                    t = p.get_text()
+                    if t.strip():
+                        texto_digital += f"\n--- Página {page_num+1} ---\n" + t
 
-                return 'text_context', f"\n\n[CONTENIDO PDF '{file_name}']:\n{texto[:12000]}\n"
+                # SI ES UN PDF ESCANEADO / HOJA A MANO (SIN TEXTO DIGITAL)
+                if not texto_digital.strip() and len(doc) > 0:
+                    print(f"👁️ [PyMuPDF]: PDF escaneado detectado en '{file_name}'. Renderizando a HD...")
+                    page = doc[0]  # Primera página
+                    pix = page.get_pixmap(dpi=150)
+                    img_bytes = pix.tobytes("jpeg")
+                    img_b64 = base64.b64encode(img_bytes).decode('utf-8')
+                    return 'image', f"data:image/jpeg;base64,{img_b64}"
+
+                return 'text_context', f"\n\n[CONTENIDO DEL DOCUMENTO PDF '{file_name}']:\n{texto_digital[:15000]}\n"
             except Exception as e:
-                return 'text_context', f"\n\n[AVISO PDF '{file_name}']: {str(e)}\n"
+                print(f"⚠️ Error al procesar PDF con PyMuPDF: {e}")
+                return 'text_context', f"\n\n[AVISO PDF '{file_name}']: Error de lectura en el documento.\n"
 
-        # 4. WORD
+        # 4. DOCUMENTOS WORD (.docx)
         if ext in ['.docx', '.doc'] and docx:
             try:
                 doc = docx.Document(io.BytesIO(file_bytes))
                 texto = "\n".join([p.text for p in doc.paragraphs if p.text])
-                return 'text_context', f"\n\n[CONTENIDO WORD '{file_name}']:\n{texto[:12000]}\n"
+                return 'text_context', f"\n\n[CONTENIDO WORD '{file_name}']:\n{texto[:15000]}\n"
             except Exception as e:
                 return 'text_context', f"\n\n[AVISO WORD '{file_name}']: {str(e)}\n"
 
-        # 5. EXCEL
+        # 5. HOJAS DE CÁLCULO EXCEL Y CSV
         if ext in ['.xlsx', '.xls', '.csv']:
             try:
                 if ext == '.csv':
                     decoded = file_bytes.decode('utf-8', errors='ignore')
-                    return 'text_context', f"\n\n[CONTENIDO CSV '{file_name}']:\n{decoded[:12000]}\n"
+                    return 'text_context', f"\n\n[CONTENIDO CSV '{file_name}']:\n{decoded[:15000]}\n"
                 elif openpyxl:
                     wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
                     res = []
@@ -161,14 +164,14 @@ def procesar_archivo_adjunto(file_b64: str = None, file_name: str = None) -> tup
                         for row in ws.iter_rows(values_only=True):
                             if any(row):
                                 res.append(" | ".join([str(v) if v is not None else "" for v in row]))
-                    return 'text_context', f"\n\n[CONTENIDO EXCEL '{file_name}']:\n" + "\n".join(res)[:12000] + "\n"
+                    return 'text_context', f"\n\n[CONTENIDO EXCEL '{file_name}']:\n" + "\n".join(res)[:15000] + "\n"
             except Exception as e:
                 return 'text_context', f"\n\n[AVISO EXCEL '{file_name}']: {str(e)}\n"
 
-        # 6. TEXTO PLANO
+        # 6. TEXTO PLANO / CÓDIGO FUENTE
         texto_decoded = file_bytes.decode('utf-8', errors='ignore')
         lang = ext.replace('.', '') if ext else 'txt'
-        return 'text_context', f"\n\n[CONTENIDO ARCHIVO '{file_name}']:\n```{lang}\n{texto_decoded[:12000]}\n```\n"
+        return 'text_context', f"\n\n[CONTENIDO ARCHIVO '{file_name}']:\n```{lang}\n{texto_decoded[:15000]}\n```\n"
 
     except Exception as err:
         print(f"⚠️ Error procesando adjunto: {err}")
@@ -364,7 +367,6 @@ herramientas = [
     {"type": "function", "function": {"name": "obtener_clima_en_vivo", "description": "Clima.", "parameters": {"type": "object", "properties": {"ciudad": {"type": "string"}}, "required": ["ciudad"]}}}
 ]
 
-# MODELO FLEXIBLE CON VALORES DEFAULT
 class ChatInput(BaseModel):
     message: str = ""
     session_id: str = "default_session"
@@ -391,10 +393,12 @@ async def consultar_jarvis(data: ChatInput):
             historial_usuario = SESIONES_MEMORIA[sid]["messages"]
 
         categoria_archivo, contenido_o_b64 = procesar_archivo_adjunto(data.file_b64, data.file_name)
-        prompt_usuario = data.message if data.message else "Señor, he recibido un archivo."
+        prompt_usuario = data.message if data.message else "Señor, he recibido un archivo para analizar."
 
+        # MODO VISIÓN ARTIFICIAL (IMÁGENES O PDFS ESCANEADOS)
         if categoria_archivo == 'image':
             historial_usuario.append({"role": "user", "content": prompt_usuario})
+            print("👁️ [Jarvis Vision]: Ejecutando análisis visual...")
             response = ejecutar_consulta_vision(historial_usuario, contenido_o_b64)
             respuesta_final = response.choices[0].message.content
             
@@ -402,6 +406,7 @@ async def consultar_jarvis(data: ChatInput):
             audio_b64 = generar_audio_elevenlabs(respuesta_final)
             return {"status": "success", "reply": respuesta_final, "audio_b64": audio_b64, "action_url": None}
 
+        # MODO TEXTO DIGITAL (PDFS DIGITALES, WORD, EXCEL, CÓDIGO)
         if categoria_archivo == 'text_context':
             prompt_usuario += contenido_o_b64
 
@@ -480,7 +485,7 @@ async def consultar_jarvis(data: ChatInput):
         print(f"🚨 Excepción en el servidor: {str(e)}")
         return {
             "status": "success", 
-            "reply": "Sistemas reconectados, señor. Experimenté un microcorte pero estoy a su disposición.", 
+            "reply": "Sistemas reconectados, señor. Ya me encuentro operativo.", 
             "audio_b64": None,
             "action_url": None
         }
