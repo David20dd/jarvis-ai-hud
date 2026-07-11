@@ -18,7 +18,7 @@
     </script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 
-    <!-- 📄 MOTOR CLIENT-SIDE RENDERER PARA PDFS (PDF.JS DE MOZILLA) -->
+    <!-- 📄 MOTOR CLIENT-SIDE MULTIPÁGINA PARA PDFS (PDF.JS DE MOZILLA) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 
     <style>
@@ -140,7 +140,6 @@
         .user-message { align-self: flex-end; background: rgba(79, 172, 254, 0.15); border: 1px solid rgba(79, 172, 254, 0.4); color: #e6f7ff; border-bottom-right-radius: 2px; }
         .jarvis-message { align-self: flex-start; background: rgba(0, 242, 254, 0.08); border: 1px solid var(--stark-border); color: #d1f7ff; border-bottom-left-radius: 2px; }
 
-        /* FÓRMULAS MATEMÁTICAS VECTORIALES */
         .MathJax { color: #00ff88 !important; font-size: 1.05rem !important; }
         .mjx-chtml { margin: 8px 0 !important; }
 
@@ -169,7 +168,7 @@
         .preview-info { flex: 1; font-size: 0.8rem; color: var(--stark-cyan); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .preview-close { background: transparent; border: none; color: var(--stark-red); font-size: 1.2rem; cursor: pointer; font-weight: bold; padding: 0 8px; }
 
-        .chat-img-thumb { max-width: 100%; max-height: 220px; border-radius: 6px; margin-bottom: 8px; border: 1px solid var(--stark-cyan); box-shadow: 0 0 12px rgba(0, 242, 254, 0.2); display: block; }
+        .chat-img-thumb { max-width: 100%; max-height: 250px; border-radius: 6px; margin-bottom: 8px; border: 1px solid var(--stark-cyan); box-shadow: 0 0 12px rgba(0, 242, 254, 0.2); display: block; object-fit: contain; }
 
         .file-badge-chat {
             display: inline-block; background: rgba(0, 242, 254, 0.15); border: 1px solid var(--stark-cyan);
@@ -208,7 +207,7 @@
         </div>
 
         <div class="chat-box" id="chatBox">
-            <div class="message jarvis-message">Sistemas en línea, señor Cristian. Motor de Visión PDF.js y Renderizado Matemático LaTeX activos. ¿En qué le puedo asistir hoy?</div>
+            <div class="message jarvis-message">Sistemas en línea, señor Cristian. Escáner multipágina de documentos activado. ¿En qué puedo asistirlo hoy?</div>
         </div>
 
         <div class="preview-bar" id="previewBar">
@@ -314,7 +313,7 @@
             if (estado === 'error') sysStatus.style.color = "var(--stark-red)";
         }
 
-        /* 📄 RENDERIZADO VISUAL INSTANTÁNEO DE PDFS EN CLIENTE CON PDF.JS */
+        /* 📄 ENSAMBLADOR MULTIPÁGINA PARA PDFS */
         async function procesarArchivoSeleccionado(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -322,39 +321,58 @@
             currentFileName = file.name;
             const ext = file.name.split('.').pop().toLowerCase();
 
-            // CASO A: SI ES UN PDF -> RENDERIZAR PÁGINA A IMAGEN HD EN CANVAS
             if (ext === 'pdf' || file.type === 'application/pdf') {
-                setEstado('processing', 'ESCANEANDO PDF...');
+                setEstado('processing', 'PROCESANDO PDF MULTIPÁGINA...');
                 try {
                     const arrayBuffer = await file.arrayBuffer();
                     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
                     
-                    if (pdf.numPages > 0) {
-                        const page = await pdf.getPage(1);
-                        const viewport = page.getViewport({ scale: 2.0 });
+                    // Procesar hasta 4 páginas del documento
+                    const numPaginas = Math.min(pdf.numPages, 4);
+                    const pageCanvases = [];
+                    let totalWidth = 0;
+                    let totalHeight = 0;
+
+                    for (let i = 1; i <= numPaginas; i++) {
+                        const page = await pdf.getPage(i);
+                        const viewport = page.getViewport({ scale: 1.2 });
                         const canvas = document.createElement('canvas');
                         const ctx = canvas.getContext('2d');
-                        canvas.height = viewport.height;
                         canvas.width = viewport.width;
-
+                        canvas.height = viewport.height;
                         await page.render({ canvasContext: ctx, viewport: viewport }).promise;
 
-                        currentFileB64 = canvas.toDataURL('image/jpeg', 0.85);
-                        isImage = true;
-
-                        previewIcon.innerHTML = `<img src="${currentFileB64}" style="width:100%;height:100%;object-fit:cover;border-radius:3px;">`;
-                        previewText.innerText = `PDF VISUAL: ${file.name.toUpperCase()}`;
-                        previewBar.classList.add("active");
-                        setEstado('ready', 'ONLINE');
-                        playSFX("mic");
-                        return;
+                        pageCanvases.push(canvas);
+                        totalWidth = Math.max(totalWidth, viewport.width);
+                        totalHeight += viewport.height;
                     }
+
+                    // Canvas unificado vertical
+                    const combinedCanvas = document.createElement('canvas');
+                    combinedCanvas.width = totalWidth;
+                    combinedCanvas.height = totalHeight;
+                    const combinedCtx = combinedCanvas.getContext('2d');
+
+                    let currentY = 0;
+                    for (const c of pageCanvases) {
+                        combinedCtx.drawImage(c, 0, currentY);
+                        currentY += c.height;
+                    }
+
+                    currentFileB64 = combinedCanvas.toDataURL('image/jpeg', 0.75);
+                    isImage = true;
+
+                    previewIcon.innerHTML = `<img src="${currentFileB64}" style="width:100%;height:100%;object-fit:cover;border-radius:3px;">`;
+                    previewText.innerText = `PDF UNIFICADO (${numPaginas} PÁG): ${file.name.toUpperCase()}`;
+                    previewBar.classList.add("active");
+                    setEstado('ready', 'ONLINE');
+                    playSFX("mic");
+                    return;
                 } catch(err) {
-                    console.warn("Aviso PDF.js client-side, usando fallback:", err);
+                    console.warn("Aviso PDF.js:", err);
                 }
             }
 
-            // CASO B: SI ES IMAGEN DIRECTA
             const reader = new FileReader();
             if (file.type.startsWith('image/')) {
                 isImage = true;
@@ -379,7 +397,6 @@
                 };
                 reader.readAsDataURL(file);
             } else {
-                // CASO C: ARCHIVOS DOCX, EXCEL, AUDIO, CÓDIGO FUENTE
                 isImage = false;
                 reader.onload = (e) => {
                     currentFileB64 = e.target.result;
