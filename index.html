@@ -40,9 +40,7 @@
             padding: 0;
         }
 
-        @media (min-width: 600px) {
-            body { padding: 15px; }
-        }
+        @media (min-width: 600px) { body { padding: 15px; } }
 
         .jarvis-container {
             width: 100%; 
@@ -60,9 +58,7 @@
             overflow: hidden;
         }
 
-        @media (min-width: 600px) {
-            .jarvis-container { height: 90vh; border-radius: 12px; }
-        }
+        @media (min-width: 600px) { .jarvis-container { height: 90vh; border-radius: 12px; } }
 
         .jarvis-header {
             padding: 12px 15px; 
@@ -73,9 +69,7 @@
             background: rgba(0, 0, 0, 0.5);
         }
 
-        @media (min-width: 600px) {
-            .jarvis-header { padding: 18px 25px; }
-        }
+        @media (min-width: 600px) { .jarvis-header { padding: 18px 25px; } }
 
         .header-title {
             font-size: 0.95rem; 
@@ -86,9 +80,7 @@
             gap: 10px;
         }
 
-        @media (min-width: 600px) {
-            .header-title { font-size: 1.1rem; letter-spacing: 2px; gap: 12px; }
-        }
+        @media (min-width: 600px) { .header-title { font-size: 1.1rem; letter-spacing: 2px; gap: 12px; } }
 
         .arc-reactor {
             width: 16px; 
@@ -132,6 +124,28 @@
 
         .code-block { background: #020408; border: 1px solid var(--stark-cyan); border-left: 4px solid var(--stark-cyan); border-radius: 4px; padding: 10px; margin: 8px 0; font-family: 'Consolas', monospace; color: #00ff88; overflow-x: auto; font-size: 0.82rem; }
 
+        /* BOTÓN DE ENLACE INTERACTIVO EN CHAT */
+        .hud-link-btn {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 8px 16px;
+            background: linear-gradient(135deg, rgba(0, 242, 254, 0.3), rgba(0, 255, 136, 0.3));
+            border: 1px solid var(--stark-cyan);
+            color: #ffffff;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 0.85rem;
+            letter-spacing: 1px;
+            box-shadow: 0 0 10px rgba(0, 242, 254, 0.3);
+            transition: all 0.3s ease;
+        }
+        .hud-link-btn:hover {
+            background: var(--stark-cyan);
+            color: var(--stark-dark);
+            box-shadow: 0 0 20px var(--stark-cyan);
+        }
+
         .input-panel { padding: 12px 12px; border-top: 1px solid var(--stark-border); background: rgba(0, 0, 0, 0.6); display: flex; gap: 8px; }
         @media (min-width: 600px) { .input-panel { padding: 18px 25px; gap: 12px; } }
 
@@ -170,7 +184,6 @@
         const sysStatus = document.getElementById("sys-status");
         const reactor = document.getElementById("reactor");
 
-        // GENERADOR Y OBTENEDOR DE SESIÓN ÚNICA POR NAVEGADOR
         function obtenerSessionId() {
             let sid = localStorage.getItem("jarvis_session_id");
             if (!sid) {
@@ -237,22 +250,36 @@
 
         if ('speechSynthesis' in window) window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
 
-        function tipoEscribir(elemento, texto, callback) {
+        function tipoEscribir(elemento, texto, actionUrl, callback) {
             let i = 0; elemento.innerText = "";
+            
             if (texto.includes("```")) {
                 elemento.innerHTML = formatearTextoConCodigo(texto);
+                if (actionUrl) agregarBotonAccion(elemento, actionUrl);
                 if (callback) callback();
                 return;
             }
+
             const timer = setInterval(() => {
                 if (i < texto.length) {
                     elemento.innerText += texto.charAt(i); i++;
                     chatBox.scrollTop = chatBox.scrollHeight;
                 } else {
                     clearInterval(timer);
+                    if (actionUrl) agregarBotonAccion(elemento, actionUrl);
                     if (callback) callback();
                 }
             }, 10);
+        }
+
+        function agregarBotonAccion(elemento, url) {
+            const btnLink = document.createElement("a");
+            btnLink.href = url;
+            btnLink.target = "_blank";
+            btnLink.className = "hud-link-btn";
+            btnLink.innerText = "🚀 ABRIR ENLACE EN PANTALLA";
+            elemento.appendChild(document.createElement("br"));
+            elemento.appendChild(btnLink);
         }
 
         function formatearTextoConCodigo(texto) {
@@ -288,7 +315,16 @@
                     msgDiv.className = "message jarvis-message";
                     chatBox.appendChild(msgDiv);
 
-                    tipoEscribir(msgDiv, data.reply, () => {
+                    // EJECUCIÓN DIRECTA DE NAVEGACIÓN EN PANTALLA
+                    if (data.action_url) {
+                        try {
+                            window.open(data.action_url, '_blank');
+                        } catch(e) {
+                            console.warn("Navegador bloqueó popup automático, usando botón táctil.");
+                        }
+                    }
+
+                    tipoEscribir(msgDiv, data.reply, data.action_url, () => {
                         if (data.audio_b64) {
                             const audio = new Audio(data.audio_b64);
                             audio.volume = 1.0;
