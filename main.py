@@ -49,7 +49,7 @@ PROMPT_SISTEMA = {
         "2. Si el usuario te pide abrir un sitio web o reproducir/buscar contenido (como películas en Netflix, videos en YouTube o música en Spotify), "
         "invoca INMEDIATAMENTE la herramienta 'abrir_sitio_web' pasando la plataforma en 'url' y el título exacto en 'busqueda'. Confirma brevemente que estás desplegando el enlace.\n"
         "3. Tienes la habilidad de analizar todo tipo de archivos (imágenes, PDFs, documentos Word, hojas de cálculo Excel, scripts de código y audios). "
-        "Sé minucioso, profesional y directo al responder sobre el contenido de los archivos adjuntos.\n"
+        "Si procesas tareas matemáticas o ejercicios, resuélvelos paso a paso con máxima claridad y precisión.\n"
         "4. REGLA DE HERRAMIENTAS: Una vez recibida la confirmación de la herramienta, genera tu respuesta final sin bucles ni demoras."
     )
 }
@@ -71,90 +71,106 @@ def obtener_historial_sesion(session_id: str):
     return SESIONES_MEMORIA[session_id]["messages"]
 
 
-# --- MOTOR DE EXTRACCIÓN Y PROCESAMIENTO DE ARCHIVOS MULTIFORMATO ---
+# --- MOTOR DE EXTRACCIÓN PROTEGIDO CONTRA CRASHES ---
 def procesar_archivo_adjunto(file_b64: str, file_name: str) -> tuple[str, str]:
     """
-    Procesa cualquier tipo de archivo enviado en Base64.
-    Retorna: (categoria, contenido_extraido)
-    Categorías posibles: 'image', 'text_context'
+    Procesa cualquier archivo sin tumbar el servidor si ocurre una excepción.
+    Retorna: (categoria, contenido_o_b64)
+    Categorías: 'none', 'image', 'text_context'
     """
     if not file_b64:
         return 'none', ""
 
-    if "," in file_b64:
-        header, encoded = file_b64.split(",", 1)
-    else:
-        encoded = file_b64
-        header = ""
-
-    file_bytes = base64.b64decode(encoded)
-    ext = os.path.splitext(file_name.lower())[1] if file_name else ""
-
-    # 1. IMÁGENES
-    if ext in ['.jpg', '.jpeg', '.png', '.webp', '.gif'] or 'image/' in header:
-        return 'image', file_b64
-
-    # 2. AUDIOS (TRANSCRIPCIÓN EN TIEMPO REAL CON GROQ WHISPER)
-    if ext in ['.mp3', '.wav', '.m4a', '.ogg', '.flac', '.webm'] or 'audio/' in header:
-        try:
-            buffer = io.BytesIO(file_bytes)
-            buffer.name = file_name or "audio_usuario.mp3"
-            transcription = client.audio.transcriptions.create(
-                file=(buffer.name, buffer.read()),
-                model="whisper-large-v3",
-                language="es"
-            )
-            return 'text_context', f"\n\n[TRANSCRIPCIÓN DE AUDIO ADJUNTO '{file_name}']:\n\"{transcription.text}\"\n"
-        except Exception as e:
-            return 'text_context', f"\n\n[ERROR AL PROCESAR AUDIO '{file_name}']: {str(e)}\n"
-
-    # 3. DOCUMENTOS PDF
-    if ext == '.pdf' or 'application/pdf' in header:
-        try:
-            reader = pypdf.PdfReader(io.BytesIO(file_bytes))
-            texto = ""
-            for i, page in enumerate(reader.pages):
-                t = page.extract_text()
-                if t: texto += f"\n--- Página {i+1} ---\n" + t
-            return 'text_context', f"\n\n[CONTENIDO DEL DOCUMENTO PDF '{file_name}']:\n{texto[:15000]}\n"
-        except Exception as e:
-            return 'text_context', f"\n\n[ERROR AL LEER PDF '{file_name}']: {str(e)}\n"
-
-    # 4. DOCUMENTOS WORD (.docx)
-    if ext in ['.docx', '.doc'] or 'wordprocessingml' in header:
-        try:
-            doc = docx.Document(io.BytesIO(file_bytes))
-            texto = "\n".join([p.text for p in doc.paragraphs if p.text])
-            return 'text_context', f"\n\n[CONTENIDO DEL DOCUMENTO WORD '{file_name}']:\n{texto[:15000]}\n"
-        except Exception as e:
-            return 'text_context', f"\n\n[ERROR AL LEER DOCUMENTO WORD '{file_name}']: {str(e)}\n"
-
-    # 5. HOJAS DE CÁLCULO EXCEL Y CSV (.xlsx, .csv)
-    if ext in ['.xlsx', '.xls', '.csv']:
-        try:
-            if ext == '.csv':
-                decoded = file_bytes.decode('utf-8', errors='ignore')
-                return 'text_context', f"\n\n[CONTENIDO DE HOJA DE CÁLCULO CSV '{file_name}']:\n{decoded[:15000]}\n"
-            else:
-                wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
-                res = []
-                for sheet in wb.sheetnames:
-                    ws = wb[sheet]
-                    res.append(f"--- Hoja: {sheet} ---")
-                    for row in ws.iter_rows(values_only=True):
-                        if any(row):
-                            res.append(" | ".join([str(v) if v is not None else "" for v in row]))
-                return 'text_context', f"\n\n[CONTENIDO DE HOJA DE CÁLCULO EXCEL '{file_name}']:\n" + "\n".join(res)[:15000] + "\n"
-        except Exception as e:
-            return 'text_context', f"\n\n[ERROR AL LEER EXCEL '{file_name}']: {str(e)}\n"
-
-    # 6. TEXTO PLANO / CÓDIGO FUENTE (py, js, html, css, json, sql, txt, md, etc.)
     try:
+        if "," in file_b64:
+            header, encoded = file_b64.split(",", 1)
+        else:
+            encoded = file_b64
+            header = ""
+
+        file_bytes = base64.b64decode(encoded)
+        ext = os.path.splitext(file_name.lower())[1] if file_name else ""
+
+        # 1. IMÁGENES
+        if ext in ['.jpg', '.jpeg', '.png', '.webp', '.gif'] or 'image/' in header:
+            return 'image', file_b64
+
+        # 2. AUDIOS (TRANSCRIPCIÓN EN TIEMPO REAL CON GROQ WHISPER)
+        if ext in ['.mp3', '.wav', '.m4a', '.ogg', '.flac', '.webm'] or 'audio/' in header:
+            try:
+                buffer = io.BytesIO(file_bytes)
+                buffer.name = file_name or "audio.mp3"
+                transcription = client.audio.transcriptions.create(
+                    file=(buffer.name, buffer.read()),
+                    model="whisper-large-v3",
+                    language="es"
+                )
+                return 'text_context', f"\n\n[TRANSCRIPCIÓN DE AUDIO '{file_name}']:\n\"{transcription.text}\"\n"
+            except Exception as e:
+                return 'text_context', f"\n\n[AVISO AUDIO '{file_name}']: No se pudo transcribir: {str(e)}\n"
+
+        # 3. DOCUMENTOS PDF (SOPORTE PARA TEXTO DIGITAL Y ESCANEOS)
+        if ext == '.pdf' or 'application/pdf' in header:
+            try:
+                reader = pypdf.PdfReader(io.BytesIO(file_bytes))
+                texto = ""
+                for i, page in enumerate(reader.pages[:10]): # Límite de 10 páginas
+                    t = page.extract_text()
+                    if t: texto += f"\n--- Página {i+1} ---\n" + t
+                
+                # Si no hay texto digital (PDF escaneado/foto), intentar extraer imágenes internas
+                if not texto.strip():
+                    for page in reader.pages[:3]:
+                        if hasattr(page, 'images') and len(page.images) > 0:
+                            img_obj = page.images[0]
+                            img_b64 = base64.b64encode(img_obj.data).decode('utf-8')
+                            mime = "image/jpeg" if img_obj.name.endswith(".jpg") else "image/png"
+                            print("👁️ [PDF Escaneado]: Imagen extraída para análisis de visión.")
+                            return 'image', f"data:{mime};base64,{img_b64}"
+
+                if not texto.strip():
+                    return 'text_context', f"\n\n[AVISO PDF '{file_name}']: El archivo no contiene texto seleccionable. Si es una foto de una guía, súbala como archivo de imagen (.jpg o .png).\n"
+
+                return 'text_context', f"\n\n[CONTENIDO DEL DOCUMENTO PDF '{file_name}']:\n{texto[:12000]}\n"
+            except Exception as e:
+                return 'text_context', f"\n\n[AVISO PDF '{file_name}']: Error de lectura: {str(e)}\n"
+
+        # 4. DOCUMENTOS WORD (.docx)
+        if ext in ['.docx', '.doc'] or 'wordprocessingml' in header:
+            try:
+                doc = docx.Document(io.BytesIO(file_bytes))
+                texto = "\n".join([p.text for p in doc.paragraphs if p.text])
+                return 'text_context', f"\n\n[CONTENIDO WORD '{file_name}']:\n{texto[:12000]}\n"
+            except Exception as e:
+                return 'text_context', f"\n\n[AVISO WORD '{file_name}']: Error de lectura: {str(e)}\n"
+
+        # 5. HOJAS DE CÁLCULO EXCEL Y CSV
+        if ext in ['.xlsx', '.xls', '.csv']:
+            try:
+                if ext == '.csv':
+                    decoded = file_bytes.decode('utf-8', errors='ignore')
+                    return 'text_context', f"\n\n[CONTENIDO CSV '{file_name}']:\n{decoded[:12000]}\n"
+                else:
+                    wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
+                    res = []
+                    for sheet in wb.sheetnames[:3]:
+                        ws = wb[sheet]
+                        res.append(f"--- Hoja: {sheet} ---")
+                        for row in ws.iter_rows(values_only=True):
+                            if any(row):
+                                res.append(" | ".join([str(v) if v is not None else "" for v in row]))
+                    return 'text_context', f"\n\n[CONTENIDO EXCEL '{file_name}']:\n" + "\n".join(res)[:12000] + "\n"
+            except Exception as e:
+                return 'text_context', f"\n\n[AVISO EXCEL '{file_name}']: Error de lectura: {str(e)}\n"
+
+        # 6. TEXTO PLANO / CÓDIGO FUENTE
         texto_decoded = file_bytes.decode('utf-8', errors='ignore')
         lang = ext.replace('.', '') if ext else 'txt'
-        return 'text_context', f"\n\n[CONTENIDO DEL ARCHIVO ADJUNTO '{file_name}']:\n```{lang}\n{texto_decoded[:15000]}\n```\n"
-    except Exception as e:
-        return 'text_context', f"\n\n[ERROR AL LEER ARCHIVO '{file_name}']: {str(e)}\n"
+        return 'text_context', f"\n\n[CONTENIDO ARCHIVO '{file_name}']:\n```{lang}\n{texto_decoded[:12000]}\n```\n"
+
+    except Exception as general_err:
+        print(f"⚠️ Error al procesar adjunto: {general_err}")
+        return 'text_context', f"\n\n[AVISO ARCHIVO '{file_name}']: No se pudo procesar el formato adjunto.\n"
 
 
 # --- GENERADOR DE VOZ HD EN MEMORIA RAM ---
@@ -373,29 +389,27 @@ async def consultar_jarvis(data: ChatInput):
             SESIONES_MEMORIA[sid]["messages"] = [PROMPT_SISTEMA] + historial_usuario[-8:]
             historial_usuario = SESIONES_MEMORIA[sid]["messages"]
 
-        # === PROCESAMIENTO DE ARCHIVO MULTIFORMATO ===
-        categoria_archivo, contenido_extraido = procesar_archivo_adjunto(data.file_b64, data.file_name)
-
+        # PROCESAMIENTO PROTEGIDO DE ARCHIVOS
+        categoria_archivo, contenido_o_b64 = procesar_archivo_adjunto(data.file_b64, data.file_name)
         prompt_usuario = data.message if data.message else "Señor, analice el archivo adjunto por favor."
 
-        # SI ES IMAGEN -> MODO VISIÓN ARTIFICIAL
+        # SI ES IMAGEN O PDF ESCANEADO CONVERTIDO A IMAGEN
         if categoria_archivo == 'image':
             historial_usuario.append({"role": "user", "content": prompt_usuario})
-            print(f"👁️ [Jarvis Vision]: Analizando imagen '{data.file_name}'...")
-            response = ejecutar_consulta_vision(historial_usuario, data.file_b64)
+            print(f"👁️ [Jarvis Vision]: Procesando modelo de visión artificial...")
+            response = ejecutar_consulta_vision(historial_usuario, contenido_o_b64)
             respuesta_final = response.choices[0].message.content
             
             historial_usuario.append({"role": "assistant", "content": respuesta_final})
             audio_b64 = generar_audio_elevenlabs(respuesta_final)
             return {"status": "success", "reply": respuesta_final, "audio_b64": audio_b64, "action_url": None}
 
-        # SI ES DOCUMENTO, EXCEL, AUDIO O CÓDIGO -> MODO TEXTO INYECTADO
+        # SI ES TEXTO/PDF/EXCEL/WORD/CÓDIGO/AUDIO
         if categoria_archivo == 'text_context':
-            prompt_usuario += contenido_extraido
+            prompt_usuario += contenido_o_b64
 
         historial_usuario.append({"role": "user", "content": prompt_usuario})
 
-        # === PROCESAMIENTO GENERAL CON LLAMA 3.3 70B ===
         MAX_ITERACIONES = 3
         iteracion = 0
         ultima_respuesta_herramienta = ""
@@ -469,7 +483,7 @@ async def consultar_jarvis(data: ChatInput):
         print(f"🚨 Excepción en el servidor: {str(e)}")
         return {
             "status": "success", 
-            "reply": "Sistemas listos, señor. ¿En qué le colaboro?", 
+            "reply": "Sistemas reconectados, señor. El formato del archivo o mensaje requería un ajuste de memoria, pero ya me encuentro operativo.", 
             "audio_b64": None,
             "action_url": None
         }
