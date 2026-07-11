@@ -33,7 +33,7 @@
             background-size: 100% 100%, 25px 25px, 25px 25px;
             color: #d1f7ff;
             height: 100vh;
-            height: 100dvh; /* Altura dinámica para navegadores móviles */
+            height: 100dvh;
             display: flex; 
             justify-content: center; 
             align-items: center;
@@ -41,9 +41,7 @@
         }
 
         @media (min-width: 600px) {
-            body {
-                padding: 15px;
-            }
+            body { padding: 15px; }
         }
 
         .jarvis-container {
@@ -63,13 +61,9 @@
         }
 
         @media (min-width: 600px) {
-            .jarvis-container {
-                height: 90vh;
-                border-radius: 12px;
-            }
+            .jarvis-container { height: 90vh; border-radius: 12px; }
         }
 
-        /* HEADER Y REACTOR ARC */
         .jarvis-header {
             padding: 12px 15px; 
             border-bottom: 1px solid var(--stark-border);
@@ -80,9 +74,7 @@
         }
 
         @media (min-width: 600px) {
-            .jarvis-header {
-                padding: 18px 25px;
-            }
+            .jarvis-header { padding: 18px 25px; }
         }
 
         .header-title {
@@ -95,11 +87,7 @@
         }
 
         @media (min-width: 600px) {
-            .header-title {
-                font-size: 1.1rem;
-                letter-spacing: 2px;
-                gap: 12px;
-            }
+            .header-title { font-size: 1.1rem; letter-spacing: 2px; gap: 12px; }
         }
 
         .arc-reactor {
@@ -123,133 +111,34 @@
         @keyframes speakGlow { 0% { transform: scale(1); filter: brightness(1); } 100% { transform: scale(1.35); filter: brightness(1.6); } }
         @keyframes strobe { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
 
-        .status-badge { 
-            font-size: 0.75rem; 
-            color: rgba(209, 247, 255, 0.7); 
-            letter-spacing: 1px; 
-            text-align: right;
-        }
+        .status-badge { font-size: 0.75rem; color: rgba(209, 247, 255, 0.7); letter-spacing: 1px; text-align: right; }
+        @media (min-width: 600px) { .status-badge { font-size: 0.85rem; } }
 
-        @media (min-width: 600px) {
-            .status-badge { font-size: 0.85rem; }
-        }
-
-        /* CHAT Y MENSAJES */
-        .chat-box { 
-            flex: 1; 
-            padding: 15px 12px; 
-            overflow-y: auto; 
-            display: flex; 
-            flex-direction: column; 
-            gap: 12px; 
-        }
-
-        @media (min-width: 600px) {
-            .chat-box { padding: 25px; gap: 18px; }
-        }
+        .chat-box { flex: 1; padding: 15px 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+        @media (min-width: 600px) { .chat-box { padding: 25px; gap: 18px; } }
 
         .chat-box::-webkit-scrollbar { width: 4px; }
         .chat-box::-webkit-scrollbar-thumb { background: var(--stark-border); border-radius: 3px; }
 
         .message {
-            max-width: 90%; 
-            padding: 12px 14px; 
-            border-radius: 8px;
-            font-size: 0.9rem; 
-            line-height: 1.4; 
-            letter-spacing: 0.3px;
-            white-space: pre-wrap; 
-            word-break: break-word;
+            max-width: 90%; padding: 12px 14px; border-radius: 8px;
+            font-size: 0.9rem; line-height: 1.4; letter-spacing: 0.3px;
+            white-space: pre-wrap; word-break: break-word;
         }
+        @media (min-width: 600px) { .message { max-width: 85%; padding: 14px 18px; font-size: 0.95rem; line-height: 1.5; } }
 
-        @media (min-width: 600px) {
-            .message {
-                max-width: 85%;
-                padding: 14px 18px;
-                font-size: 0.95rem;
-                line-height: 1.5;
-            }
-        }
+        .user-message { align-self: flex-end; background: rgba(79, 172, 254, 0.15); border: 1px solid rgba(79, 172, 254, 0.4); color: #e6f7ff; border-bottom-right-radius: 2px; }
+        .jarvis-message { align-self: flex-start; background: rgba(0, 242, 254, 0.08); border: 1px solid var(--stark-border); color: #d1f7ff; border-bottom-left-radius: 2px; }
 
-        .user-message {
-            align-self: flex-end; 
-            background: rgba(79, 172, 254, 0.15);
-            border: 1px solid rgba(79, 172, 254, 0.4); 
-            color: #e6f7ff;
-            border-bottom-right-radius: 2px;
-        }
+        .code-block { background: #020408; border: 1px solid var(--stark-cyan); border-left: 4px solid var(--stark-cyan); border-radius: 4px; padding: 10px; margin: 8px 0; font-family: 'Consolas', monospace; color: #00ff88; overflow-x: auto; font-size: 0.82rem; }
 
-        .jarvis-message {
-            align-self: flex-start; 
-            background: rgba(0, 242, 254, 0.08);
-            border: 1px solid var(--stark-border); 
-            color: #d1f7ff;
-            border-bottom-left-radius: 2px;
-        }
+        .input-panel { padding: 12px 12px; border-top: 1px solid var(--stark-border); background: rgba(0, 0, 0, 0.6); display: flex; gap: 8px; }
+        @media (min-width: 600px) { .input-panel { padding: 18px 25px; gap: 12px; } }
 
-        .code-block {
-            background: #020408; 
-            border: 1px solid var(--stark-cyan);
-            border-left: 4px solid var(--stark-cyan); 
-            border-radius: 4px;
-            padding: 10px; 
-            margin: 8px 0; 
-            font-family: 'Consolas', monospace;
-            color: #00ff88; 
-            overflow-x: auto; 
-            font-size: 0.82rem;
-        }
-
-        /* PANEL DE ENTRADA OPTIMIZADO PARA MÓVIL */
-        .input-panel {
-            padding: 12px 12px; 
-            border-top: 1px solid var(--stark-border);
-            background: rgba(0, 0, 0, 0.6); 
-            display: flex; 
-            gap: 8px;
-        }
-
-        @media (min-width: 600px) {
-            .input-panel { padding: 18px 25px; gap: 12px; }
-        }
-
-        .stark-input {
-            flex: 1; 
-            background: rgba(8, 11, 17, 0.9); 
-            border: 1px solid var(--stark-border);
-            border-radius: 6px; 
-            padding: 12px 14px; 
-            color: var(--stark-cyan);
-            font-size: 16px; /* Evita zoom automático en iPhone */
-            outline: none;
-            min-height: 44px;
-        }
-
-        .stark-btn {
-            background: linear-gradient(135deg, rgba(0, 242, 254, 0.25), rgba(79, 172, 254, 0.25));
-            border: 1px solid var(--stark-cyan); 
-            color: var(--stark-cyan);
-            padding: 0 16px; 
-            border-radius: 6px; 
-            font-size: 0.85rem;
-            cursor: pointer; 
-            transition: all 0.3s ease;
-            min-height: 44px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            white-space: nowrap;
-        }
-
-        @media (min-width: 600px) {
-            .stark-btn { padding: 0 22px; font-size: 0.9rem; }
-        }
-
-        .stark-btn:active, .stark-btn:hover { 
-            background: var(--stark-cyan); 
-            color: var(--stark-dark); 
-            font-weight: bold; 
-        }
+        .stark-input { flex: 1; background: rgba(8, 11, 17, 0.9); border: 1px solid var(--stark-border); border-radius: 6px; padding: 12px 14px; color: var(--stark-cyan); font-size: 16px; outline: none; min-height: 44px; }
+        .stark-btn { background: linear-gradient(135deg, rgba(0, 242, 254, 0.25), rgba(79, 172, 254, 0.25)); border: 1px solid var(--stark-cyan); color: var(--stark-cyan); padding: 0 16px; border-radius: 6px; font-size: 0.85rem; cursor: pointer; transition: all 0.3s ease; min-height: 44px; display: flex; align-items: center; justify-content: center; white-space: nowrap; }
+        @media (min-width: 600px) { .stark-btn { padding: 0 22px; font-size: 0.9rem; } }
+        .stark-btn:active, .stark-btn:hover { background: var(--stark-cyan); color: var(--stark-dark); font-weight: bold; }
     </style>
 </head>
 <body>
@@ -274,13 +163,22 @@
     </div>
 
     <script>
-        // SERVIDOR BACKEND OFICIAL EN RENDER
         const API_URL = "https://jarvis-ai-hud.onrender.com/api/jarvis";
 
         const chatBox = document.getElementById("chatBox");
         const userInput = document.getElementById("userInput");
         const sysStatus = document.getElementById("sys-status");
         const reactor = document.getElementById("reactor");
+
+        // GENERADOR Y OBTENEDOR DE SESIÓN ÚNICA POR NAVEGADOR
+        function obtenerSessionId() {
+            let sid = localStorage.getItem("jarvis_session_id");
+            if (!sid) {
+                sid = "stark_user_" + Math.random().toString(36).substring(2, 9) + "_" + Date.now();
+                localStorage.setItem("jarvis_session_id", sid);
+            }
+            return sid;
+        }
 
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
@@ -376,7 +274,10 @@
                 const response = await fetch(API_URL, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ message: texto })
+                    body: JSON.stringify({ 
+                        message: texto,
+                        session_id: obtenerSessionId() 
+                    })
                 });
 
                 const data = await response.json();
