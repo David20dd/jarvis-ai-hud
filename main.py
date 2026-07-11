@@ -59,10 +59,10 @@ PROMPT_SISTEMA = {
     "role": "system",
     "content": (
         "Eres J.A.R.V.I.S., una Inteligencia Artificial Avanzada especialista en Matemáticas, Física, Estadística, Cálculo, Álgebra y Ciencias Exactas, creada para asistir a Cristian.\n"
-        "DIRECTIVAS ESTRICTAS DE RESOLUCIÓN:\n"
+        "DIRECTIVAS ESTRICTAS DE RESOLUCIÓN BLAZING FAST:\n"
         "1. Dirígete al usuario como 'señor' o 'Cristian'. Sé analítico, claro, directo y extremadamente preciso.\n"
-        "2. NUNCA respondas con anuncios de lo que vas a hacer (ej. 'Procederé a resolverlo' o 'Analicé la imagen'). DÉ LA SOLUCIÓN Y EL PROCEDIMIENTO DIRECTAMENTE EN TU PRIMER ENUNCIADO.\n"
-        "3. SI EL USUARIO PIDE RESOLVER EJERCICIOS (ej: '1', 'resuélvelo', 'todos los ejercicios'): Identifica la ecuación o función en la imagen, escríbela en LaTeX y desglosa todo el cálculo paso a paso.\n"
+        "2. ANALIZA EL DOCUMENTO COMPLETO DESDE LA PRIMERA PÁGINA. NUNCA respondas con anuncios de lo que vas a hacer (ej. 'Procederé a resolverlo' o 'Analicé la imagen'). ENTREGA LA SOLUCIÓN Y EL PROCEDIMIENTO DIRECTAMENTE EN TU PRIMER ENUNCIADO.\n"
+        "3. SI EL DOCUMENTO TIENE VARIOS EJERCICIOS: Transcribe el Ejercicio 1 (o el número especificado), desglosa su procedimiento completo paso a paso y da el resultado exacto. Luego, indica brevemente que estás listo para el siguiente.\n"
         "4. FORMATO MATEMÁTICO LaTeX OBLIGATORIO:\n"
         "   - Ecuaciones centradas y paso a paso en bloque: '$$ ecuacion $$'. Ejemplo: $$ f(x) = \\frac{x^2 - 4}{x + 2} = x - 2 $$\n"
         "   - Fórmulas o variables en el texto: '$ ecuacion $'. Ejemplo: $x \\neq -2$\n"
@@ -89,9 +89,9 @@ def obtener_historial_sesion(session_id: str):
     return SESIONES_MEMORIA[session_id]
 
 
-# --- OPTIMIZADOR Y COMPRESOR DE IMÁGENES PARA GROQ VISION ---
+# --- OPTIMIZADOR Y COMPRESOR NEURONAL DE IMÁGENES ---
 def optimizar_imagen_b64(image_b64_data: str, max_dim: int = 1280) -> str:
-    """Garantiza fondo blanco puro, proporciones adecuadas y peso liviano."""
+    """Garantiza fondo blanco puro, resolución HD legible y payload optimizado."""
     try:
         if "," in image_b64_data:
             header, encoded = image_b64_data.split(",", 1)
@@ -122,7 +122,7 @@ def optimizar_imagen_b64(image_b64_data: str, max_dim: int = 1280) -> str:
             img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
 
         output_buffer = io.BytesIO()
-        img.save(output_buffer, format="JPEG", quality=80, optimize=True)
+        img.save(output_buffer, format="JPEG", quality=82, optimize=True)
         compressed_bytes = output_buffer.getvalue()
         
         compressed_b64 = base64.b64encode(compressed_bytes).decode('utf-8')
@@ -253,10 +253,9 @@ def ejecutar_consulta_vision(historial_mensajes, image_b64_data):
     last_msg = historial_mensajes[-1]
     prompt_texto = last_msg.get("content", "").strip()
     
-    # INSTRUCCIÓN DE ACCIÓN DIRECTA OBLIGATORIA
     instruccion_directa = (
-        f"INSTRUCCIÓN OBLIGATORIA: Lee la imagen adjunta y responde de inmediato con la solución matemática completa. "
-        f"Transcribe la ecuación/función seleccionada y muestra el procedimiento paso a paso en LaTeX. "
+        f"INSTRUCCIÓN DE RESOLUCIÓN COMPLETA: Examina todo el documento desde la primera página. "
+        f"Encuentra los ejercicios o el problema indicado, escribe la función o enunciado exacto en LaTeX y proporciona la solución matemática desglosada paso a paso. "
         f"Petición del usuario: '{prompt_texto}'"
     )
 
@@ -435,7 +434,7 @@ async def consultar_jarvis(data: ChatInput):
             historial_usuario = sesion_data["messages"]
 
         categoria_archivo, contenido_o_b64 = procesar_archivo_adjunto(data.file_b64, data.file_name)
-        prompt_usuario = data.message.strip() if data.message else "Resuelve los ejercicios presentes en la imagen."
+        prompt_usuario = data.message.strip() if data.message else "Resuelve los ejercicios del documento completo."
 
         # ALMACENAR IMAGEN EN MEMORIA DE LA SESIÓN
         if categoria_archivo == 'image':
@@ -445,7 +444,7 @@ async def consultar_jarvis(data: ChatInput):
         if sesion_data.get("last_image_b64") and (prompt_usuario.isdigit() or re.match(r'^(ejercicio|num|numero|item|resuelvelo|resuelve)?\s*\d*[a-z]?$', prompt_usuario, re.IGNORECASE)):
             num_match = re.findall(r'\d+[a-z]?', prompt_usuario, re.IGNORECASE)
             num_str = num_match[0] if num_match else "1"
-            prompt_usuario = f"Localiza el ejercicio número {num_str} en el documento, escribe su enunciado/función en LaTeX y desglosa todo su procedimiento matemático paso a paso."
+            prompt_usuario = f"Localiza el ejercicio número {num_str} en el documento completo, escribe su enunciado/función en LaTeX y desglosa todo su procedimiento matemático paso a paso."
 
         # MEMORIA VISUAL ALWAYS-ON
         usar_vision = (sesion_data.get("last_image_b64") is not None) and (categoria_archivo == 'image' or not data.file_b64)
@@ -457,8 +456,9 @@ async def consultar_jarvis(data: ChatInput):
                 response = ejecutar_consulta_vision(historial_usuario, sesion_data["last_image_b64"])
                 respuesta_final = response.choices[0].message.content
             except Exception as vision_err:
-                print(f"🚨 Error en Visión: {vision_err}")
-                respuesta_final = "Señor, se presentó una pequeña interrupción. Reintentando la lectura de la ecuación."
+                print(f"🚨 Error de Visión en servidor: {vision_err}")
+                response_fallback = ejecutar_consulta_llm(historial_usuario, herramientas)
+                respuesta_final = response_fallback.choices[0].message.content
 
             historial_usuario.append({"role": "assistant", "content": respuesta_final})
             audio_b64 = generar_audio_elevenlabs(respuesta_final)
