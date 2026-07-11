@@ -63,7 +63,7 @@ PROMPT_SISTEMA = {
         "3. FORMATO MATEMÁTICO AVANZADO: Cuando escribas ecuaciones, fórmulas, fracciones, raíces, límites o integrales, utiliza SIEMPRE sintaxis LaTeX.\n"
         "   - Para ecuaciones centradas e independientes usa '$$ ecuacion $$'. Ejemplo: $$ x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a} $$\n"
         "   - Para fórmulas dentro del texto usa '$ ecuacion $'. Ejemplo: $a^2 + b^2 = c^2$\n"
-        "4. Tienes acceso visual directo a documentos y tareas. Si recibes ejercicios de matemáticas o álgebra, resuélvelos directamente paso a paso con máxima claridad y precisión.\n"
+        "4. Tienes acceso completo a documentos y tareas. Si recibes ejercicios de matemáticas o álgebra, resuélvelos directamente paso a paso con máxima claridad y precisión.\n"
         "5. REGLA DE HERRAMIENTAS: Una vez recibida la confirmación de la herramienta, genera tu respuesta final sin bucles ni demoras."
     )
 }
@@ -100,7 +100,7 @@ def procesar_archivo_adjunto(file_b64: Optional[str] = None, file_name: Optional
         file_bytes = base64.b64decode(encoded)
         ext = os.path.splitext(file_name.lower())[1] if file_name else ""
 
-        # 1. IMÁGENES (INCLUYE PDFS RENDERIZADOS CLIENT-SIDE)
+        # 1. IMÁGENES (O PDFS ESCANEADOS PROCESADOS EN CLIENTE)
         if ext in ['.jpg', '.jpeg', '.png', '.webp', '.gif'] or 'image/' in header:
             return 'image', file_b64
 
@@ -118,7 +118,7 @@ def procesar_archivo_adjunto(file_b64: Optional[str] = None, file_name: Optional
             except Exception as e:
                 return 'text_context', f"\n\n[AVISO AUDIO '{file_name}']: {str(e)}\n"
 
-        # 3. PDFS CON TEXTO DIGITAL
+        # 3. PDFS CON TEXTO DIGITAL (EXTRAÍDO EN CLIENTE O BACKEND)
         if (ext == '.pdf' or 'application/pdf' in header) and pypdf:
             try:
                 reader = pypdf.PdfReader(io.BytesIO(file_bytes))
@@ -129,7 +129,7 @@ def procesar_archivo_adjunto(file_b64: Optional[str] = None, file_name: Optional
                 if texto_digital.strip():
                     return 'text_context', f"\n\n[CONTENIDO DEL DOCUMENTO PDF '{file_name}']:\n{texto_digital[:15000]}\n"
             except Exception as e:
-                print(f"Error pypdf: {e}")
+                print(f"Aviso pypdf: {e}")
 
         # 4. DOCUMENTOS WORD (.docx)
         if ext in ['.docx', '.doc'] and docx:
@@ -207,7 +207,7 @@ def generar_audio_elevenlabs(texto: str) -> str:
         return None
 
 
-# --- CEREBROS IA ---
+# --- CEREBROS IA CON MANEJO SEGURO DE ERRORES ---
 def ejecutar_consulta_vision(historial_mensajes, image_b64_data):
     if not image_b64_data.startswith("data:image"):
         image_b64_data = f"data:image/jpeg;base64,{image_b64_data}"
@@ -237,7 +237,8 @@ def ejecutar_consulta_vision(historial_mensajes, image_b64_data):
             messages=messages_multimodal,
             temperature=0.2
         )
-    except Exception:
+    except Exception as err_v1:
+        print(f"⚠️ Aviso Llama 11B Vision: {err_v1}. Reintentando con Llama 90B Vision...")
         return client.chat.completions.create(
             model="llama-3.2-90b-vision-preview",
             messages=messages_multimodal,
@@ -355,13 +356,12 @@ herramientas = [
         }
     },
     {"type": "function", "function": {"name": "buscar_en_internet", "description": "Busca en la web.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}},
-    {"type": "function", "function": {"name": "leer_pagina_web", "description": "Lee una URL.", "parameters": {"type": "object", "properties": {"url": {"type": "string"}}, "required": ["url"]}}},
+    {"type": "function", "function": {"name": "leer_pagina_web", "description": "Lee una URL.", "parameters": {"type": "object", "properties": {"url": {"type": "string"}}, "required": ["query"]}}},
     {"type": "function", "function": {"name": "obtener_estado_pc", "description": "Diagnóstico.", "parameters": {"type": "object", "properties": {}}}},
     {"type": "function", "function": {"name": "ejecutar_codigo_python", "description": "Ejecuta Python.", "parameters": {"type": "object", "properties": {"codigo": {"type": "string"}}, "required": ["codigo"]}}},
     {"type": "function", "function": {"name": "obtener_clima_en_vivo", "description": "Clima.", "parameters": {"type": "object", "properties": {"ciudad": {"type": "string"}}, "required": ["ciudad"]}}}
 ]
 
-# MODELO CON CAMPOS OPCIONALES SEGUROS
 class ChatInput(BaseModel):
     message: Optional[str] = ""
     session_id: Optional[str] = "default_session"
@@ -390,13 +390,17 @@ async def consultar_jarvis(data: ChatInput):
         categoria_archivo, contenido_o_b64 = procesar_archivo_adjunto(data.file_b64, data.file_name)
         prompt_usuario = data.message if data.message else "Señor, he recibido un archivo para analizar."
 
-        # MODO VISIÓN ARTIFICIAL (IMÁGENES O PDFS CONVERTIDOS A IMAGEN)
+        # MODO VISIÓN ARTIFICIAL
         if categoria_archivo == 'image':
             historial_usuario.append({"role": "user", "content": prompt_usuario})
-            print("👁️ [Jarvis Vision]: Ejecutando análisis visual...")
-            response = ejecutar_consulta_vision(historial_usuario, contenido_o_b64)
-            respuesta_final = response.choices[0].message.content
-            
+            print("👁️ [Jarvis Vision]: Procesando modelo multimodal...")
+            try:
+                response = ejecutar_consulta_vision(historial_usuario, contenido_o_b64)
+                respuesta_final = response.choices[0].message.content
+            except Exception as vision_err:
+                print(f"🚨 Error en Visión: {vision_err}")
+                respuesta_final = "Señor, he recibido la imagen del documento, pero la resolución excedió los límites de lectura directa. Por favor, intente enviarme la captura de la página específica con los ejercicios."
+
             historial_usuario.append({"role": "assistant", "content": respuesta_final})
             audio_b64 = generar_audio_elevenlabs(respuesta_final)
             return {"status": "success", "reply": respuesta_final, "audio_b64": audio_b64, "action_url": None}
