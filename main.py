@@ -14,7 +14,14 @@ import time
 import urllib.parse
 import io
 
-# LIBRERÍAS DE LECTURA DE PDFS (MOTOR DUAL SEGURO)
+# LIBRERÍAS DE PROCESAMIENTO MULTIMODAL DE PDFS (RENDERIZADO A IMAGEN HD)
+try:
+    import pypdfium2 as pdfium
+except ImportError:
+    pdfium = None
+
+from PIL import Image
+
 try:
     import fitz  # PyMuPDF
 except ImportError:
@@ -67,7 +74,7 @@ PROMPT_SISTEMA = {
         "3. FORMATO MATEMÁTICO AVANZADO: Cuando escribas ecuaciones, fórmulas, fracciones, raíces, límites o integrales, utiliza SIEMPRE sintaxis LaTeX.\n"
         "   - Para ecuaciones centradas e independientes usa '$$ ecuacion $$'. Ejemplo: $$ x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a} $$\n"
         "   - Para fórmulas dentro del texto usa '$ ecuacion $'. Ejemplo: $a^2 + b^2 = c^2$\n"
-        "4. Tienes acceso completo a documentos y tareas. Si recibes ejercicios de matemáticas o álgebra, resuélvelos paso a paso con máxima claridad y precisión.\n"
+        "4. Tienes acceso visual y directo a documentos y tareas. Si recibes ejercicios de matemáticas o álgebra, resuélvelos directamente paso a paso con máxima claridad y precisión.\n"
         "5. REGLA DE HERRAMIENTAS: Una vez recibida la confirmación de la herramienta, genera tu respuesta final sin bucles ni demoras."
     )
 }
@@ -89,7 +96,7 @@ def obtener_historial_sesion(session_id: str):
     return SESIONES_MEMORIA[session_id]["messages"]
 
 
-# --- PROCESADOR MULTIMODAL CON DOBLE MOTOR PARA PDFS ---
+# --- PROCESADOR MULTIMODAL DE ARCHIVOS Y CONVERTIDOR DE PDF A IMAGEN ---
 def procesar_archivo_adjunto(file_b64: str = None, file_name: str = None) -> tuple[str, str]:
     if not file_b64:
         return 'none', ""
@@ -122,50 +129,67 @@ def procesar_archivo_adjunto(file_b64: str = None, file_name: str = None) -> tup
             except Exception as e:
                 return 'text_context', f"\n\n[AVISO AUDIO '{file_name}']: {str(e)}\n"
 
-        # 3. DOCUMENTOS PDF (SISTEMA DE PROCESAMIENTO BLINDADO)
+        # 3. DOCUMENTOS PDF (Detección Inteligente de Texto vs Renderizado Visual)
         if ext == '.pdf' or 'application/pdf' in header:
             texto_pdf = ""
-            imagen_pdf_b64 = None
-
-            # INTENTO 1: PyMuPDF (fitz) - Texto y Renderizado de Escaneos
+            
+            # Intento de extracción de texto digital con PyMuPDF
             if fitz:
                 try:
                     doc = fitz.open(stream=file_bytes, filetype="pdf")
-                    for page_num in range(min(len(doc), 10)):
-                        p = doc[page_num]
-                        t = p.get_text()
+                    for page_num in range(min(len(doc), 5)):
+                        t = doc[page_num].get_text()
                         if t.strip():
                             texto_pdf += f"\n--- Página {page_num+1} ---\n" + t
-
-                    # Si es un escaneo o foto en PDF, renderizar la primera página a HD
-                    if not texto_pdf.strip() and len(doc) > 0:
-                        print(f"👁️ [PyMuPDF]: PDF escaneado detectado en '{file_name}'. Renderizando...")
-                        page = doc[0]
-                        pix = page.get_pixmap(dpi=150)
-                        img_bytes = pix.tobytes("jpeg")
-                        imagen_pdf_b64 = f"data:image/jpeg;base64,{base64.b64encode(img_bytes).decode('utf-8')}"
                 except Exception as e:
-                    print(f"⚠️ Error PyMuPDF: {e}")
+                    print(f"Error fitz text: {e}")
 
-            # INTENTO 2: pypdf (Fallback si fitz no está o no extrajo texto)
-            if not texto_pdf.strip() and not imagen_pdf_b64 and pypdf:
+            # Fallback de texto con pypdf
+            if not texto_pdf.strip() and pypdf:
                 try:
                     reader = pypdf.PdfReader(io.BytesIO(file_bytes))
-                    for i, page in enumerate(reader.pages[:10]):
+                    for i, page in enumerate(reader.pages[:5]):
                         t = page.extract_text()
-                        if t:
+                        if t and t.strip():
                             texto_pdf += f"\n--- Página {i+1} ---\n" + t
                 except Exception as e:
-                    print(f"⚠️ Error pypdf: {e}")
+                    print(f"Error pypdf text: {e}")
 
-            # RESULTADO FINAL DEL PDF
-            if imagen_pdf_b64:
-                return 'image', imagen_pdf_b64
+            palabras_reales = re.findall(r'\b[a-zA-Z0-9]{2,}\b', texto_pdf)
+
+            # Si el PDF tiene poco texto digital (< 40 palabras) o es una tarea con ecuaciones/gráficas: RENDERIZAR A IMAGEN HD
+            if len(palabras_reales) < 40:
+                print(f"👁️ [Jarvis Vision]: PDF con ecuaciones/escaneo detectado en '{file_name}'. Renderizando a Imagen HD...")
+
+                # Conversión usando pypdfium2 (Chrome Engine)
+                if pdfium:
+                    try:
+                        pdf = pdfium.PdfDocument(file_bytes)
+                        if len(pdf) > 0:
+                            page = pdf[0]
+                            image = page.render(scale=2).to_pil()
+                            buf = io.BytesIO()
+                            image.save(buf, format="JPEG", quality=85)
+                            img_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+                            return 'image', f"data:image/jpeg;base64,{img_b64}"
+                    except Exception as e:
+                        print(f"Error render pdfium: {e}")
+
+                # Conversión usando PyMuPDF (fitz)
+                if fitz:
+                    try:
+                        doc = fitz.open(stream=file_bytes, filetype="pdf")
+                        if len(doc) > 0:
+                            page = doc[0]
+                            pix = page.get_pixmap(dpi=150)
+                            img_bytes = pix.tobytes("jpeg")
+                            img_b64 = base64.b64encode(img_bytes).decode('utf-8')
+                            return 'image', f"data:image/jpeg;base64,{img_b64}"
+                    except Exception as e:
+                        print(f"Error render fitz: {e}")
 
             if texto_pdf.strip():
                 return 'text_context', f"\n\n[CONTENIDO DEL DOCUMENTO PDF '{file_name}']:\n{texto_pdf[:15000]}\n"
-
-            return 'text_context', f"\n\n[AVISO DE SISTEMA]: El archivo PDF '{file_name}' no contiene texto seleccionable. Si es una fotografía o escaneo de una guía, por favor adjúntela como archivo de imagen (.jpg o .png).\n"
 
         # 4. DOCUMENTOS WORD (.docx)
         if ext in ['.docx', '.doc'] and docx:
@@ -428,7 +452,7 @@ async def consultar_jarvis(data: ChatInput):
         # MODO VISIÓN ARTIFICIAL (IMÁGENES O PDFS ESCANEADOS)
         if categoria_archivo == 'image':
             historial_usuario.append({"role": "user", "content": prompt_usuario})
-            print("👁️ [Jarvis Vision]: Ejecutando análisis visual...")
+            print("👁️ [Jarvis Vision]: Ejecutando análisis visual de tarea/documento...")
             response = ejecutar_consulta_vision(historial_usuario, contenido_o_b64)
             respuesta_final = response.choices[0].message.content
             
