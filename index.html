@@ -500,7 +500,7 @@
             utterance.rate = 0.90; utterance.pitch = 0.85; utterance.lang = 'es-ES';
             const voces = window.speechSynthesis.getVoices();
             const vozEspecial = voces.find(v => (v.lang.includes('es') || v.lang.includes('ES')) && (v.name.includes('Pablo') || v.name.includes('Jorge') || v.name.includes('Male') || v.name.includes('Google')));
-            if (vozEspecial) utterance.voice = vozEspecial;
+            if (vozEspecial) utterance.voice = voces.find(v => v.lang.includes('es') && v.name.includes('Pab')); // Prioridad a voz 'Pablo'
             
             utterance.onstart = () => setEstado('speaking', 'VOZ ACTIVA');
             utterance.onend = () => setEstado('ready', 'ONLINE');
@@ -563,7 +563,7 @@
             if (!texto && !fileEnviar) return;
 
             playSFX('send');
-            agregarMensajeUsuario(texto, fileEnviar, fileNameEnviar, isImage);
+            agregarMensajeUsuario(texto, fileEnviar, fileNameEnviar, esImagen);
             
             userInput.value = "";
             cancelarArchivo();
