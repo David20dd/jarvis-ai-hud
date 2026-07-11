@@ -135,7 +135,6 @@
         }
         .hud-link-btn:hover { background: var(--stark-cyan); color: var(--stark-dark); box-shadow: 0 0 20px var(--stark-cyan); }
 
-        /* PREVIEW DE ARCHIVO Y FOTO ADJUNTADA */
         .preview-bar {
             display: none; padding: 8px 15px; background: rgba(0, 0, 0, 0.8);
             border-top: 1px solid var(--stark-border); align-items: center; gap: 12px;
@@ -157,7 +156,6 @@
             padding: 6px 12px; border-radius: 4px; font-size: 0.82rem; margin-bottom: 8px; color: var(--stark-green);
         }
 
-        /* CONTROLES DE ENTRADA */
         .input-panel { padding: 12px 12px; border-top: 1px solid var(--stark-border); background: rgba(0, 0, 0, 0.6); display: flex; gap: 8px; align-items: center; }
         @media (min-width: 600px) { .input-panel { padding: 18px 25px; gap: 12px; } }
 
@@ -190,10 +188,9 @@
         </div>
 
         <div class="chat-box" id="chatBox">
-            <div class="message jarvis-message">Sistemas en línea, señor Cristian. Módulos Multificha activos (PDF, Word, Excel, Código, Audio e Imágenes). ¿Qué archivo o consulta desea procesar?</div>
+            <div class="message jarvis-message">Sistemas en línea, señor Cristian. Módulos Multificha activos. ¿En qué le puedo asistir?</div>
         </div>
 
-        <!-- BARRA DE PREVIEW DE ARCHIVO/IMAGEN ADJUNTADA -->
         <div class="preview-bar" id="previewBar">
             <div id="previewIcon" class="preview-thumb">FILE</div>
             <div class="preview-info" id="previewText">ARCHIVO DETECTADO</div>
@@ -201,17 +198,14 @@
         </div>
 
         <div class="input-panel">
-            <!-- BOTÓN MULTI-ARCHIVO (CÁMARA, PDF, EXCEL, WORD, CÓDIGO, AUDIO) -->
             <button class="stark-btn icon-btn" onclick="document.getElementById('fileInput').click()" title="Adjuntar Archivo o Foto">
                 <svg viewBox="0 0 24 24">
                     <path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"/>
                 </svg>
             </button>
 
-            <!-- INPUT OCULTO ADMITE TODO TIPO DE ARCHIVOS -->
             <input type="file" id="fileInput" accept="*/*" style="display:none;" onchange="procesarArchivoSeleccionado(event)">
 
-            <!-- BOTÓN DE MICRÓFONO -->
             <button class="stark-btn icon-btn mic-btn" id="micBtn" onclick="toggleMicrofono()" title="Activar micrófono">
                 <svg viewBox="0 0 24 24">
                     <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
@@ -296,14 +290,12 @@
             if (estado === 'error') sysStatus.style.color = "var(--stark-red)";
         }
 
-        /* 📁 LECTURA MULTI-ARCHIVO ADAPTABLE */
         function procesarArchivoSeleccionado(event) {
             const file = event.target.files[0];
             if (!file) return;
 
             currentFileName = file.name;
             const ext = file.name.split('.').pop().toLowerCase();
-
             const reader = new FileReader();
 
             if (file.type.startsWith('image/')) {
@@ -348,7 +340,6 @@
             previewBar.classList.remove("active");
         }
 
-        /* 🎙️ CONTROL DE MICRÓFONO */
         if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             recognition = new SpeechRecognition();
@@ -461,7 +452,6 @@
             if (!texto && !fileEnviar) return;
 
             playSFX('send');
-            
             agregarMensajeUsuario(texto, fileEnviar, fileNameEnviar, isImage);
             
             userInput.value = "";
@@ -474,7 +464,7 @@
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ 
-                        message: texto || "Señor, analice el archivo adjunto por favor.",
+                        message: texto || "Señor, he enviado una consulta.",
                         session_id: obtenerSessionId(),
                         file_b64: fileEnviar,
                         file_name: fileNameEnviar
@@ -483,7 +473,7 @@
 
                 const data = await response.json();
 
-                if (data.status === "success") {
+                if (response.ok && data.status === "success" && data.reply) {
                     playSFX('success');
                     const msgDiv = document.createElement("div");
                     msgDiv.className = "message jarvis-message";
@@ -510,7 +500,8 @@
                 } else {
                     setEstado('error', 'FALLO EN RESPUESTA');
                     playSFX('error');
-                    agregarMensajeJarvis("[ALERTA]: " + data.reply);
+                    const errorTexto = data.reply || data.detail || "Error interno en el servidor.";
+                    agregarMensajeJarvis("[ALERTA]: " + errorTexto);
                 }
             } catch (error) {
                 setEstado('error', 'DESCONEXIÓN');
