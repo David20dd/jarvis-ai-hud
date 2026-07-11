@@ -18,6 +18,9 @@
     </script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 
+    <!-- 📄 MOTOR CLIENT-SIDE RENDERER PARA PDFS (PDF.JS DE MOZILLA) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
     <style>
         :root {
             --stark-cyan: #00f2fe;
@@ -137,7 +140,7 @@
         .user-message { align-self: flex-end; background: rgba(79, 172, 254, 0.15); border: 1px solid rgba(79, 172, 254, 0.4); color: #e6f7ff; border-bottom-right-radius: 2px; }
         .jarvis-message { align-self: flex-start; background: rgba(0, 242, 254, 0.08); border: 1px solid var(--stark-border); color: #d1f7ff; border-bottom-left-radius: 2px; }
 
-        /* ESTILOS DE FÓRMULAS MATEMÁTICAS CIENTÍFICAS */
+        /* FÓRMULAS MATEMÁTICAS VECTORIALES */
         .MathJax { color: #00ff88 !important; font-size: 1.05rem !important; }
         .mjx-chtml { margin: 8px 0 !important; }
 
@@ -205,7 +208,7 @@
         </div>
 
         <div class="chat-box" id="chatBox">
-            <div class="message jarvis-message">Sistemas en línea, señor Cristian. Motor de Renderizado Matemático LaTeX activo. ¿Qué ecuación o problema desea resolver hoy?</div>
+            <div class="message jarvis-message">Sistemas en línea, señor Cristian. Motor de Visión PDF.js y Renderizado Matemático LaTeX activos. ¿En qué le puedo asistir hoy?</div>
         </div>
 
         <div class="preview-bar" id="previewBar">
@@ -237,6 +240,10 @@
 
     <script>
         const API_URL = "https://jarvis-ai-hud.onrender.com/api/jarvis";
+
+        if (window.pdfjsLib) {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        }
 
         const chatBox = document.getElementById("chatBox");
         const userInput = document.getElementById("userInput");
@@ -307,14 +314,48 @@
             if (estado === 'error') sysStatus.style.color = "var(--stark-red)";
         }
 
-        function procesarArchivoSeleccionado(event) {
+        /* 📄 RENDERIZADO VISUAL INSTANTÁNEO DE PDFS EN CLIENTE CON PDF.JS */
+        async function procesarArchivoSeleccionado(event) {
             const file = event.target.files[0];
             if (!file) return;
 
             currentFileName = file.name;
             const ext = file.name.split('.').pop().toLowerCase();
-            const reader = new FileReader();
 
+            // CASO A: SI ES UN PDF -> RENDERIZAR PÁGINA A IMAGEN HD EN CANVAS
+            if (ext === 'pdf' || file.type === 'application/pdf') {
+                setEstado('processing', 'ESCANEANDO PDF...');
+                try {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                    
+                    if (pdf.numPages > 0) {
+                        const page = await pdf.getPage(1);
+                        const viewport = page.getViewport({ scale: 2.0 });
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+                        canvas.height = viewport.height;
+                        canvas.width = viewport.width;
+
+                        await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+
+                        currentFileB64 = canvas.toDataURL('image/jpeg', 0.85);
+                        isImage = true;
+
+                        previewIcon.innerHTML = `<img src="${currentFileB64}" style="width:100%;height:100%;object-fit:cover;border-radius:3px;">`;
+                        previewText.innerText = `PDF VISUAL: ${file.name.toUpperCase()}`;
+                        previewBar.classList.add("active");
+                        setEstado('ready', 'ONLINE');
+                        playSFX("mic");
+                        return;
+                    }
+                } catch(err) {
+                    console.warn("Aviso PDF.js client-side, usando fallback:", err);
+                }
+            }
+
+            // CASO B: SI ES IMAGEN DIRECTA
+            const reader = new FileReader();
             if (file.type.startsWith('image/')) {
                 isImage = true;
                 reader.onload = (e) => {
@@ -338,6 +379,7 @@
                 };
                 reader.readAsDataURL(file);
             } else {
+                // CASO C: ARCHIVOS DOCX, EXCEL, AUDIO, CÓDIGO FUENTE
                 isImage = false;
                 reader.onload = (e) => {
                     currentFileB64 = e.target.result;
@@ -412,7 +454,6 @@
             if (!('speechSynthesis' in window)) return;
             window.speechSynthesis.cancel();
             
-            // Filtro de fórmulas LaTeX para audio local
             let textoLimpio = texto.replace(/```[\s\S]*?```/g, " Código desplegado. ")
                                    .replace(/\$\$[\s\S]*?\$\$/g, " la ecuación mostrada en pantalla ")
                                    .replace(/\$[\s\S]*?\$/g, " ")
@@ -457,7 +498,6 @@
             }, 8);
         }
 
-        /* 🧮 TRANSFORMA CÓDIGO LATEX EN ECOSISTEMA MATEMÁTICO VECTORIAL */
         function renderizarMatematicas(elemento) {
             if (window.MathJax && window.MathJax.typesetPromise) {
                 window.MathJax.typesetPromise([elemento]).then(() => {
@@ -535,7 +575,16 @@
                 } else {
                     setEstado('error', 'FALLO EN RESPUESTA');
                     playSFX('error');
-                    const errorTexto = data.reply || data.detail || "Error interno en el servidor.";
+                    
+                    let errorTexto = "Error en el servidor central.";
+                    if (data && data.reply) {
+                        errorTexto = data.reply;
+                    } else if (data && typeof data.detail === 'string') {
+                        errorTexto = data.detail;
+                    } else if (data && Array.isArray(data.detail)) {
+                        errorTexto = data.detail.map(e => e.msg || JSON.stringify(e)).join(', ');
+                    }
+                    
                     agregarMensajeJarvis("[ALERTA]: " + errorTexto);
                 }
             } catch (error) {
