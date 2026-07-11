@@ -6,6 +6,6 @@ requests
 beautifulsoup4
 pydantic
 psutil
-pypdf
+pymupdf
 python-docx
 openpyxl
