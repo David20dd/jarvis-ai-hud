@@ -5,6 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>J.A.R.V.I.S. // STARK HUD 3.0</title>
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    
+    <!-- 🧮 MOTOR DE RENDERIZADO MATEMÁTICO VECTORIAL MATHJAX 3 -->
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']]
+            },
+            svg: { fontCache: 'global' }
+        };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
     <style>
         :root {
             --stark-cyan: #00f2fe;
@@ -124,6 +137,10 @@
         .user-message { align-self: flex-end; background: rgba(79, 172, 254, 0.15); border: 1px solid rgba(79, 172, 254, 0.4); color: #e6f7ff; border-bottom-right-radius: 2px; }
         .jarvis-message { align-self: flex-start; background: rgba(0, 242, 254, 0.08); border: 1px solid var(--stark-border); color: #d1f7ff; border-bottom-left-radius: 2px; }
 
+        /* ESTILOS DE FÓRMULAS MATEMÁTICAS CIENTÍFICAS */
+        .MathJax { color: #00ff88 !important; font-size: 1.05rem !important; }
+        .mjx-chtml { margin: 8px 0 !important; }
+
         .code-block { background: #020408; border: 1px solid var(--stark-cyan); border-left: 4px solid var(--stark-cyan); border-radius: 4px; padding: 10px; margin: 8px 0; font-family: 'Consolas', monospace; color: #00ff88; overflow-x: auto; font-size: 0.82rem; }
 
         .hud-link-btn {
@@ -188,7 +205,7 @@
         </div>
 
         <div class="chat-box" id="chatBox">
-            <div class="message jarvis-message">Sistemas en línea, señor Cristian. Módulos Multificha activos. ¿En qué le puedo asistir?</div>
+            <div class="message jarvis-message">Sistemas en línea, señor Cristian. Motor de Renderizado Matemático LaTeX activo. ¿Qué ecuación o problema desea resolver hoy?</div>
         </div>
 
         <div class="preview-bar" id="previewBar">
@@ -394,7 +411,14 @@
         function hablarEstiloJarvisLocal(texto) {
             if (!('speechSynthesis' in window)) return;
             window.speechSynthesis.cancel();
-            let textoLimpio = texto.replace(/```[\s\S]*?```/g, " Código desplegado en consola. ").replace(/[*_#`]/g, "");
+            
+            // Filtro de fórmulas LaTeX para audio local
+            let textoLimpio = texto.replace(/```[\s\S]*?```/g, " Código desplegado. ")
+                                   .replace(/\$\$[\s\S]*?\$\$/g, " la ecuación mostrada en pantalla ")
+                                   .replace(/\$[\s\S]*?\$/g, " ")
+                                   .replace(/\\[a-zA-Z]+/g, " ")
+                                   .replace(/[*_#`{}]/g, "");
+
             const utterance = new SpeechSynthesisUtterance(textoLimpio);
             utterance.rate = 0.90; utterance.pitch = 0.85; utterance.lang = 'es-ES';
             const voces = window.speechSynthesis.getVoices();
@@ -415,6 +439,7 @@
             if (texto.includes("```")) {
                 elemento.innerHTML = formatearTextoConCodigo(texto);
                 if (actionUrl) agregarBotonAccion(elemento, actionUrl);
+                renderizarMatematicas(elemento);
                 if (callback) callback();
                 return;
             }
@@ -426,9 +451,19 @@
                 } else {
                     clearInterval(timer);
                     if (actionUrl) agregarBotonAccion(elemento, actionUrl);
+                    renderizarMatematicas(elemento);
                     if (callback) callback();
                 }
-            }, 10);
+            }, 8);
+        }
+
+        /* 🧮 TRANSFORMA CÓDIGO LATEX EN ECOSISTEMA MATEMÁTICO VECTORIAL */
+        function renderizarMatematicas(elemento) {
+            if (window.MathJax && window.MathJax.typesetPromise) {
+                window.MathJax.typesetPromise([elemento]).then(() => {
+                    chatBox.scrollTop = chatBox.scrollHeight;
+                }).catch((err) => console.warn("Aviso MathJax:", err));
+            }
         }
 
         function agregarBotonAccion(elemento, url) {
