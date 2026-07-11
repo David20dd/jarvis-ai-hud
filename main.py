@@ -14,6 +14,8 @@ import re
 import time
 import urllib.parse
 import io
+import sys
+import contextlib
 
 # LIBRERÍAS DE LECTURA DE ARCHIVOS MULTIFORMATO
 try:
@@ -63,7 +65,7 @@ PROMPT_SISTEMA = {
         "3. FORMATO MATEMÁTICO AVANZADO: Cuando escribas ecuaciones, fórmulas, fracciones, raíces, límites o integrales, utiliza SIEMPRE sintaxis LaTeX.\n"
         "   - Para ecuaciones centradas e independientes usa '$$ ecuacion $$'. Ejemplo: $$ x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a} $$\n"
         "   - Para fórmulas dentro del texto usa '$ ecuacion $'. Ejemplo: $a^2 + b^2 = c^2$\n"
-        "4. Tienes acceso completo a documentos y tareas. Si recibes ejercicios de matemáticas o álgebra, resuélvelos directamente paso a paso con máxima claridad y precisión.\n"
+        "4. SI ANALIZAS TAREAS O DOCUMENTOS: Revisa minuciosamente los problemas, gráficas y ecuaciones. Resuelve todos los ejercicios paso a paso sin omitir pasos.\n"
         "5. REGLA DE HERRAMIENTAS: Una vez recibida la confirmación de la herramienta, genera tu respuesta final sin bucles ni demoras."
     )
 }
@@ -73,7 +75,8 @@ def obtener_historial_sesion(session_id: str):
     if session_id not in SESIONES_MEMORIA:
         SESIONES_MEMORIA[session_id] = {
             "messages": [PROMPT_SISTEMA],
-            "last_active": now
+            "last_active": now,
+            "last_image_b64": None
         }
     else:
         SESIONES_MEMORIA[session_id]["last_active"] = now
@@ -82,7 +85,7 @@ def obtener_historial_sesion(session_id: str):
         if now - SESIONES_MEMORIA[sid]["last_active"] > 7200:
             del SESIONES_MEMORIA[sid]
 
-    return SESIONES_MEMORIA[session_id]["messages"]
+    return SESIONES_MEMORIA[session_id]
 
 
 # --- PROCESADOR MULTIMODAL ROBUSTO ---
@@ -100,7 +103,7 @@ def procesar_archivo_adjunto(file_b64: Optional[str] = None, file_name: Optional
         file_bytes = base64.b64decode(encoded)
         ext = os.path.splitext(file_name.lower())[1] if file_name else ""
 
-        # 1. IMÁGENES (O PDFS ESCANEADOS PROCESADOS EN CLIENTE)
+        # 1. IMÁGENES / PDFS RENDERIZADOS A VISIÓN HD
         if ext in ['.jpg', '.jpeg', '.png', '.webp', '.gif'] or 'image/' in header:
             return 'image', file_b64
 
@@ -118,20 +121,7 @@ def procesar_archivo_adjunto(file_b64: Optional[str] = None, file_name: Optional
             except Exception as e:
                 return 'text_context', f"\n\n[AVISO AUDIO '{file_name}']: {str(e)}\n"
 
-        # 3. PDFS CON TEXTO DIGITAL (EXTRAÍDO EN CLIENTE O BACKEND)
-        if (ext == '.pdf' or 'application/pdf' in header) and pypdf:
-            try:
-                reader = pypdf.PdfReader(io.BytesIO(file_bytes))
-                texto_digital = ""
-                for i, page in enumerate(reader.pages[:10]):
-                    t = page.extract_text()
-                    if t: texto_digital += f"\n--- Página {i+1} ---\n" + t
-                if texto_digital.strip():
-                    return 'text_context', f"\n\n[CONTENIDO DEL DOCUMENTO PDF '{file_name}']:\n{texto_digital[:15000]}\n"
-            except Exception as e:
-                print(f"Aviso pypdf: {e}")
-
-        # 4. DOCUMENTOS WORD (.docx)
+        # 3. DOCUMENTOS WORD (.docx)
         if ext in ['.docx', '.doc'] and docx:
             try:
                 doc = docx.Document(io.BytesIO(file_bytes))
@@ -140,7 +130,7 @@ def procesar_archivo_adjunto(file_b64: Optional[str] = None, file_name: Optional
             except Exception as e:
                 return 'text_context', f"\n\n[AVISO WORD '{file_name}']: {str(e)}\n"
 
-        # 5. HOJAS DE CÁLCULO EXCEL Y CSV
+        # 4. HOJAS DE CÁLCULO EXCEL Y CSV
         if ext in ['.xlsx', '.xls', '.csv']:
             try:
                 if ext == '.csv':
@@ -159,7 +149,7 @@ def procesar_archivo_adjunto(file_b64: Optional[str] = None, file_name: Optional
             except Exception as e:
                 return 'text_context', f"\n\n[AVISO EXCEL '{file_name}']: {str(e)}\n"
 
-        # 6. CÓDIGO FUENTE / TEXTO PLANO
+        # 5. CÓDIGO FUENTE / TEXTO PLANO
         texto_decoded = file_bytes.decode('utf-8', errors='ignore')
         lang = ext.replace('.', '') if ext else 'txt'
         return 'text_context', f"\n\n[CONTENIDO ARCHIVO '{file_name}']:\n```{lang}\n{texto_decoded[:15000]}\n```\n"
@@ -264,7 +254,7 @@ def ejecutar_consulta_llm(historial_mensajes, herramientas_lista):
         )
 
 
-# --- HERRAMIENTAS ---
+# --- HERRAMIENTAS Y EJECUTOR DE CÓDIGO PYTHON CON CAPTURA DE SALIDA ---
 def abrir_sitio_web(url: str, busqueda: str = None) -> str:
     global ACTION_URL_TEMP
     url_lower = url.lower().strip()
@@ -331,10 +321,16 @@ def obtener_estado_pc() -> str:
         return "Diagnóstico no disponible."
 
 def ejecutar_codigo_python(codigo: str) -> str:
+    """Ejecuta código Python y captura la salida estándar (print)."""
     try:
-        local_scope = {}
-        exec(codigo, {"__builtins__": None}, local_scope)
-        return f"Resultado del código: {local_scope}"
+        f = io.StringIO()
+        with contextlib.redirect_stdout(f):
+            local_scope = {}
+            exec(codigo, {"__builtins__": __builtins__}, local_scope)
+        output = f.getvalue().strip()
+        if not output and local_scope:
+            output = f"Variables resultantes: {local_scope}"
+        return output if output else "Código ejecutado exitosamente sin salida de texto."
     except Exception as e:
         return f"Error de ejecución: {str(e)}"
 
@@ -358,7 +354,7 @@ herramientas = [
     {"type": "function", "function": {"name": "buscar_en_internet", "description": "Busca en la web.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}},
     {"type": "function", "function": {"name": "leer_pagina_web", "description": "Lee una URL.", "parameters": {"type": "object", "properties": {"url": {"type": "string"}}, "required": ["query"]}}},
     {"type": "function", "function": {"name": "obtener_estado_pc", "description": "Diagnóstico.", "parameters": {"type": "object", "properties": {}}}},
-    {"type": "function", "function": {"name": "ejecutar_codigo_python", "description": "Ejecuta Python.", "parameters": {"type": "object", "properties": {"codigo": {"type": "string"}}, "required": ["codigo"]}}},
+    {"type": "function", "function": {"name": "ejecutar_codigo_python", "description": "Ejecuta código Python y captura los resultados impresos.", "parameters": {"type": "object", "properties": {"codigo": {"type": "string"}}, "required": ["codigo"]}}},
     {"type": "function", "function": {"name": "obtener_clima_en_vivo", "description": "Clima.", "parameters": {"type": "object", "properties": {"ciudad": {"type": "string"}}, "required": ["ciudad"]}}}
 ]
 
@@ -381,31 +377,41 @@ async def consultar_jarvis(data: ChatInput):
     
     try:
         sid = data.session_id if data.session_id else "default_session"
-        historial_usuario = obtener_historial_sesion(sid)
+        sesion_data = obtener_historial_sesion(sid)
+        historial_usuario = sesion_data["messages"]
 
         if len(historial_usuario) > 9:
-            SESIONES_MEMORIA[sid]["messages"] = [PROMPT_SISTEMA] + historial_usuario[-8:]
-            historial_usuario = SESIONES_MEMORIA[sid]["messages"]
+            sesion_data["messages"] = [PROMPT_SISTEMA] + historial_usuario[-8:]
+            historial_usuario = sesion_data["messages"]
 
         categoria_archivo, contenido_o_b64 = procesar_archivo_adjunto(data.file_b64, data.file_name)
         prompt_usuario = data.message if data.message else "Señor, he recibido un archivo para analizar."
 
-        # MODO VISIÓN ARTIFICIAL
+        # SI SE SUBIÓ UNA NUEVA IMAGEN, GUARDARLA EN LA MEMORIA DE SESIÓN
         if categoria_archivo == 'image':
+            sesion_data["last_image_b64"] = contenido_o_b64
+
+        # DETERMINAR SI DEBEMOS USAR EL MOTOR DE VISIÓN (SI HAY IMAGEN EN ESTA PETICIÓN O EN LA MEMORIA DE LA SESIÓN)
+        usar_vision = (categoria_archivo == 'image') or (
+            sesion_data.get("last_image_b64") is not None and 
+            any(w in prompt_usuario.lower() for w in ["documento", "ejercicio", "tarea", "imagen", "archivo", "resuelve", "problema", "siguiente", "resto"])
+        )
+
+        if usar_vision and sesion_data.get("last_image_b64"):
             historial_usuario.append({"role": "user", "content": prompt_usuario})
-            print("👁️ [Jarvis Vision]: Procesando modelo multimodal...")
+            print("👁️ [Jarvis Vision]: Procesando modelo de visión con memoria activa...")
             try:
-                response = ejecutar_consulta_vision(historial_usuario, contenido_o_b64)
+                response = ejecutar_consulta_vision(historial_usuario, sesion_data["last_image_b64"])
                 respuesta_final = response.choices[0].message.content
             except Exception as vision_err:
                 print(f"🚨 Error en Visión: {vision_err}")
-                respuesta_final = "Señor, he recibido la imagen del documento, pero la resolución excedió los límites de lectura directa. Por favor, intente enviarme la captura de la página específica con los ejercicios."
+                respuesta_final = "Señor, procesé el documento pero la resolución excedió los límites. Envíeme una captura enfocada del ejercicio que desea resolver."
 
             historial_usuario.append({"role": "assistant", "content": respuesta_final})
             audio_b64 = generar_audio_elevenlabs(respuesta_final)
             return {"status": "success", "reply": respuesta_final, "audio_b64": audio_b64, "action_url": None}
 
-        # MODO TEXTO DIGITAL (PDFS CON TEXTO, WORD, EXCEL, CÓDIGO)
+        # MODO TEXTO DIGITAL (WORD, EXCEL, CÓDIGO, AUDIOS)
         if categoria_archivo == 'text_context':
             prompt_usuario += contenido_o_b64
 
