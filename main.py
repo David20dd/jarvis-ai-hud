@@ -14,11 +14,16 @@ import time
 import urllib.parse
 import io
 
-# LIBRERÍA DE PROCESAMIENTO DE PDFS Y RENDERIZADO VISUAL
+# LIBRERÍAS DE LECTURA DE PDFS (MOTOR DUAL SEGURO)
 try:
     import fitz  # PyMuPDF
 except ImportError:
     fitz = None
+
+try:
+    import pypdf # Fallback puro Python
+except ImportError:
+    pypdf = None
 
 try:
     import docx
@@ -41,7 +46,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- CREDENCIALES ---
+# --- CREDENCIALES CONFIGURADAS ---
 GROQ_API_KEY = "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"
 ELEVENLABS_API_KEY = "sk_92aed3f61a37aa4d0ef70400ce2e1c32dd9930115aa23e8d"
 ELEVENLABS_VOICE_ID = "BiIfcPRDdl6eB0GlYhJc"
@@ -59,11 +64,11 @@ PROMPT_SISTEMA = {
         "1. Responde con elegancia, precisión brillante y naturalidad. Dirígete al usuario como 'señor' o 'Cristian'.\n"
         "2. Si el usuario te pide abrir un sitio web o reproducir/buscar contenido (como películas en Netflix, videos en YouTube o música en Spotify), "
         "invoca INMEDIATAMENTE la herramienta 'abrir_sitio_web' pasando la plataforma en 'url' y el título exacto en 'busqueda'. Confirma brevemente que estás desplegando el enlace.\n"
-        "3. FORMATO MATEMÁTICO AVANZADO: Cuando escribas ecuaciones, fórmulas, fracciones, raíces, límites o integrales, utiliza SIEMPRE la sintaxis LaTeX estándar.\n"
+        "3. FORMATO MATEMÁTICO AVANZADO: Cuando escribas ecuaciones, fórmulas, fracciones, raíces, límites o integrales, utiliza SIEMPRE sintaxis LaTeX.\n"
         "   - Para ecuaciones centradas e independientes usa '$$ ecuacion $$'. Ejemplo: $$ x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a} $$\n"
-        "   - Para fórmulas o variables dentro del texto usa '$ ecuacion $'. Ejemplo: $a^2 + b^2 = c^2$\n"
-        "   - NUNCA escribas matemáticas en texto plano descuidado como 'x = (-b +- sqrt(b^2-4ac))/2a'.\n"
-        "4. REGLA DE HERRAMIENTAS: Una vez recibida la confirmación de la herramienta, genera tu respuesta final sin bucles ni demoras."
+        "   - Para fórmulas dentro del texto usa '$ ecuacion $'. Ejemplo: $a^2 + b^2 = c^2$\n"
+        "4. Tienes acceso completo a documentos y tareas. Si recibes ejercicios de matemáticas o álgebra, resuélvelos paso a paso con máxima claridad y precisión.\n"
+        "5. REGLA DE HERRAMIENTAS: Una vez recibida la confirmación de la herramienta, genera tu respuesta final sin bucles ni demoras."
     )
 }
 
@@ -84,7 +89,7 @@ def obtener_historial_sesion(session_id: str):
     return SESIONES_MEMORIA[session_id]["messages"]
 
 
-# --- PROCESADOR MULTIMODAL CON CONVERSIÓN VISUAL DE PDFS ---
+# --- PROCESADOR MULTIMODAL CON DOBLE MOTOR PARA PDFS ---
 def procesar_archivo_adjunto(file_b64: str = None, file_name: str = None) -> tuple[str, str]:
     if not file_b64:
         return 'none', ""
@@ -117,30 +122,50 @@ def procesar_archivo_adjunto(file_b64: str = None, file_name: str = None) -> tup
             except Exception as e:
                 return 'text_context', f"\n\n[AVISO AUDIO '{file_name}']: {str(e)}\n"
 
-        # 3. DOCUMENTOS PDF (LECTURA DE TEXTO + RENDERIZADO VISUAL PARA ESCANEOS)
-        if (ext == '.pdf' or 'application/pdf' in header) and fitz:
-            try:
-                doc = fitz.open(stream=file_bytes, filetype="pdf")
-                texto_digital = ""
+        # 3. DOCUMENTOS PDF (SISTEMA DE PROCESAMIENTO BLINDADO)
+        if ext == '.pdf' or 'application/pdf' in header:
+            texto_pdf = ""
+            imagen_pdf_b64 = None
 
-                for page_num in range(min(len(doc), 10)):
-                    p = doc[page_num]
-                    t = p.get_text()
-                    if t.strip():
-                        texto_digital += f"\n--- Página {page_num+1} ---\n" + t
+            # INTENTO 1: PyMuPDF (fitz) - Texto y Renderizado de Escaneos
+            if fitz:
+                try:
+                    doc = fitz.open(stream=file_bytes, filetype="pdf")
+                    for page_num in range(min(len(doc), 10)):
+                        p = doc[page_num]
+                        t = p.get_text()
+                        if t.strip():
+                            texto_pdf += f"\n--- Página {page_num+1} ---\n" + t
 
-                if not texto_digital.strip() and len(doc) > 0:
-                    print(f"👁️ [PyMuPDF]: PDF escaneado detectado en '{file_name}'. Renderizando a HD...")
-                    page = doc[0]
-                    pix = page.get_pixmap(dpi=150)
-                    img_bytes = pix.tobytes("jpeg")
-                    img_b64 = base64.b64encode(img_bytes).decode('utf-8')
-                    return 'image', f"data:image/jpeg;base64,{img_b64}"
+                    # Si es un escaneo o foto en PDF, renderizar la primera página a HD
+                    if not texto_pdf.strip() and len(doc) > 0:
+                        print(f"👁️ [PyMuPDF]: PDF escaneado detectado en '{file_name}'. Renderizando...")
+                        page = doc[0]
+                        pix = page.get_pixmap(dpi=150)
+                        img_bytes = pix.tobytes("jpeg")
+                        imagen_pdf_b64 = f"data:image/jpeg;base64,{base64.b64encode(img_bytes).decode('utf-8')}"
+                except Exception as e:
+                    print(f"⚠️ Error PyMuPDF: {e}")
 
-                return 'text_context', f"\n\n[CONTENIDO DEL DOCUMENTO PDF '{file_name}']:\n{texto_digital[:15000]}\n"
-            except Exception as e:
-                print(f"⚠️ Error al procesar PDF con PyMuPDF: {e}")
-                return 'text_context', f"\n\n[AVISO PDF '{file_name}']: Error de lectura en el documento.\n"
+            # INTENTO 2: pypdf (Fallback si fitz no está o no extrajo texto)
+            if not texto_pdf.strip() and not imagen_pdf_b64 and pypdf:
+                try:
+                    reader = pypdf.PdfReader(io.BytesIO(file_bytes))
+                    for i, page in enumerate(reader.pages[:10]):
+                        t = page.extract_text()
+                        if t:
+                            texto_pdf += f"\n--- Página {i+1} ---\n" + t
+                except Exception as e:
+                    print(f"⚠️ Error pypdf: {e}")
+
+            # RESULTADO FINAL DEL PDF
+            if imagen_pdf_b64:
+                return 'image', imagen_pdf_b64
+
+            if texto_pdf.strip():
+                return 'text_context', f"\n\n[CONTENIDO DEL DOCUMENTO PDF '{file_name}']:\n{texto_pdf[:15000]}\n"
+
+            return 'text_context', f"\n\n[AVISO DE SISTEMA]: El archivo PDF '{file_name}' no contiene texto seleccionable. Si es una fotografía o escaneo de una guía, por favor adjúntela como archivo de imagen (.jpg o .png).\n"
 
         # 4. DOCUMENTOS WORD (.docx)
         if ext in ['.docx', '.doc'] and docx:
@@ -170,7 +195,7 @@ def procesar_archivo_adjunto(file_b64: str = None, file_name: str = None) -> tup
             except Exception as e:
                 return 'text_context', f"\n\n[AVISO EXCEL '{file_name}']: {str(e)}\n"
 
-        # 6. TEXTO PLANO / CÓDIGO FUENTE
+        # 6. ARCHIVOS DE TEXTO Y CÓDIGO FUENTE
         texto_decoded = file_bytes.decode('utf-8', errors='ignore')
         lang = ext.replace('.', '') if ext else 'txt'
         return 'text_context', f"\n\n[CONTENIDO ARCHIVO '{file_name}']:\n```{lang}\n{texto_decoded[:15000]}\n```\n"
@@ -180,7 +205,7 @@ def procesar_archivo_adjunto(file_b64: str = None, file_name: str = None) -> tup
         return 'none', ""
 
 
-# --- GENERADOR DE VOZ HD EN RAM (LIMPIEZA DE LATEX PARA AUDIO NATURAL) ---
+# --- GENERADOR DE VOZ HD EN RAM ---
 def generar_audio_elevenlabs(texto: str) -> str:
     try:
         if not ELEVENLABS_API_KEY or "sk_" not in ELEVENLABS_API_KEY:
@@ -193,9 +218,8 @@ def generar_audio_elevenlabs(texto: str) -> str:
             "xi-api-key": ELEVENLABS_API_KEY
         }
         
-        # Limpieza de bloques de código y fórmulas LaTeX para que la voz hable de forma fluida
         texto_limpio = re.sub(r'```[\s\S]*?```', '', texto)
-        texto_limpio = re.sub(r'\$\$[\s\S]*?\$\$', ' según la fórmula matemática ', texto_limpio)
+        texto_limpio = re.sub(r'\$\$[\s\S]*?\$\$', ' según la fórmula mostrada ', texto_limpio)
         texto_limpio = re.sub(r'\$[\s\S]*?\$', '', texto_limpio)
         texto_limpio = re.sub(r'\\[a-zA-Z]+', '', texto_limpio)
         texto_limpio = re.sub(r'[*_#`{}]', '', texto_limpio)
@@ -401,6 +425,7 @@ async def consultar_jarvis(data: ChatInput):
         categoria_archivo, contenido_o_b64 = procesar_archivo_adjunto(data.file_b64, data.file_name)
         prompt_usuario = data.message if data.message else "Señor, he recibido un archivo para analizar."
 
+        # MODO VISIÓN ARTIFICIAL (IMÁGENES O PDFS ESCANEADOS)
         if categoria_archivo == 'image':
             historial_usuario.append({"role": "user", "content": prompt_usuario})
             print("👁️ [Jarvis Vision]: Ejecutando análisis visual...")
@@ -411,6 +436,7 @@ async def consultar_jarvis(data: ChatInput):
             audio_b64 = generar_audio_elevenlabs(respuesta_final)
             return {"status": "success", "reply": respuesta_final, "audio_b64": audio_b64, "action_url": None}
 
+        # MODO TEXTO DIGITAL (PDFS DIGITALES, WORD, EXCEL, CÓDIGO)
         if categoria_archivo == 'text_context':
             prompt_usuario += contenido_o_b64
 
