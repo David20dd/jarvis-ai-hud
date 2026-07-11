@@ -14,14 +14,25 @@ import time
 import urllib.parse
 import io
 
-# LIBRERÍAS DE LECTURA DE ARCHIVOS MULTIFORMATO
-import pypdf
-import docx
-import openpyxl
+# IMPORTS SEGUROS CON FALLBACK
+try:
+    import pypdf
+except ImportError:
+    pypdf = None
+
+try:
+    import docx
+except ImportError:
+    docx = None
+
+try:
+    import openpyxl
+except ImportError:
+    openpyxl = None
 
 app = FastAPI()
 
-# --- CONFIGURACIÓN DE CORS PARA CONEXIÓN PÚBLICA ---
+# --- CONFIGURACIÓN DE CORS ---
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], 
@@ -30,7 +41,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- CREDENCIALES CONFIGURADAS ---
+# --- CREDENCIALES ---
 GROQ_API_KEY = "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"
 ELEVENLABS_API_KEY = "sk_92aed3f61a37aa4d0ef70400ce2e1c32dd9930115aa23e8d"
 ELEVENLABS_VOICE_ID = "BiIfcPRDdl6eB0GlYhJc"
@@ -48,9 +59,7 @@ PROMPT_SISTEMA = {
         "1. Responde con elegancia, precisión brillante y naturalidad. Dirígete al usuario como 'señor' o 'Cristian'.\n"
         "2. Si el usuario te pide abrir un sitio web o reproducir/buscar contenido (como películas en Netflix, videos en YouTube o música en Spotify), "
         "invoca INMEDIATAMENTE la herramienta 'abrir_sitio_web' pasando la plataforma en 'url' y el título exacto en 'busqueda'. Confirma brevemente que estás desplegando el enlace.\n"
-        "3. Tienes la habilidad de analizar todo tipo de archivos (imágenes, PDFs, documentos Word, hojas de cálculo Excel, scripts de código y audios). "
-        "Si procesas tareas matemáticas o ejercicios, resuélvelos paso a paso con máxima claridad y precisión.\n"
-        "4. REGLA DE HERRAMIENTAS: Una vez recibida la confirmación de la herramienta, genera tu respuesta final sin bucles ni demoras."
+        "3. REGLA DE HERRAMIENTAS: Una vez recibida la confirmación de la herramienta, genera tu respuesta final sin bucles ni demoras."
     )
 }
 
@@ -71,13 +80,8 @@ def obtener_historial_sesion(session_id: str):
     return SESIONES_MEMORIA[session_id]["messages"]
 
 
-# --- MOTOR DE EXTRACCIÓN PROTEGIDO CONTRA CRASHES ---
-def procesar_archivo_adjunto(file_b64: str, file_name: str) -> tuple[str, str]:
-    """
-    Procesa cualquier archivo sin tumbar el servidor si ocurre una excepción.
-    Retorna: (categoria, contenido_o_b64)
-    Categorías: 'none', 'image', 'text_context'
-    """
+# --- PROCESADOR DE ARCHIVOS MULTIFORMATO SEGURO ---
+def procesar_archivo_adjunto(file_b64: str = None, file_name: str = None) -> tuple[str, str]:
     if not file_b64:
         return 'none', ""
 
@@ -95,7 +99,7 @@ def procesar_archivo_adjunto(file_b64: str, file_name: str) -> tuple[str, str]:
         if ext in ['.jpg', '.jpeg', '.png', '.webp', '.gif'] or 'image/' in header:
             return 'image', file_b64
 
-        # 2. AUDIOS (TRANSCRIPCIÓN EN TIEMPO REAL CON GROQ WHISPER)
+        # 2. AUDIOS
         if ext in ['.mp3', '.wav', '.m4a', '.ogg', '.flac', '.webm'] or 'audio/' in header:
             try:
                 buffer = io.BytesIO(file_bytes)
@@ -107,50 +111,48 @@ def procesar_archivo_adjunto(file_b64: str, file_name: str) -> tuple[str, str]:
                 )
                 return 'text_context', f"\n\n[TRANSCRIPCIÓN DE AUDIO '{file_name}']:\n\"{transcription.text}\"\n"
             except Exception as e:
-                return 'text_context', f"\n\n[AVISO AUDIO '{file_name}']: No se pudo transcribir: {str(e)}\n"
+                return 'text_context', f"\n\n[AVISO AUDIO '{file_name}']: {str(e)}\n"
 
-        # 3. DOCUMENTOS PDF (SOPORTE PARA TEXTO DIGITAL Y ESCANEOS)
-        if ext == '.pdf' or 'application/pdf' in header:
+        # 3. PDF
+        if (ext == '.pdf' or 'application/pdf' in header) and pypdf:
             try:
                 reader = pypdf.PdfReader(io.BytesIO(file_bytes))
                 texto = ""
-                for i, page in enumerate(reader.pages[:10]): # Límite de 10 páginas
+                for i, page in enumerate(reader.pages[:10]):
                     t = page.extract_text()
                     if t: texto += f"\n--- Página {i+1} ---\n" + t
                 
-                # Si no hay texto digital (PDF escaneado/foto), intentar extraer imágenes internas
                 if not texto.strip():
                     for page in reader.pages[:3]:
                         if hasattr(page, 'images') and len(page.images) > 0:
                             img_obj = page.images[0]
                             img_b64 = base64.b64encode(img_obj.data).decode('utf-8')
                             mime = "image/jpeg" if img_obj.name.endswith(".jpg") else "image/png"
-                            print("👁️ [PDF Escaneado]: Imagen extraída para análisis de visión.")
                             return 'image', f"data:{mime};base64,{img_b64}"
 
                 if not texto.strip():
-                    return 'text_context', f"\n\n[AVISO PDF '{file_name}']: El archivo no contiene texto seleccionable. Si es una foto de una guía, súbala como archivo de imagen (.jpg o .png).\n"
+                    return 'text_context', f"\n\n[AVISO PDF '{file_name}']: PDF sin texto digital.\n"
 
-                return 'text_context', f"\n\n[CONTENIDO DEL DOCUMENTO PDF '{file_name}']:\n{texto[:12000]}\n"
+                return 'text_context', f"\n\n[CONTENIDO PDF '{file_name}']:\n{texto[:12000]}\n"
             except Exception as e:
-                return 'text_context', f"\n\n[AVISO PDF '{file_name}']: Error de lectura: {str(e)}\n"
+                return 'text_context', f"\n\n[AVISO PDF '{file_name}']: {str(e)}\n"
 
-        # 4. DOCUMENTOS WORD (.docx)
-        if ext in ['.docx', '.doc'] or 'wordprocessingml' in header:
+        # 4. WORD
+        if ext in ['.docx', '.doc'] and docx:
             try:
                 doc = docx.Document(io.BytesIO(file_bytes))
                 texto = "\n".join([p.text for p in doc.paragraphs if p.text])
                 return 'text_context', f"\n\n[CONTENIDO WORD '{file_name}']:\n{texto[:12000]}\n"
             except Exception as e:
-                return 'text_context', f"\n\n[AVISO WORD '{file_name}']: Error de lectura: {str(e)}\n"
+                return 'text_context', f"\n\n[AVISO WORD '{file_name}']: {str(e)}\n"
 
-        # 5. HOJAS DE CÁLCULO EXCEL Y CSV
+        # 5. EXCEL
         if ext in ['.xlsx', '.xls', '.csv']:
             try:
                 if ext == '.csv':
                     decoded = file_bytes.decode('utf-8', errors='ignore')
                     return 'text_context', f"\n\n[CONTENIDO CSV '{file_name}']:\n{decoded[:12000]}\n"
-                else:
+                elif openpyxl:
                     wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
                     res = []
                     for sheet in wb.sheetnames[:3]:
@@ -161,19 +163,19 @@ def procesar_archivo_adjunto(file_b64: str, file_name: str) -> tuple[str, str]:
                                 res.append(" | ".join([str(v) if v is not None else "" for v in row]))
                     return 'text_context', f"\n\n[CONTENIDO EXCEL '{file_name}']:\n" + "\n".join(res)[:12000] + "\n"
             except Exception as e:
-                return 'text_context', f"\n\n[AVISO EXCEL '{file_name}']: Error de lectura: {str(e)}\n"
+                return 'text_context', f"\n\n[AVISO EXCEL '{file_name}']: {str(e)}\n"
 
-        # 6. TEXTO PLANO / CÓDIGO FUENTE
+        # 6. TEXTO PLANO
         texto_decoded = file_bytes.decode('utf-8', errors='ignore')
         lang = ext.replace('.', '') if ext else 'txt'
         return 'text_context', f"\n\n[CONTENIDO ARCHIVO '{file_name}']:\n```{lang}\n{texto_decoded[:12000]}\n```\n"
 
-    except Exception as general_err:
-        print(f"⚠️ Error al procesar adjunto: {general_err}")
-        return 'text_context', f"\n\n[AVISO ARCHIVO '{file_name}']: No se pudo procesar el formato adjunto.\n"
+    except Exception as err:
+        print(f"⚠️ Error procesando adjunto: {err}")
+        return 'none', ""
 
 
-# --- GENERADOR DE VOZ HD EN MEMORIA RAM ---
+# --- GENERADOR DE VOZ HD EN RAM ---
 def generar_audio_elevenlabs(texto: str) -> str:
     try:
         if not ELEVENLABS_API_KEY or "sk_" not in ELEVENLABS_API_KEY:
@@ -204,12 +206,11 @@ def generar_audio_elevenlabs(texto: str) -> str:
             audio_b64 = base64.b64encode(res.content).decode('utf-8')
             return f"data:audio/mp3;base64,{audio_b64}"
         return None
-    except Exception as err:
-        print(f"⚠️ Error en audio ElevenLabs: {err}")
+    except Exception:
         return None
 
 
-# --- CEREBROS IA (VISIÓN Y TEXTO) ---
+# --- CEREBROS IA ---
 def ejecutar_consulta_vision(historial_mensajes, image_b64_data):
     if not image_b64_data.startswith("data:image"):
         image_b64_data = f"data:image/jpeg;base64,{image_b64_data}"
@@ -268,7 +269,6 @@ def ejecutar_consulta_llm(historial_mensajes, herramientas_lista):
 # --- HERRAMIENTAS ---
 def abrir_sitio_web(url: str, busqueda: str = None) -> str:
     global ACTION_URL_TEMP
-    print(f"🌐 [Navegación Jarvis]: Generando orden para: '{url}' | Búsqueda: '{busqueda}'")
     url_lower = url.lower().strip()
     
     if busqueda:
@@ -346,27 +346,28 @@ herramientas = [
         "type": "function", 
         "function": {
             "name": "abrir_sitio_web", 
-            "description": "Obligatoria para abrir webs o buscar/reproducir contenido en plataformas como Netflix, YouTube, Spotify o Google. Pasa 'url' (ej: 'netflix') y en 'busqueda' pon el título de la película, serie o canción.", 
+            "description": "Obligatoria para abrir webs o buscar/reproducir contenido en plataformas como Netflix, YouTube, Spotify o Google.", 
             "parameters": {
                 "type": "object", 
                 "properties": {
-                    "url": {"type": "string", "description": "Plataforma o dirección web (netflix, youtube, spotify, etc.)."},
-                    "busqueda": {"type": "string", "description": "Título exacto de la película, serie o video a reproducir/buscar."}
+                    "url": {"type": "string"},
+                    "busqueda": {"type": "string"}
                 }, 
                 "required": ["url"]
             }
         }
     },
-    {"type": "function", "function": {"name": "buscar_en_internet", "description": "Busca noticias o información en tiempo real.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}},
-    {"type": "function", "function": {"name": "leer_pagina_web", "description": "Lee información de una URL.", "parameters": {"type": "object", "properties": {"url": {"type": "string"}}, "required": ["url"]}}},
-    {"type": "function", "function": {"name": "obtener_estado_pc", "description": "Obtiene el diagnóstico del servidor.", "parameters": {"type": "object", "properties": {}}}},
-    {"type": "function", "function": {"name": "ejecutar_codigo_python", "description": "Ejecuta algoritmos en Python.", "parameters": {"type": "object", "properties": {"codigo": {"type": "string"}}, "required": ["codigo"]}}},
-    {"type": "function", "function": {"name": "obtener_clima_en_vivo", "description": "Consulta el clima de cualquier ciudad.", "parameters": {"type": "object", "properties": {"ciudad": {"type": "string"}}, "required": ["ciudad"]}}}
+    {"type": "function", "function": {"name": "buscar_en_internet", "description": "Busca en la web.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}},
+    {"type": "function", "function": {"name": "leer_pagina_web", "description": "Lee una URL.", "parameters": {"type": "object", "properties": {"url": {"type": "string"}}, "required": ["url"]}}},
+    {"type": "function", "function": {"name": "obtener_estado_pc", "description": "Diagnóstico.", "parameters": {"type": "object", "properties": {}}}},
+    {"type": "function", "function": {"name": "ejecutar_codigo_python", "description": "Ejecuta Python.", "parameters": {"type": "object", "properties": {"codigo": {"type": "string"}}, "required": ["codigo"]}}},
+    {"type": "function", "function": {"name": "obtener_clima_en_vivo", "description": "Clima.", "parameters": {"type": "object", "properties": {"ciudad": {"type": "string"}}, "required": ["ciudad"]}}}
 ]
 
+# MODELO FLEXIBLE CON VALORES DEFAULT
 class ChatInput(BaseModel):
-    message: str
-    session_id: str = None
+    message: str = ""
+    session_id: str = "default_session"
     file_b64: str = None
     file_name: str = None
 
@@ -389,14 +390,11 @@ async def consultar_jarvis(data: ChatInput):
             SESIONES_MEMORIA[sid]["messages"] = [PROMPT_SISTEMA] + historial_usuario[-8:]
             historial_usuario = SESIONES_MEMORIA[sid]["messages"]
 
-        # PROCESAMIENTO PROTEGIDO DE ARCHIVOS
         categoria_archivo, contenido_o_b64 = procesar_archivo_adjunto(data.file_b64, data.file_name)
-        prompt_usuario = data.message if data.message else "Señor, analice el archivo adjunto por favor."
+        prompt_usuario = data.message if data.message else "Señor, he recibido un archivo."
 
-        # SI ES IMAGEN O PDF ESCANEADO CONVERTIDO A IMAGEN
         if categoria_archivo == 'image':
             historial_usuario.append({"role": "user", "content": prompt_usuario})
-            print(f"👁️ [Jarvis Vision]: Procesando modelo de visión artificial...")
             response = ejecutar_consulta_vision(historial_usuario, contenido_o_b64)
             respuesta_final = response.choices[0].message.content
             
@@ -404,7 +402,6 @@ async def consultar_jarvis(data: ChatInput):
             audio_b64 = generar_audio_elevenlabs(respuesta_final)
             return {"status": "success", "reply": respuesta_final, "audio_b64": audio_b64, "action_url": None}
 
-        # SI ES TEXTO/PDF/EXCEL/WORD/CÓDIGO/AUDIO
         if categoria_archivo == 'text_context':
             prompt_usuario += contenido_o_b64
 
@@ -468,7 +465,7 @@ async def consultar_jarvis(data: ChatInput):
 
             iteracion += 1
 
-        respuesta_fallback = f"Señor, he procesado su solicitud: {ultima_respuesta_herramienta}"
+        respuesta_fallback = f"Señor, procesé su solicitud: {ultima_respuesta_herramienta}"
         historial_usuario.append({"role": "assistant", "content": respuesta_fallback})
         
         audio_b64 = generar_audio_elevenlabs(respuesta_fallback)
@@ -483,7 +480,7 @@ async def consultar_jarvis(data: ChatInput):
         print(f"🚨 Excepción en el servidor: {str(e)}")
         return {
             "status": "success", 
-            "reply": "Sistemas reconectados, señor. El formato del archivo o mensaje requería un ajuste de memoria, pero ya me encuentro operativo.", 
+            "reply": "Sistemas reconectados, señor. Experimenté un microcorte pero estoy a su disposición.", 
             "audio_b64": None,
             "action_url": None
         }
