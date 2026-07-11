@@ -127,23 +127,37 @@
         .code-block { background: #020408; border: 1px solid var(--stark-cyan); border-left: 4px solid var(--stark-cyan); border-radius: 4px; padding: 10px; margin: 8px 0; font-family: 'Consolas', monospace; color: #00ff88; overflow-x: auto; font-size: 0.82rem; }
 
         .hud-link-btn {
-            display: inline-block;
-            margin-top: 10px;
-            padding: 8px 16px;
+            display: inline-block; margin-top: 10px; padding: 8px 16px;
             background: linear-gradient(135deg, rgba(0, 242, 254, 0.3), rgba(0, 255, 136, 0.3));
-            border: 1px solid var(--stark-cyan);
-            color: #ffffff;
-            text-decoration: none;
-            border-radius: 6px;
-            font-weight: bold;
-            font-size: 0.85rem;
-            letter-spacing: 1px;
-            box-shadow: 0 0 10px rgba(0, 242, 254, 0.3);
-            transition: all 0.3s ease;
+            border: 1px solid var(--stark-cyan); color: #ffffff; text-decoration: none;
+            border-radius: 6px; font-weight: bold; font-size: 0.85rem; letter-spacing: 1px;
+            box-shadow: 0 0 10px rgba(0, 242, 254, 0.3); transition: all 0.3s ease;
         }
         .hud-link-btn:hover { background: var(--stark-cyan); color: var(--stark-dark); box-shadow: 0 0 20px var(--stark-cyan); }
 
-        /* PANEL DE CONTROLES E INPUT CON BOTÓN DE MICRÓFONO */
+        /* PREVIEW DE IMAGEN ADJUNTADA EN EL ENCABEZADO DEL INPUT */
+        .preview-bar {
+            display: none; padding: 8px 15px; background: rgba(0, 0, 0, 0.7);
+            border-top: 1px solid var(--stark-border); align-items: center; gap: 12px;
+        }
+        .preview-bar.active { display: flex; }
+        .preview-thumb {
+            width: 45px; height: 45px; border-radius: 4px; object-fit: cover;
+            border: 1px solid var(--stark-cyan); box-shadow: 0 0 8px var(--stark-cyan);
+        }
+        .preview-info { flex: 1; font-size: 0.8rem; color: var(--stark-cyan); }
+        .preview-close {
+            background: transparent; border: none; color: var(--stark-red);
+            font-size: 1.2rem; cursor: pointer; font-weight: bold; padding: 0 8px;
+        }
+
+        .chat-img-thumb {
+            max-width: 100%; max-height: 220px; border-radius: 6px;
+            margin-bottom: 8px; border: 1px solid var(--stark-cyan);
+            box-shadow: 0 0 12px rgba(0, 242, 254, 0.2); display: block;
+        }
+
+        /* CONTROLES DE ENTRADA */
         .input-panel { padding: 12px 12px; border-top: 1px solid var(--stark-border); background: rgba(0, 0, 0, 0.6); display: flex; gap: 8px; align-items: center; }
         @media (min-width: 600px) { .input-panel { padding: 18px 25px; gap: 12px; } }
 
@@ -153,37 +167,15 @@
         @media (min-width: 600px) { .stark-btn { padding: 0 22px; font-size: 0.9rem; } }
         .stark-btn:active, .stark-btn:hover { background: var(--stark-cyan); color: var(--stark-dark); font-weight: bold; }
 
-        /* ESTILO DEL BOTÓN DE MICRÓFONO */
-        .mic-btn {
-            width: 44px;
-            min-width: 44px;
-            padding: 0;
-            border-radius: 6px;
-        }
+        .icon-btn { width: 44px; min-width: 44px; padding: 0; border-radius: 6px; }
+        .icon-btn svg { width: 20px; height: 20px; fill: var(--stark-cyan); transition: fill 0.3s ease; }
 
-        .mic-btn svg {
-            width: 20px;
-            height: 20px;
-            fill: var(--stark-cyan);
-            transition: fill 0.3s ease;
-        }
-
-        /* ESTADO DE MICRÓFONO ENCENDIDO Y ESCUCHANDO */
         .mic-btn.active {
-            background: rgba(255, 51, 102, 0.25) !important;
-            border-color: var(--stark-red) !important;
-            box-shadow: 0 0 18px rgba(255, 51, 102, 0.6);
-            animation: pulseMic 1s infinite alternate;
+            background: rgba(255, 51, 102, 0.25) !important; border-color: var(--stark-red) !important;
+            box-shadow: 0 0 18px rgba(255, 51, 102, 0.6); animation: pulseMic 1s infinite alternate;
         }
-
-        .mic-btn.active svg {
-            fill: #ffffff !important;
-        }
-
-        @keyframes pulseMic {
-            0% { transform: scale(1); }
-            100% { transform: scale(1.08); }
-        }
+        .mic-btn.active svg { fill: #ffffff !important; }
+        @keyframes pulseMic { 0% { transform: scale(1); } 100% { transform: scale(1.08); } }
     </style>
 </head>
 <body>
@@ -198,12 +190,30 @@
         </div>
 
         <div class="chat-box" id="chatBox">
-            <div class="message jarvis-message">Sistemas en línea, señor Cristian. Interfaz holográfica Stark 3.0 activa. ¿En qué puedo asistirlo hoy?</div>
+            <div class="message jarvis-message">Sistemas en línea, señor Cristian. Interfaz holográfica Stark 3.0 activa. Módulos de Visión Multimodal en línea. ¿En qué puedo asistirlo hoy?</div>
+        </div>
+
+        <!-- BARRA DE PREVIEW DE IMAGEN ADJUNTADA -->
+        <div class="preview-bar" id="previewBar">
+            <img id="previewImg" class="preview-thumb" src="" alt="Vista previa">
+            <div class="preview-info">IMAGEN CAPTURADA - LISTA PARA ANÁLISIS</div>
+            <button class="preview-close" onclick="cancelarImagen()">✕</button>
         </div>
 
         <div class="input-panel">
-            <!-- BOTÓN DE MICRÓFONO MANUAL -->
-            <button class="stark-btn mic-btn" id="micBtn" onclick="toggleMicrofono()" title="Activar micrófono">
+            <!-- BOTÓN DE CÁMARA / SUBIR IMAGEN -->
+            <button class="stark-btn icon-btn" onclick="document.getElementById('imageInput').click()" title="Capturar / Adjuntar Imagen">
+                <svg viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="3.2"/>
+                    <path d="M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/>
+                </svg>
+            </button>
+
+            <!-- INPUT OCULTO DE IMAGEN -->
+            <input type="file" id="imageInput" accept="image/*" style="display:none;" onchange="procesarImagenSeleccionada(event)">
+
+            <!-- BOTÓN DE MICRÓFONO -->
+            <button class="stark-btn icon-btn mic-btn" id="micBtn" onclick="toggleMicrofono()" title="Activar micrófono">
                 <svg viewBox="0 0 24 24">
                     <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
                     <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
@@ -223,9 +233,14 @@
         const sysStatus = document.getElementById("sys-status");
         const reactor = document.getElementById("reactor");
         const micBtn = document.getElementById("micBtn");
+        
+        const previewBar = document.getElementById("previewBar");
+        const previewImg = document.getElementById("previewImg");
+        const imageInput = document.getElementById("imageInput");
 
         let recognition = null;
         let isListening = false;
+        let currentImageB64 = None = null;
 
         function obtenerSessionId() {
             let sid = localStorage.getItem("jarvis_session_id");
@@ -279,12 +294,52 @@
             if (estado === 'error') sysStatus.style.color = "var(--stark-red)";
         }
 
-        /* 🎙️ CONTROL DE MICRÓFONO MANUAL Y SEGURO */
+        /* 🖼️ OPTIMIZACIÓN Y COMPRESIÓN DE IMÁGENES */
+        function procesarImagenSeleccionada(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement("canvas");
+                    const MAX_WIDTH = 1280;
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > MAX_WIDTH) {
+                        height = Math.round((height * MAX_WIDTH) / width);
+                        width = MAX_WIDTH;
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext("2d");
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    currentImageB64 = canvas.toDataURL("image/jpeg", 0.8);
+                    previewImg.src = currentImageB64;
+                    previewBar.classList.add("active");
+                    playSFX("mic");
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function cancelarImagen() {
+            currentImageB64 = null;
+            imageInput.value = "";
+            previewBar.classList.remove("active");
+        }
+
+        /* 🎙️ CONTROL DE MICRÓFONO */
         if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             recognition = new SpeechRecognition();
             recognition.lang = 'es-ES';
-            recognition.continuous = false; // Se apaga solo tras capturar la frase
+            recognition.continuous = false;
             recognition.interimResults = false;
 
             recognition.onstart = () => {
@@ -298,37 +353,26 @@
                 const textoCapturado = event.results[0][0].transcript;
                 userInput.value = textoCapturado;
                 apagarMicrofono();
-                enviarMensaje(); // Envía el comando automáticamente
+                enviarMensaje();
             };
 
-            recognition.onerror = (e) => {
-                console.warn("Error o cancelación de micrófono:", e.error);
-                apagarMicrofono();
-                setEstado('ready', 'ONLINE');
-            };
-
-            recognition.onend = () => {
-                apagarMicrofono();
-            };
+            recognition.onerror = () => apagarMicrofono();
+            recognition.onend = () => apagarMicrofono();
         }
 
         function toggleMicrofono() {
             if (!recognition) {
-                alert("Su navegador no soporta el reconocimiento de voz por micrófono.");
+                alert("Navegador sin soporte de voz.");
                 return;
             }
-
             if (isListening) {
                 recognition.stop();
                 apagarMicrofono();
             } else {
-                // ACTIVACIÓN EXCLUSIVA POR CLIC MANUAL DEL USUARIO
                 try {
-                    window.speechSynthesis.cancel(); // Silencia a Jarvis si estaba hablando
+                    window.speechSynthesis.cancel();
                     recognition.start();
-                } catch(e) {
-                    apagarMicrofono();
-                }
+                } catch(e) { apagarMicrofono(); }
             }
         }
 
@@ -384,9 +428,7 @@
 
         function agregarBotonAccion(elemento, url) {
             const btnLink = document.createElement("a");
-            btnLink.href = url;
-            btnLink.target = "_blank";
-            btnLink.className = "hud-link-btn";
+            btnLink.href = url; btnLink.target = "_blank"; btnLink.className = "hud-link-btn";
             btnLink.innerText = "🚀 ABRIR ENLACE EN PANTALLA";
             elemento.appendChild(document.createElement("br"));
             elemento.appendChild(btnLink);
@@ -399,11 +441,17 @@
 
         async function enviarMensaje() {
             const texto = userInput.value.trim();
-            if (!texto) return;
+            const imgEnviar = currentImageB64;
+
+            if (!texto && !imgEnviar) return;
 
             playSFX('send');
-            agregarMensajeUsuario(texto);
+            
+            // Renderizar mensaje del usuario en el chat (con miniatura de imagen si existe)
+            agregarMensajeUsuario(texto, imgEnviar);
+            
             userInput.value = "";
+            cancelarImagen();
 
             setEstado('processing', 'PROCESANDO...');
 
@@ -412,8 +460,9 @@
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ 
-                        message: texto,
-                        session_id: obtenerSessionId() 
+                        message: texto || "Señor, analice esta imagen por favor.",
+                        session_id: obtenerSessionId(),
+                        image_b64: imgEnviar
                     })
                 });
 
@@ -426,11 +475,8 @@
                     chatBox.appendChild(msgDiv);
 
                     if (data.action_url) {
-                        try {
-                            window.open(data.action_url, '_blank');
-                        } catch(e) {
-                            console.warn("Navegador bloqueó popup automático, usando botón táctil.");
-                        }
+                        try { window.open(data.action_url, '_blank'); } 
+                        catch(e) { console.warn("Popup bloqueado."); }
                     }
 
                     tipoEscribir(msgDiv, data.reply, data.action_url, () => {
@@ -458,10 +504,22 @@
             }
         }
 
-        function agregarMensajeUsuario(texto) {
+        function agregarMensajeUsuario(texto, imgB64) {
             const msgDiv = document.createElement("div");
             msgDiv.className = "message user-message";
-            msgDiv.innerText = texto;
+            
+            if (imgB64) {
+                const imgElem = document.createElement("img");
+                imgElem.src = imgB64;
+                imgElem.className = "chat-img-thumb";
+                msgDiv.appendChild(imgElem);
+            }
+            
+            if (texto) {
+                const textNode = document.createTextNode(texto);
+                msgDiv.appendChild(textNode);
+            }
+
             chatBox.appendChild(msgDiv);
             chatBox.scrollTop = chatBox.scrollHeight;
         }
