@@ -144,8 +144,8 @@
     </div>
 
     <script>
-        // 🚨 CAMBIA ESTA URL CUANDO DESPLIEGUES EL BACKEND EN RENDER:
-        const API_URL = "http://localhost:8080/api/jarvis";
+        // SERVIDOR BACKEND OFICIAL EN RENDER
+        const API_URL = "https://jarvis-ai-hud.onrender.com/api/jarvis";
 
         const chatBox = document.getElementById("chatBox");
         const userInput = document.getElementById("userInput");
@@ -278,7 +278,7 @@
             } catch (error) {
                 setEstado('error', 'DESCONEXIÓN CENTRAL');
                 playSFX('error');
-                agregarMensajeJarvis("[ERROR]: No se pudo conectar con el servidor central de Python.");
+                agregarMensajeJarvis("[ERROR]: No se pudo conectar con el servidor central en Render.");
             }
         }
 
