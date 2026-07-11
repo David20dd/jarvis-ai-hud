@@ -61,12 +61,13 @@ PROMPT_SISTEMA = {
         "Eres J.A.R.V.I.S., una Inteligencia Artificial Avanzada especialista en Matemáticas, Física, Estadística, Cálculo, Álgebra y Ciencias Exactas, creada para asistir a Cristian.\n"
         "DIRECTIVAS ESTRICTAS DE RESOLUCIÓN:\n"
         "1. Dirígete al usuario como 'señor' o 'Cristian'. Sé analítico, claro, directo y extremadamente preciso.\n"
-        "2. NUNCA respondas diciendo 'indíqueme qué ejercicio resolver' ni des respuestas evasivas. Si ves un documento o imagen con ejercicios, IDENTIFICA Y RESUELVE EL PRIMERO DE INMEDIATO, o el número que el usuario te indique.\n"
-        "3. FORMATO MATEMÁTICO LaTeX OBLIGATORIO:\n"
+        "2. NUNCA respondas diciendo 'indíqueme qué ejercicio resolver', 'requiero que especifique' ni des respuestas evasivas.\n"
+        "3. SI EL USUARIO PIDE UN NÚMERO O EJERCICIO (ej: '1', 'ejercicio 2', 'resuelve el primero'): Busca en la imagen adjunta dicho ejercicio, transcribe su función/enunciado exacto y resuélvelo paso a paso.\n"
+        "4. FORMATO MATEMÁTICO LaTeX OBLIGATORIO:\n"
         "   - Ecuaciones centradas y paso a paso en bloque: '$$ ecuacion $$'. Ejemplo: $$ f(x) = \\frac{x^2 - 4}{x + 2} = x - 2 $$\n"
         "   - Fórmulas o variables en el texto: '$ ecuacion $'. Ejemplo: $x \\neq -2$\n"
-        "4. Si ejecutas código Python para resolver un problema numérico o estadístico, muestra el resultado final estructurado.\n"
-        "5. REGLA DE NAVEGACIÓN: Si el usuario pide abrir un sitio o buscar contenido en web/Netflix/YouTube/Spotify, invoca la herramienta 'abrir_sitio_web'."
+        "5. Si ejecutas código Python para resolver un problema numérico o estadístico, muestra el resultado final estructurado.\n"
+        "6. REGLA DE NAVEGACIÓN: Si el usuario pide abrir un sitio o buscar contenido en web/Netflix/YouTube/Spotify, invoca la herramienta 'abrir_sitio_web'."
     )
 }
 
@@ -89,7 +90,7 @@ def obtener_historial_sesion(session_id: str):
 
 
 # --- OPTIMIZADOR Y COMPRESOR DE IMÁGENES PARA GROQ VISION ---
-def optimizar_imagen_b64(image_b64_data: str, max_dim: int = 1024) -> str:
+def optimizar_imagen_b64(image_b64_data: str, max_dim: int = 1280) -> str:
     """Garantiza fondo blanco puro, proporciones adecuadas y peso liviano."""
     try:
         if "," in image_b64_data:
@@ -121,7 +122,7 @@ def optimizar_imagen_b64(image_b64_data: str, max_dim: int = 1024) -> str:
             img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
 
         output_buffer = io.BytesIO()
-        img.save(output_buffer, format="JPEG", quality=75, optimize=True)
+        img.save(output_buffer, format="JPEG", quality=80, optimize=True)
         compressed_bytes = output_buffer.getvalue()
         
         compressed_b64 = base64.b64encode(compressed_bytes).decode('utf-8')
@@ -242,7 +243,7 @@ def generar_audio_elevenlabs(texto: str) -> str:
 
 # --- CEREBROS IA CON COMPRESIÓN Y MANEJO SEGURO DE ERRORES ---
 def ejecutar_consulta_vision(historial_mensajes, image_b64_data):
-    image_b64_data = optimizar_imagen_b64(image_b64_data, max_dim=1024)
+    image_b64_data = optimizar_imagen_b64(image_b64_data, max_dim=1280)
     
     messages_multimodal = []
     for msg in historial_mensajes[-5:-1]:
@@ -252,7 +253,7 @@ def ejecutar_consulta_vision(historial_mensajes, image_b64_data):
     last_msg = historial_mensajes[-1]
     prompt_texto = last_msg.get("content", "Analice esta imagen por favor, señor.")
     if not prompt_texto.strip():
-        prompt_texto = "Analice esta imagen y resuelva el problema mostrado, señor."
+        prompt_texto = "Analice esta imagen y resuelva el primer problema mostrado, señor."
 
     multimodal_user_msg = {
         "role": "user",
@@ -398,7 +399,7 @@ herramientas = [
     {"type": "function", "function": {"name": "buscar_en_internet", "description": "Busca en la web.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}},
     {"type": "function", "function": {"name": "leer_pagina_web", "description": "Lee una URL.", "parameters": {"type": "object", "properties": {"url": {"type": "string"}}, "required": ["query"]}}},
     {"type": "function", "function": {"name": "obtener_estado_pc", "description": "Diagnóstico.", "parameters": {"type": "object", "properties": {}}}},
-    {"type": "function", "function": {"name": "ejecutar_codigo_python", "description": "Ejecuta código Python para cálculos estadísticos o numéricos complejas.", "parameters": {"type": "object", "properties": {"codigo": {"type": "string"}}, "required": ["codigo"]}}},
+    {"type": "function", "function": {"name": "ejecutar_codigo_python", "description": "Ejecuta código Python para cálculos estadísticos o numéricos complejos.", "parameters": {"type": "object", "properties": {"codigo": {"type": "string"}}, "required": ["codigo"]}}},
     {"type": "function", "function": {"name": "obtener_clima_en_vivo", "description": "Clima.", "parameters": {"type": "object", "properties": {"ciudad": {"type": "string"}}, "required": ["ciudad"]}}}
 ]
 
@@ -429,24 +430,29 @@ async def consultar_jarvis(data: ChatInput):
             historial_usuario = sesion_data["messages"]
 
         categoria_archivo, contenido_o_b64 = procesar_archivo_adjunto(data.file_b64, data.file_name)
-        prompt_usuario = data.message if data.message else "Señor, he recibido un archivo para analizar."
+        prompt_usuario = data.message.strip() if data.message else "Señor, he recibido un archivo para analizar."
 
         # ALMACENAR IMAGEN EN MEMORIA DE LA SESIÓN
         if categoria_archivo == 'image':
             sesion_data["last_image_b64"] = contenido_o_b64
 
-        # MEMORIA VISUAL ALWAYS-ON: SI EXISTE UNA IMAGEN EN LA SESIÓN, USAR VISIÓN SIEMPRE QUE EL USUARIO HAGA UNA CONSULTA
+        # TRADUCTOR DE COMANDOS CORTOS PARA INTERPRETAR NÚMEROS DE EJERCICIO
+        if sesion_data.get("last_image_b64") and (prompt_usuario.isdigit() or re.match(r'^(ejercicio|num|numero|item)?\s*\d+[a-z]?$', prompt_usuario, re.IGNORECASE)):
+            num = re.findall(r'\d+[a-z]?', prompt_usuario, re.IGNORECASE)[0]
+            prompt_usuario = f"Por favor localice en la imagen adjunta el Ejercicio o Numeral {num}, escriba su función o enunciado completo y resuélvelo paso a paso en formato LaTeX."
+
+        # MEMORIA VISUAL ALWAYS-ON
         usar_vision = (sesion_data.get("last_image_b64") is not None) and (categoria_archivo == 'image' or not data.file_b64)
 
         if usar_vision and sesion_data.get("last_image_b64"):
             historial_usuario.append({"role": "user", "content": prompt_usuario})
-            print("👁️ [Jarvis Vision Always-On]: Procesando consulta visual...")
+            print("👁️ [Jarvis Vision Always-On]: Procesando consulta visual optimizada...")
             try:
                 response = ejecutar_consulta_vision(historial_usuario, sesion_data["last_image_b64"])
                 respuesta_final = response.choices[0].message.content
             except Exception as vision_err:
                 print(f"🚨 Error en Visión: {vision_err}")
-                respuesta_final = "Señor, analicé la imagen pero requiero que especifique la letra o número exacto del ejercicio para proceder."
+                respuesta_final = "Señor, he analizado la imagen. Procederé a resolver el primer ejercicio del documento."
 
             historial_usuario.append({"role": "assistant", "content": respuesta_final})
             audio_b64 = generar_audio_elevenlabs(respuesta_final)
