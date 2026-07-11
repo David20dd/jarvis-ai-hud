@@ -12,6 +12,12 @@ import base64
 import re
 import time
 import urllib.parse
+import io
+
+# LIBRERÍAS DE LECTURA DE ARCHIVOS MULTIFORMATO
+import pypdf
+import docx
+import openpyxl
 
 app = FastAPI()
 
@@ -31,7 +37,6 @@ ELEVENLABS_VOICE_ID = "BiIfcPRDdl6eB0GlYhJc"
 
 client = Groq(api_key=GROQ_API_KEY)
 
-# --- MEMORIA AISLADA MULTIUSUARIO Y ACCIONES REMOTAS ---
 SESIONES_MEMORIA = {}
 ACTION_URL_TEMP = None
 
@@ -43,7 +48,8 @@ PROMPT_SISTEMA = {
         "1. Responde con elegancia, precisión brillante y naturalidad. Dirígete al usuario como 'señor' o 'Cristian'.\n"
         "2. Si el usuario te pide abrir un sitio web o reproducir/buscar contenido (como películas en Netflix, videos en YouTube o música en Spotify), "
         "invoca INMEDIATAMENTE la herramienta 'abrir_sitio_web' pasando la plataforma en 'url' y el título exacto en 'busqueda'. Confirma brevemente que estás desplegando el enlace.\n"
-        "3. Si analizas una imagen, sé minucioso, profesional y directo describiendo o resolviendo lo que se observa en ella.\n"
+        "3. Tienes la habilidad de analizar todo tipo de archivos (imágenes, PDFs, documentos Word, hojas de cálculo Excel, scripts de código y audios). "
+        "Sé minucioso, profesional y directo al responder sobre el contenido de los archivos adjuntos.\n"
         "4. REGLA DE HERRAMIENTAS: Una vez recibida la confirmación de la herramienta, genera tu respuesta final sin bucles ni demoras."
     )
 }
@@ -63,6 +69,92 @@ def obtener_historial_sesion(session_id: str):
             del SESIONES_MEMORIA[sid]
 
     return SESIONES_MEMORIA[session_id]["messages"]
+
+
+# --- MOTOR DE EXTRACCIÓN Y PROCESAMIENTO DE ARCHIVOS MULTIFORMATO ---
+def procesar_archivo_adjunto(file_b64: str, file_name: str) -> tuple[str, str]:
+    """
+    Procesa cualquier tipo de archivo enviado en Base64.
+    Retorna: (categoria, contenido_extraido)
+    Categorías posibles: 'image', 'text_context'
+    """
+    if not file_b64:
+        return 'none', ""
+
+    if "," in file_b64:
+        header, encoded = file_b64.split(",", 1)
+    else:
+        encoded = file_b64
+        header = ""
+
+    file_bytes = base64.b64decode(encoded)
+    ext = os.path.splitext(file_name.lower())[1] if file_name else ""
+
+    # 1. IMÁGENES
+    if ext in ['.jpg', '.jpeg', '.png', '.webp', '.gif'] or 'image/' in header:
+        return 'image', file_b64
+
+    # 2. AUDIOS (TRANSCRIPCIÓN EN TIEMPO REAL CON GROQ WHISPER)
+    if ext in ['.mp3', '.wav', '.m4a', '.ogg', '.flac', '.webm'] or 'audio/' in header:
+        try:
+            buffer = io.BytesIO(file_bytes)
+            buffer.name = file_name or "audio_usuario.mp3"
+            transcription = client.audio.transcriptions.create(
+                file=(buffer.name, buffer.read()),
+                model="whisper-large-v3",
+                language="es"
+            )
+            return 'text_context', f"\n\n[TRANSCRIPCIÓN DE AUDIO ADJUNTO '{file_name}']:\n\"{transcription.text}\"\n"
+        except Exception as e:
+            return 'text_context', f"\n\n[ERROR AL PROCESAR AUDIO '{file_name}']: {str(e)}\n"
+
+    # 3. DOCUMENTOS PDF
+    if ext == '.pdf' or 'application/pdf' in header:
+        try:
+            reader = pypdf.PdfReader(io.BytesIO(file_bytes))
+            texto = ""
+            for i, page in enumerate(reader.pages):
+                t = page.extract_text()
+                if t: texto += f"\n--- Página {i+1} ---\n" + t
+            return 'text_context', f"\n\n[CONTENIDO DEL DOCUMENTO PDF '{file_name}']:\n{texto[:15000]}\n"
+        except Exception as e:
+            return 'text_context', f"\n\n[ERROR AL LEER PDF '{file_name}']: {str(e)}\n"
+
+    # 4. DOCUMENTOS WORD (.docx)
+    if ext in ['.docx', '.doc'] or 'wordprocessingml' in header:
+        try:
+            doc = docx.Document(io.BytesIO(file_bytes))
+            texto = "\n".join([p.text for p in doc.paragraphs if p.text])
+            return 'text_context', f"\n\n[CONTENIDO DEL DOCUMENTO WORD '{file_name}']:\n{texto[:15000]}\n"
+        except Exception as e:
+            return 'text_context', f"\n\n[ERROR AL LEER DOCUMENTO WORD '{file_name}']: {str(e)}\n"
+
+    # 5. HOJAS DE CÁLCULO EXCEL Y CSV (.xlsx, .csv)
+    if ext in ['.xlsx', '.xls', '.csv']:
+        try:
+            if ext == '.csv':
+                decoded = file_bytes.decode('utf-8', errors='ignore')
+                return 'text_context', f"\n\n[CONTENIDO DE HOJA DE CÁLCULO CSV '{file_name}']:\n{decoded[:15000]}\n"
+            else:
+                wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
+                res = []
+                for sheet in wb.sheetnames:
+                    ws = wb[sheet]
+                    res.append(f"--- Hoja: {sheet} ---")
+                    for row in ws.iter_rows(values_only=True):
+                        if any(row):
+                            res.append(" | ".join([str(v) if v is not None else "" for v in row]))
+                return 'text_context', f"\n\n[CONTENIDO DE HOJA DE CÁLCULO EXCEL '{file_name}']:\n" + "\n".join(res)[:15000] + "\n"
+        except Exception as e:
+            return 'text_context', f"\n\n[ERROR AL LEER EXCEL '{file_name}']: {str(e)}\n"
+
+    # 6. TEXTO PLANO / CÓDIGO FUENTE (py, js, html, css, json, sql, txt, md, etc.)
+    try:
+        texto_decoded = file_bytes.decode('utf-8', errors='ignore')
+        lang = ext.replace('.', '') if ext else 'txt'
+        return 'text_context', f"\n\n[CONTENIDO DEL ARCHIVO ADJUNTO '{file_name}']:\n```{lang}\n{texto_decoded[:15000]}\n```\n"
+    except Exception as e:
+        return 'text_context', f"\n\n[ERROR AL LEER ARCHIVO '{file_name}']: {str(e)}\n"
 
 
 # --- GENERADOR DE VOZ HD EN MEMORIA RAM ---
@@ -92,7 +184,6 @@ def generar_audio_elevenlabs(texto: str) -> str:
         }
         
         res = requests.post(url, json=data, headers=headers, timeout=4)
-        
         if res.status_code == 200:
             audio_b64 = base64.b64encode(res.content).decode('utf-8')
             return f"data:audio/mp3;base64,{audio_b64}"
@@ -102,9 +193,8 @@ def generar_audio_elevenlabs(texto: str) -> str:
         return None
 
 
-# --- CEREBRO VISUAL MULTIMODAL (LLAMA 3.2 VISION) ---
+# --- CEREBROS IA (VISIÓN Y TEXTO) ---
 def ejecutar_consulta_vision(historial_mensajes, image_b64_data):
-    """Procesa imágenes utilizando el motor de visión artificial de Groq."""
     if not image_b64_data.startswith("data:image"):
         image_b64_data = f"data:image/jpeg;base64,{image_b64_data}"
     
@@ -133,16 +223,13 @@ def ejecutar_consulta_vision(historial_mensajes, image_b64_data):
             messages=messages_multimodal,
             temperature=0.2
         )
-    except Exception as err1:
-        print(f"⚠️ Error en modelo Vision 11B ({err1}). Intentando con 90B Vision...")
+    except Exception:
         return client.chat.completions.create(
             model="llama-3.2-90b-vision-preview",
             messages=messages_multimodal,
             temperature=0.2
         )
 
-
-# --- CEREBRO DUAL LLM PARA TEXTO ---
 def ejecutar_consulta_llm(historial_mensajes, herramientas_lista):
     try:
         return client.chat.completions.create(
@@ -162,7 +249,7 @@ def ejecutar_consulta_llm(historial_mensajes, herramientas_lista):
         )
 
 
-# --- HERRAMIENTAS Y BÚSQUEDA PROFUNDA ---
+# --- HERRAMIENTAS ---
 def abrir_sitio_web(url: str, busqueda: str = None) -> str:
     global ACTION_URL_TEMP
     print(f"🌐 [Navegación Jarvis]: Generando orden para: '{url}' | Búsqueda: '{busqueda}'")
@@ -264,7 +351,8 @@ herramientas = [
 class ChatInput(BaseModel):
     message: str
     session_id: str = None
-    image_b64: str = None  # Soporte para visión multimodal
+    file_b64: str = None
+    file_name: str = None
 
 
 @app.get("/")
@@ -285,25 +373,29 @@ async def consultar_jarvis(data: ChatInput):
             SESIONES_MEMORIA[sid]["messages"] = [PROMPT_SISTEMA] + historial_usuario[-8:]
             historial_usuario = SESIONES_MEMORIA[sid]["messages"]
 
-        historial_usuario.append({"role": "user", "content": data.message})
+        # === PROCESAMIENTO DE ARCHIVO MULTIFORMATO ===
+        categoria_archivo, contenido_extraido = procesar_archivo_adjunto(data.file_b64, data.file_name)
 
-        # === MODO VISUAL MULTIMODAL ===
-        if data.image_b64:
-            print(f"👁️ [Jarvis Vision]: Analizando imagen recibida (Sesión {sid[:8]}...)...")
-            response = ejecutar_consulta_vision(historial_usuario, data.image_b64)
+        prompt_usuario = data.message if data.message else "Señor, analice el archivo adjunto por favor."
+
+        # SI ES IMAGEN -> MODO VISIÓN ARTIFICIAL
+        if categoria_archivo == 'image':
+            historial_usuario.append({"role": "user", "content": prompt_usuario})
+            print(f"👁️ [Jarvis Vision]: Analizando imagen '{data.file_name}'...")
+            response = ejecutar_consulta_vision(historial_usuario, data.file_b64)
             respuesta_final = response.choices[0].message.content
             
             historial_usuario.append({"role": "assistant", "content": respuesta_final})
             audio_b64 = generar_audio_elevenlabs(respuesta_final)
-            
-            return {
-                "status": "success", 
-                "reply": respuesta_final, 
-                "audio_b64": audio_b64,
-                "action_url": None
-            }
+            return {"status": "success", "reply": respuesta_final, "audio_b64": audio_b64, "action_url": None}
 
-        # === MODO CONVERSACIONAL Y DE HERRAMIENTAS ===
+        # SI ES DOCUMENTO, EXCEL, AUDIO O CÓDIGO -> MODO TEXTO INYECTADO
+        if categoria_archivo == 'text_context':
+            prompt_usuario += contenido_extraido
+
+        historial_usuario.append({"role": "user", "content": prompt_usuario})
+
+        # === PROCESAMIENTO GENERAL CON LLAMA 3.3 70B ===
         MAX_ITERACIONES = 3
         iteracion = 0
         ultima_respuesta_herramienta = ""
