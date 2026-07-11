@@ -43,12 +43,12 @@ PROMPT_SISTEMA = {
         "1. Responde con elegancia, precisión brillante y naturalidad. Dirígete al usuario como 'señor' o 'Cristian'.\n"
         "2. Si el usuario te pide abrir un sitio web o reproducir/buscar contenido (como películas en Netflix, videos en YouTube o música en Spotify), "
         "invoca INMEDIATAMENTE la herramienta 'abrir_sitio_web' pasando la plataforma en 'url' y el título exacto en 'busqueda'. Confirma brevemente que estás desplegando el enlace.\n"
-        "3. REGLA DE HERRAMIENTAS: Una vez recibida la confirmación de la herramienta, genera tu respuesta final sin bucles ni demoras."
+        "3. Si analizas una imagen, sé minucioso, profesional y directo describiendo o resolviendo lo que se observa en ella.\n"
+        "4. REGLA DE HERRAMIENTAS: Una vez recibida la confirmación de la herramienta, genera tu respuesta final sin bucles ni demoras."
     )
 }
 
 def obtener_historial_sesion(session_id: str):
-    """Garantiza la privacidad y memoria aislada para cada usuario."""
     now = time.time()
     if session_id not in SESIONES_MEMORIA:
         SESIONES_MEMORIA[session_id] = {
@@ -58,7 +58,6 @@ def obtener_historial_sesion(session_id: str):
     else:
         SESIONES_MEMORIA[session_id]["last_active"] = now
 
-    # Limpieza automática de sesiones inactivas por más de 2 horas
     for sid in list(SESIONES_MEMORIA.keys()):
         if now - SESIONES_MEMORIA[sid]["last_active"] > 7200:
             del SESIONES_MEMORIA[sid]
@@ -66,9 +65,8 @@ def obtener_historial_sesion(session_id: str):
     return SESIONES_MEMORIA[session_id]["messages"]
 
 
-# --- GENERADOR DE VOZ HD EN MEMORIA RAM (BASE64) ---
+# --- GENERADOR DE VOZ HD EN MEMORIA RAM ---
 def generar_audio_elevenlabs(texto: str) -> str:
-    """Sintetiza la voz HD en memoria sin escribir archivos en disco."""
     try:
         if not ELEVENLABS_API_KEY or "sk_" not in ELEVENLABS_API_KEY:
             return None
@@ -104,9 +102,48 @@ def generar_audio_elevenlabs(texto: str) -> str:
         return None
 
 
-# --- CEREBRO DUAL LLM (ALTA POTENCIA CON RESPALDO INSTANTÁNEO) ---
+# --- CEREBRO VISUAL MULTIMODAL (LLAMA 3.2 VISION) ---
+def ejecutar_consulta_vision(historial_mensajes, image_b64_data):
+    """Procesa imágenes utilizando el motor de visión artificial de Groq."""
+    if not image_b64_data.startswith("data:image"):
+        image_b64_data = f"data:image/jpeg;base64,{image_b64_data}"
+    
+    messages_multimodal = []
+    for msg in historial_mensajes[:-1]:
+        if isinstance(msg.get("content"), str):
+            messages_multimodal.append(msg)
+            
+    last_msg = historial_mensajes[-1]
+    prompt_texto = last_msg.get("content", "Analice esta imagen por favor, señor.")
+    if not prompt_texto.strip():
+        prompt_texto = "Analice esta imagen detalladamente, señor."
+
+    multimodal_user_msg = {
+        "role": "user",
+        "content": [
+            {"type": "text", "text": prompt_texto},
+            {"type": "image_url", "image_url": {"url": image_b64_data}}
+        ]
+    }
+    messages_multimodal.append(multimodal_user_msg)
+
+    try:
+        return client.chat.completions.create(
+            model="llama-3.2-11b-vision-preview",
+            messages=messages_multimodal,
+            temperature=0.2
+        )
+    except Exception as err1:
+        print(f"⚠️ Error en modelo Vision 11B ({err1}). Intentando con 90B Vision...")
+        return client.chat.completions.create(
+            model="llama-3.2-90b-vision-preview",
+            messages=messages_multimodal,
+            temperature=0.2
+        )
+
+
+# --- CEREBRO DUAL LLM PARA TEXTO ---
 def ejecutar_consulta_llm(historial_mensajes, herramientas_lista):
-    """Consulta al modelo de 70 mil millones de parámetros; conmuta a 8B si hay saturación."""
     try:
         return client.chat.completions.create(
             model="llama-3.3-70b-versatile",
@@ -125,12 +162,10 @@ def ejecutar_consulta_llm(historial_mensajes, herramientas_lista):
         )
 
 
-# --- HERRAMIENTAS Y BÚSQUEDA PROFUNDA DE ENTRETENIMIENTO ---
+# --- HERRAMIENTAS Y BÚSQUEDA PROFUNDA ---
 def abrir_sitio_web(url: str, busqueda: str = None) -> str:
-    """Construye enlaces profundos para buscar películas, música o navegar hacia cualquier web."""
     global ACTION_URL_TEMP
     print(f"🌐 [Navegación Jarvis]: Generando orden para: '{url}' | Búsqueda: '{busqueda}'")
-    
     url_lower = url.lower().strip()
     
     if busqueda:
@@ -154,7 +189,6 @@ def abrir_sitio_web(url: str, busqueda: str = None) -> str:
             url = "https://" + url
 
     ACTION_URL_TEMP = url
-    
     if busqueda:
         return f"Desplegando '{busqueda}' en {url_lower.capitalize()}."
     return f"Redirigiendo a {url}."
@@ -204,7 +238,6 @@ def ejecutar_codigo_python(codigo: str) -> str:
         return f"Error de ejecución: {str(e)}"
 
 
-# --- CATÁLOGO DE HERRAMIENTAS ---
 herramientas = [
     {
         "type": "function", 
@@ -231,6 +264,7 @@ herramientas = [
 class ChatInput(BaseModel):
     message: str
     session_id: str = None
+    image_b64: str = None  # Soporte para visión multimodal
 
 
 @app.get("/")
@@ -247,13 +281,29 @@ async def consultar_jarvis(data: ChatInput):
         sid = data.session_id if data.session_id else "default_session"
         historial_usuario = obtener_historial_sesion(sid)
 
-        # Mantenimiento de memoria compacta
         if len(historial_usuario) > 9:
             SESIONES_MEMORIA[sid]["messages"] = [PROMPT_SISTEMA] + historial_usuario[-8:]
             historial_usuario = SESIONES_MEMORIA[sid]["messages"]
 
         historial_usuario.append({"role": "user", "content": data.message})
 
+        # === MODO VISUAL MULTIMODAL ===
+        if data.image_b64:
+            print(f"👁️ [Jarvis Vision]: Analizando imagen recibida (Sesión {sid[:8]}...)...")
+            response = ejecutar_consulta_vision(historial_usuario, data.image_b64)
+            respuesta_final = response.choices[0].message.content
+            
+            historial_usuario.append({"role": "assistant", "content": respuesta_final})
+            audio_b64 = generar_audio_elevenlabs(respuesta_final)
+            
+            return {
+                "status": "success", 
+                "reply": respuesta_final, 
+                "audio_b64": audio_b64,
+                "action_url": None
+            }
+
+        # === MODO CONVERSACIONAL Y DE HERRAMIENTAS ===
         MAX_ITERACIONES = 3
         iteracion = 0
         ultima_respuesta_herramienta = ""
@@ -312,7 +362,6 @@ async def consultar_jarvis(data: ChatInput):
 
             iteracion += 1
 
-        # Fallback de seguridad anti-bucles
         respuesta_fallback = f"Señor, he procesado su solicitud: {ultima_respuesta_herramienta}"
         historial_usuario.append({"role": "assistant", "content": respuesta_fallback})
         
