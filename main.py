@@ -61,13 +61,13 @@ PROMPT_SISTEMA = {
         "Eres J.A.R.V.I.S., una Inteligencia Artificial Avanzada especialista en Matemáticas, Física, Estadística, Cálculo, Álgebra y Ciencias Exactas, creada para asistir a Cristian.\n"
         "DIRECTIVAS ESTRICTAS DE RESOLUCIÓN BLAZING FAST:\n"
         "1. Dirígete al usuario como 'señor' o 'Cristian'. Sé analítico, claro, directo y extremadamente preciso.\n"
-        "2. ANALIZA EL DOCUMENTO COMPLETO DESDE LA PRIMERA PÁGINA. NUNCA respondas con anuncios de lo que vas a hacer (ej. 'Procederé a resolverlo' o 'Analicé la imagen'). ENTREGA LA SOLUCIÓN Y EL PROCEDIMIENTO DIRECTAMENTE EN TU PRIMER ENUNCIADO.\n"
-        "3. SI EL DOCUMENTO TIENE VARIOS EJERCICIOS: Transcribe el Ejercicio 1 (o el número especificado), desglosa su procedimiento completo paso a paso y da el resultado exacto. Luego, indica brevemente que estás listo para el siguiente.\n"
+        "2. NAVEGACIÓN Y BÚSQUEDA: Si el usuario te pide ir a un sitio web, abrir Google, buscar en internet o reproducir contenido (en YouTube, Netflix, Spotify), "
+        "invoca INMEDIATAMENTE la herramienta 'abrir_sitio_web' o 'buscar_en_internet'. Responde brevemente confirmando el despliegue del enlace.\n"
+        "3. ANALIZA EL DOCUMENTO COMPLETO DESDE LA PRIMERA PÁGINA. NUNCA respondas con anuncios de lo que vas a hacer. ENTREGA LA SOLUCIÓN Y EL PROCEDIMIENTO DIRECTAMENTE EN TU PRIMER ENUNCIADO.\n"
         "4. FORMATO MATEMÁTICO LaTeX OBLIGATORIO:\n"
         "   - Ecuaciones centradas y paso a paso en bloque: '$$ ecuacion $$'. Ejemplo: $$ f(x) = \\frac{x^2 - 4}{x + 2} = x - 2 $$\n"
         "   - Fórmulas o variables en el texto: '$ ecuacion $'. Ejemplo: $x \\neq -2$\n"
-        "5. Si ejecutas código Python para resolver un problema numérico o estadístico, muestra el resultado final estructurado.\n"
-        "6. REGLA DE NAVEGACIÓN: Si el usuario pide abrir un sitio o buscar contenido en web/Netflix/YouTube/Spotify, invoca la herramienta 'abrir_sitio_web'."
+        "5. Si ejecutas código Python para resolver un problema numérico o estadístico, muestra el resultado final estructurado."
     )
 }
 
@@ -303,35 +303,43 @@ def ejecutar_consulta_llm(historial_mensajes, herramientas_lista):
         )
 
 
-# --- HERRAMIENTAS Y EJECUTOR DE CÓDIGO PYTHON ---
-def abrir_sitio_web(url: str, busqueda: str = None) -> str:
+# --- HERRAMIENTAS Y NAVEGACIÓN WEB ULTRASSEGURA ---
+def abrir_sitio_web(url: str, busqueda: Optional[str] = None) -> str:
     global ACTION_URL_TEMP
-    url_lower = url.lower().strip()
-    
-    if busqueda:
-        busqueda_encoded = urllib.parse.quote(busqueda)
-        if "netflix" in url_lower:
-            url = f"https://www.netflix.com/search?q={busqueda_encoded}"
-        elif "youtube" in url_lower:
-            url = f"https://www.youtube.com/results?search_query={busqueda_encoded}"
-        elif "spotify" in url_lower:
-            url = f"https://open.spotify.com/search/{busqueda_encoded}"
+    try:
+        url_lower = str(url).lower().strip() if url else "google"
+        busqueda_str = str(busqueda).strip() if busqueda else None
+        
+        if busqueda_str:
+            busqueda_encoded = urllib.parse.quote(busqueda_str)
+            if "netflix" in url_lower:
+                target_url = f"https://www.netflix.com/search?q={busqueda_encoded}"
+            elif "youtube" in url_lower:
+                target_url = f"https://www.youtube.com/results?search_query={busqueda_encoded}"
+            elif "spotify" in url_lower:
+                target_url = f"https://open.spotify.com/search/{busqueda_encoded}"
+            else:
+                target_url = f"https://www.google.com/search?q={busqueda_encoded}"
         else:
-            url = f"https://www.google.com/search?q={busqueda_encoded}"
-    else:
-        if "netflix" in url_lower and "http" not in url_lower:
-            url = "https://www.netflix.com"
-        elif "youtube" in url_lower and "http" not in url_lower:
-            url = "https://www.youtube.com"
-        elif "google" in url_lower and "http" not in url_lower:
-            url = "https://www.google.com"
-        elif not url.startswith("http"):
-            url = "https://" + url
+            if "netflix" in url_lower and "http" not in url_lower:
+                target_url = "https://www.netflix.com"
+            elif "youtube" in url_lower and "http" not in url_lower:
+                target_url = "https://www.youtube.com"
+            elif "google" in url_lower and "http" not in url_lower:
+                target_url = "https://www.google.com"
+            elif not url_lower.startswith("http"):
+                target_url = "https://" + url_lower
+            else:
+                target_url = url
 
-    ACTION_URL_TEMP = url
-    if busqueda:
-        return f"Desplegando '{busqueda}' en {url_lower.capitalize()}."
-    return f"Redirigiendo a {url}."
+        ACTION_URL_TEMP = target_url
+        if busqueda_str:
+            return f"Desplegando '{busqueda_str}' en {url_lower.capitalize()}."
+        return f"Redirigiendo a {target_url}."
+    except Exception as err:
+        print(f"⚠️ Error en abrir_sitio_web: {err}")
+        ACTION_URL_TEMP = "https://www.google.com"
+        return "Redirigiendo a Google."
 
 def obtener_clima_en_vivo(ciudad: str) -> str:
     try:
@@ -389,7 +397,7 @@ herramientas = [
         "type": "function", 
         "function": {
             "name": "abrir_sitio_web", 
-            "description": "Obligatoria para abrir webs o buscar/reproducir contenido en plataformas como Netflix, YouTube, Spotify o Google.", 
+            "description": "Obligatoria para abrir webs o buscar/reproducir contenido en plataformas como Google, Netflix, YouTube o Spotify. Pasa 'url' (ej: 'google', 'youtube') y opcionalmente 'busqueda'.", 
             "parameters": {
                 "type": "object", 
                 "properties": {
@@ -446,8 +454,8 @@ async def consultar_jarvis(data: ChatInput):
             num_str = num_match[0] if num_match else "1"
             prompt_usuario = f"Localiza el ejercicio número {num_str} en el documento completo, escribe su enunciado/función en LaTeX y desglosa todo su procedimiento matemático paso a paso."
 
-        # MEMORIA VISUAL ALWAYS-ON
-        usar_vision = (sesion_data.get("last_image_b64") is not None) and (categoria_archivo == 'image' or not data.file_b64)
+        # MEMORIA VISUAL ALWAYS-ON (SOLO SI EL USUARIO HACE CONSULTA SOBRE DOCUMENTO O SUBE ARCHIVO)
+        usar_vision = (sesion_data.get("last_image_b64") is not None) and (categoria_archivo == 'image' or (not data.file_b64 and any(w in prompt_usuario.lower() for w in ["documento", "ejercicio", "tarea", "imagen", "archivo", "resuelve", "problema"])))
 
         if usar_vision and sesion_data.get("last_image_b64"):
             historial_usuario.append({"role": "user", "content": prompt_usuario})
@@ -464,7 +472,7 @@ async def consultar_jarvis(data: ChatInput):
             audio_b64 = generar_audio_elevenlabs(respuesta_final)
             return {"status": "success", "reply": respuesta_final, "audio_b64": audio_b64, "action_url": None}
 
-        # MODO TEXTO DIGITAL (WORD, EXCEL, CÓDIGO, AUDIOS)
+        # MODO TEXTO DIGITAL (WORD, EXCEL, CÓDIGO, AUDIOS, NAVEGACIÓN Y PREGUNTAS GENERALES)
         if categoria_archivo == 'text_context':
             prompt_usuario += contenido_o_b64
 
@@ -503,20 +511,23 @@ async def consultar_jarvis(data: ChatInput):
 
             for tool_call in respuesta_modelo.tool_calls:
                 fn_name = tool_call.function.name
-                arguments = json.loads(tool_call.function.arguments)
+                try:
+                    arguments = json.loads(tool_call.function.arguments)
+                except Exception:
+                    arguments = {}
                 
                 if fn_name == "abrir_sitio_web": 
-                    resultado = abrir_sitio_web(url=arguments.get("url"), busqueda=arguments.get("busqueda"))
+                    resultado = abrir_sitio_web(url=arguments.get("url", "google"), busqueda=arguments.get("busqueda"))
                 elif fn_name == "buscar_en_internet": 
-                    resultado = buscar_en_internet(query=arguments.get("query"))
+                    resultado = buscar_en_internet(query=arguments.get("query", ""))
                 elif fn_name == "leer_pagina_web": 
-                    resultado = leer_pagina_web(url=arguments.get("url"))
+                    resultado = leer_pagina_web(url=arguments.get("url", ""))
                 elif fn_name == "obtener_estado_pc": 
                     resultado = obtener_estado_pc()
                 elif fn_name == "ejecutar_codigo_python": 
-                    resultado = ejecutar_codigo_python(codigo=arguments.get("codigo"))
+                    resultado = ejecutar_codigo_python(codigo=arguments.get("codigo", ""))
                 elif fn_name == "obtener_clima_en_vivo": 
-                    resultado = obtener_clima_en_vivo(ciudad=arguments.get("ciudad"))
+                    resultado = obtener_clima_en_vivo(ciudad=arguments.get("ciudad", "Tegucigalpa"))
                 else: 
                     resultado = "Función no localizada."
 
