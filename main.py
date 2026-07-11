@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import Optional
 from groq import Groq
 from duckduckgo_search import DDGS
 import requests
@@ -14,21 +15,9 @@ import time
 import urllib.parse
 import io
 
-# LIBRERÍAS DE PROCESAMIENTO MULTIMODAL DE PDFS (RENDERIZADO A IMAGEN HD)
+# LIBRERÍAS DE LECTURA DE ARCHIVOS MULTIFORMATO
 try:
-    import pypdfium2 as pdfium
-except ImportError:
-    pdfium = None
-
-from PIL import Image
-
-try:
-    import fitz  # PyMuPDF
-except ImportError:
-    fitz = None
-
-try:
-    import pypdf # Fallback puro Python
+    import pypdf
 except ImportError:
     pypdf = None
 
@@ -44,7 +33,7 @@ except ImportError:
 
 app = FastAPI()
 
-# --- CONFIGURACIÓN DE CORS ---
+# --- CONFIGURACIÓN DE CORS PARA CONEXIÓN PÚBLICA ---
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], 
@@ -74,7 +63,7 @@ PROMPT_SISTEMA = {
         "3. FORMATO MATEMÁTICO AVANZADO: Cuando escribas ecuaciones, fórmulas, fracciones, raíces, límites o integrales, utiliza SIEMPRE sintaxis LaTeX.\n"
         "   - Para ecuaciones centradas e independientes usa '$$ ecuacion $$'. Ejemplo: $$ x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a} $$\n"
         "   - Para fórmulas dentro del texto usa '$ ecuacion $'. Ejemplo: $a^2 + b^2 = c^2$\n"
-        "4. Tienes acceso visual y directo a documentos y tareas. Si recibes ejercicios de matemáticas o álgebra, resuélvelos directamente paso a paso con máxima claridad y precisión.\n"
+        "4. Tienes acceso visual directo a documentos y tareas. Si recibes ejercicios de matemáticas o álgebra, resuélvelos directamente paso a paso con máxima claridad y precisión.\n"
         "5. REGLA DE HERRAMIENTAS: Una vez recibida la confirmación de la herramienta, genera tu respuesta final sin bucles ni demoras."
     )
 }
@@ -96,8 +85,8 @@ def obtener_historial_sesion(session_id: str):
     return SESIONES_MEMORIA[session_id]["messages"]
 
 
-# --- PROCESADOR MULTIMODAL DE ARCHIVOS Y CONVERTIDOR DE PDF A IMAGEN ---
-def procesar_archivo_adjunto(file_b64: str = None, file_name: str = None) -> tuple[str, str]:
+# --- PROCESADOR MULTIMODAL ROBUSTO ---
+def procesar_archivo_adjunto(file_b64: Optional[str] = None, file_name: Optional[str] = None) -> tuple[str, str]:
     if not file_b64:
         return 'none', ""
 
@@ -111,7 +100,7 @@ def procesar_archivo_adjunto(file_b64: str = None, file_name: str = None) -> tup
         file_bytes = base64.b64decode(encoded)
         ext = os.path.splitext(file_name.lower())[1] if file_name else ""
 
-        # 1. IMÁGENES DIRECTAS
+        # 1. IMÁGENES (INCLUYE PDFS RENDERIZADOS CLIENT-SIDE)
         if ext in ['.jpg', '.jpeg', '.png', '.webp', '.gif'] or 'image/' in header:
             return 'image', file_b64
 
@@ -129,67 +118,18 @@ def procesar_archivo_adjunto(file_b64: str = None, file_name: str = None) -> tup
             except Exception as e:
                 return 'text_context', f"\n\n[AVISO AUDIO '{file_name}']: {str(e)}\n"
 
-        # 3. DOCUMENTOS PDF (Detección Inteligente de Texto vs Renderizado Visual)
-        if ext == '.pdf' or 'application/pdf' in header:
-            texto_pdf = ""
-            
-            # Intento de extracción de texto digital con PyMuPDF
-            if fitz:
-                try:
-                    doc = fitz.open(stream=file_bytes, filetype="pdf")
-                    for page_num in range(min(len(doc), 5)):
-                        t = doc[page_num].get_text()
-                        if t.strip():
-                            texto_pdf += f"\n--- Página {page_num+1} ---\n" + t
-                except Exception as e:
-                    print(f"Error fitz text: {e}")
-
-            # Fallback de texto con pypdf
-            if not texto_pdf.strip() and pypdf:
-                try:
-                    reader = pypdf.PdfReader(io.BytesIO(file_bytes))
-                    for i, page in enumerate(reader.pages[:5]):
-                        t = page.extract_text()
-                        if t and t.strip():
-                            texto_pdf += f"\n--- Página {i+1} ---\n" + t
-                except Exception as e:
-                    print(f"Error pypdf text: {e}")
-
-            palabras_reales = re.findall(r'\b[a-zA-Z0-9]{2,}\b', texto_pdf)
-
-            # Si el PDF tiene poco texto digital (< 40 palabras) o es una tarea con ecuaciones/gráficas: RENDERIZAR A IMAGEN HD
-            if len(palabras_reales) < 40:
-                print(f"👁️ [Jarvis Vision]: PDF con ecuaciones/escaneo detectado en '{file_name}'. Renderizando a Imagen HD...")
-
-                # Conversión usando pypdfium2 (Chrome Engine)
-                if pdfium:
-                    try:
-                        pdf = pdfium.PdfDocument(file_bytes)
-                        if len(pdf) > 0:
-                            page = pdf[0]
-                            image = page.render(scale=2).to_pil()
-                            buf = io.BytesIO()
-                            image.save(buf, format="JPEG", quality=85)
-                            img_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
-                            return 'image', f"data:image/jpeg;base64,{img_b64}"
-                    except Exception as e:
-                        print(f"Error render pdfium: {e}")
-
-                # Conversión usando PyMuPDF (fitz)
-                if fitz:
-                    try:
-                        doc = fitz.open(stream=file_bytes, filetype="pdf")
-                        if len(doc) > 0:
-                            page = doc[0]
-                            pix = page.get_pixmap(dpi=150)
-                            img_bytes = pix.tobytes("jpeg")
-                            img_b64 = base64.b64encode(img_bytes).decode('utf-8')
-                            return 'image', f"data:image/jpeg;base64,{img_b64}"
-                    except Exception as e:
-                        print(f"Error render fitz: {e}")
-
-            if texto_pdf.strip():
-                return 'text_context', f"\n\n[CONTENIDO DEL DOCUMENTO PDF '{file_name}']:\n{texto_pdf[:15000]}\n"
+        # 3. PDFS CON TEXTO DIGITAL
+        if (ext == '.pdf' or 'application/pdf' in header) and pypdf:
+            try:
+                reader = pypdf.PdfReader(io.BytesIO(file_bytes))
+                texto_digital = ""
+                for i, page in enumerate(reader.pages[:10]):
+                    t = page.extract_text()
+                    if t: texto_digital += f"\n--- Página {i+1} ---\n" + t
+                if texto_digital.strip():
+                    return 'text_context', f"\n\n[CONTENIDO DEL DOCUMENTO PDF '{file_name}']:\n{texto_digital[:15000]}\n"
+            except Exception as e:
+                print(f"Error pypdf: {e}")
 
         # 4. DOCUMENTOS WORD (.docx)
         if ext in ['.docx', '.doc'] and docx:
@@ -219,7 +159,7 @@ def procesar_archivo_adjunto(file_b64: str = None, file_name: str = None) -> tup
             except Exception as e:
                 return 'text_context', f"\n\n[AVISO EXCEL '{file_name}']: {str(e)}\n"
 
-        # 6. ARCHIVOS DE TEXTO Y CÓDIGO FUENTE
+        # 6. CÓDIGO FUENTE / TEXTO PLANO
         texto_decoded = file_bytes.decode('utf-8', errors='ignore')
         lang = ext.replace('.', '') if ext else 'txt'
         return 'text_context', f"\n\n[CONTENIDO ARCHIVO '{file_name}']:\n```{lang}\n{texto_decoded[:15000]}\n```\n"
@@ -243,7 +183,7 @@ def generar_audio_elevenlabs(texto: str) -> str:
         }
         
         texto_limpio = re.sub(r'```[\s\S]*?```', '', texto)
-        texto_limpio = re.sub(r'\$\$[\s\S]*?\$\$', ' según la fórmula mostrada ', texto_limpio)
+        texto_limpio = re.sub(r'\$\$[\s\S]*?\$\$', ' según la fórmula desplegada en pantalla ', texto_limpio)
         texto_limpio = re.sub(r'\$[\s\S]*?\$', '', texto_limpio)
         texto_limpio = re.sub(r'\\[a-zA-Z]+', '', texto_limpio)
         texto_limpio = re.sub(r'[*_#`{}]', '', texto_limpio)
@@ -421,11 +361,12 @@ herramientas = [
     {"type": "function", "function": {"name": "obtener_clima_en_vivo", "description": "Clima.", "parameters": {"type": "object", "properties": {"ciudad": {"type": "string"}}, "required": ["ciudad"]}}}
 ]
 
+# MODELO CON CAMPOS OPCIONALES SEGUROS
 class ChatInput(BaseModel):
-    message: str = ""
-    session_id: str = "default_session"
-    file_b64: str = None
-    file_name: str = None
+    message: Optional[str] = ""
+    session_id: Optional[str] = "default_session"
+    file_b64: Optional[str] = None
+    file_name: Optional[str] = None
 
 
 @app.get("/")
@@ -449,10 +390,10 @@ async def consultar_jarvis(data: ChatInput):
         categoria_archivo, contenido_o_b64 = procesar_archivo_adjunto(data.file_b64, data.file_name)
         prompt_usuario = data.message if data.message else "Señor, he recibido un archivo para analizar."
 
-        # MODO VISIÓN ARTIFICIAL (IMÁGENES O PDFS ESCANEADOS)
+        # MODO VISIÓN ARTIFICIAL (IMÁGENES O PDFS CONVERTIDOS A IMAGEN)
         if categoria_archivo == 'image':
             historial_usuario.append({"role": "user", "content": prompt_usuario})
-            print("👁️ [Jarvis Vision]: Ejecutando análisis visual de tarea/documento...")
+            print("👁️ [Jarvis Vision]: Ejecutando análisis visual...")
             response = ejecutar_consulta_vision(historial_usuario, contenido_o_b64)
             respuesta_final = response.choices[0].message.content
             
@@ -460,7 +401,7 @@ async def consultar_jarvis(data: ChatInput):
             audio_b64 = generar_audio_elevenlabs(respuesta_final)
             return {"status": "success", "reply": respuesta_final, "audio_b64": audio_b64, "action_url": None}
 
-        # MODO TEXTO DIGITAL (PDFS DIGITALES, WORD, EXCEL, CÓDIGO)
+        # MODO TEXTO DIGITAL (PDFS CON TEXTO, WORD, EXCEL, CÓDIGO)
         if categoria_archivo == 'text_context':
             prompt_usuario += contenido_o_b64
 
