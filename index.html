@@ -431,6 +431,7 @@
         function cancelarArchivo() {
             currentFileB64 = null;
             currentFileName = null;
+            isImage = false;
             fileInput.value = "";
             previewBar.classList.remove("active");
         }
@@ -500,7 +501,7 @@
             utterance.rate = 0.90; utterance.pitch = 0.85; utterance.lang = 'es-ES';
             const voces = window.speechSynthesis.getVoices();
             const vozEspecial = voces.find(v => (v.lang.includes('es') || v.lang.includes('ES')) && (v.name.includes('Pablo') || v.name.includes('Jorge') || v.name.includes('Male') || v.name.includes('Google')));
-            if (vozEspecial) utterance.voice = voces.find(v => v.lang.includes('es') && v.name.includes('Pab')); // Prioridad a voz 'Pablo'
+            if (vozEspecial) utterance.voice = vozEspecial;
             
             utterance.onstart = () => setEstado('speaking', 'VOZ ACTIVA');
             utterance.onend = () => setEstado('ready', 'ONLINE');
@@ -559,11 +560,14 @@
             const texto = userInput.value.trim();
             const fileEnviar = currentFileB64;
             const fileNameEnviar = currentFileName;
+            const esImagenEnviar = isImage;
 
             if (!texto && !fileEnviar) return;
 
             playSFX('send');
-            agregarMensajeUsuario(texto, fileEnviar, fileNameEnviar, esImagen);
+            
+            // Renderizar mensaje del usuario en pantalla
+            agregarMensajeUsuario(texto, fileEnviar, fileNameEnviar, esImagenEnviar);
             
             userInput.value = "";
             cancelarArchivo();
