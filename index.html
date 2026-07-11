@@ -93,12 +93,14 @@
         }
 
         .arc-reactor.state-ready { background: var(--stark-cyan); box-shadow: 0 0 15px var(--stark-cyan); animation: pulseReady 2s infinite; }
+        .arc-reactor.state-listening { background: var(--stark-red); box-shadow: 0 0 25px var(--stark-red); animation: pulseListening 0.8s infinite alternate; }
         .arc-reactor.state-processing { background: var(--stark-amber); box-shadow: 0 0 20px var(--stark-amber); animation: pulseSpin 0.8s infinite; }
         .arc-reactor.state-speaking { background: #ffffff; box-shadow: 0 0 25px #00f2fe, 0 0 40px #ffffff; animation: speakGlow 0.4s infinite alternate; }
         .arc-reactor.state-success { background: var(--stark-green); box-shadow: 0 0 20px var(--stark-green); }
         .arc-reactor.state-error { background: var(--stark-red); box-shadow: 0 0 25px var(--stark-red); animation: strobe 0.3s infinite; }
 
         @keyframes pulseReady { 0%, 100% { opacity: 0.5; transform: scale(0.9); } 50% { opacity: 1; transform: scale(1.1); } }
+        @keyframes pulseListening { 0% { transform: scale(1); box-shadow: 0 0 10px var(--stark-red); } 100% { transform: scale(1.3); box-shadow: 0 0 30px var(--stark-red); } }
         @keyframes pulseSpin { 0% { opacity: 0.3; } 50% { opacity: 1; } 100% { opacity: 0.3; } }
         @keyframes speakGlow { 0% { transform: scale(1); filter: brightness(1); } 100% { transform: scale(1.35); filter: brightness(1.6); } }
         @keyframes strobe { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
@@ -124,7 +126,6 @@
 
         .code-block { background: #020408; border: 1px solid var(--stark-cyan); border-left: 4px solid var(--stark-cyan); border-radius: 4px; padding: 10px; margin: 8px 0; font-family: 'Consolas', monospace; color: #00ff88; overflow-x: auto; font-size: 0.82rem; }
 
-        /* BOTÓN DE ENLACE INTERACTIVO EN CHAT */
         .hud-link-btn {
             display: inline-block;
             margin-top: 10px;
@@ -140,19 +141,49 @@
             box-shadow: 0 0 10px rgba(0, 242, 254, 0.3);
             transition: all 0.3s ease;
         }
-        .hud-link-btn:hover {
-            background: var(--stark-cyan);
-            color: var(--stark-dark);
-            box-shadow: 0 0 20px var(--stark-cyan);
-        }
+        .hud-link-btn:hover { background: var(--stark-cyan); color: var(--stark-dark); box-shadow: 0 0 20px var(--stark-cyan); }
 
-        .input-panel { padding: 12px 12px; border-top: 1px solid var(--stark-border); background: rgba(0, 0, 0, 0.6); display: flex; gap: 8px; }
+        /* PANEL DE CONTROLES E INPUT CON BOTÓN DE MICRÓFONO */
+        .input-panel { padding: 12px 12px; border-top: 1px solid var(--stark-border); background: rgba(0, 0, 0, 0.6); display: flex; gap: 8px; align-items: center; }
         @media (min-width: 600px) { .input-panel { padding: 18px 25px; gap: 12px; } }
 
         .stark-input { flex: 1; background: rgba(8, 11, 17, 0.9); border: 1px solid var(--stark-border); border-radius: 6px; padding: 12px 14px; color: var(--stark-cyan); font-size: 16px; outline: none; min-height: 44px; }
+
         .stark-btn { background: linear-gradient(135deg, rgba(0, 242, 254, 0.25), rgba(79, 172, 254, 0.25)); border: 1px solid var(--stark-cyan); color: var(--stark-cyan); padding: 0 16px; border-radius: 6px; font-size: 0.85rem; cursor: pointer; transition: all 0.3s ease; min-height: 44px; display: flex; align-items: center; justify-content: center; white-space: nowrap; }
         @media (min-width: 600px) { .stark-btn { padding: 0 22px; font-size: 0.9rem; } }
         .stark-btn:active, .stark-btn:hover { background: var(--stark-cyan); color: var(--stark-dark); font-weight: bold; }
+
+        /* ESTILO DEL BOTÓN DE MICRÓFONO */
+        .mic-btn {
+            width: 44px;
+            min-width: 44px;
+            padding: 0;
+            border-radius: 6px;
+        }
+
+        .mic-btn svg {
+            width: 20px;
+            height: 20px;
+            fill: var(--stark-cyan);
+            transition: fill 0.3s ease;
+        }
+
+        /* ESTADO DE MICRÓFONO ENCENDIDO Y ESCUCHANDO */
+        .mic-btn.active {
+            background: rgba(255, 51, 102, 0.25) !important;
+            border-color: var(--stark-red) !important;
+            box-shadow: 0 0 18px rgba(255, 51, 102, 0.6);
+            animation: pulseMic 1s infinite alternate;
+        }
+
+        .mic-btn.active svg {
+            fill: #ffffff !important;
+        }
+
+        @keyframes pulseMic {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.08); }
+        }
     </style>
 </head>
 <body>
@@ -171,7 +202,15 @@
         </div>
 
         <div class="input-panel">
-            <input type="text" id="userInput" class="stark-input" placeholder="Escriba un comando..." autocomplete="off">
+            <!-- BOTÓN DE MICRÓFONO MANUAL -->
+            <button class="stark-btn mic-btn" id="micBtn" onclick="toggleMicrofono()" title="Activar micrófono">
+                <svg viewBox="0 0 24 24">
+                    <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                    <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                </svg>
+            </button>
+
+            <input type="text" id="userInput" class="stark-input" placeholder="Escriba o hable un comando..." autocomplete="off">
             <button class="stark-btn" onclick="enviarMensaje()">ENVIAR</button>
         </div>
     </div>
@@ -183,6 +222,10 @@
         const userInput = document.getElementById("userInput");
         const sysStatus = document.getElementById("sys-status");
         const reactor = document.getElementById("reactor");
+        const micBtn = document.getElementById("micBtn");
+
+        let recognition = null;
+        let isListening = false;
 
         function obtenerSessionId() {
             let sid = localStorage.getItem("jarvis_session_id");
@@ -213,6 +256,11 @@
                 osc.frequency.setValueAtTime(659.25, now + 0.08);
                 gain.gain.setValueAtTime(0.1, now); gain.gain.linearRampToValueAtTime(0.01, now + 0.2);
                 osc.start(now); osc.stop(now + 0.2);
+            } else if (tipo === 'mic') {
+                osc.type = 'sine'; osc.frequency.setValueAtTime(440, now);
+                osc.frequency.exponentialRampToValueAtTime(880, now + 0.12);
+                gain.gain.setValueAtTime(0.15, now); gain.gain.linearRampToValueAtTime(0.01, now + 0.12);
+                osc.start(now); osc.stop(now + 0.12);
             } else if (tipo === 'error') {
                 osc.type = 'sawtooth'; osc.frequency.setValueAtTime(150, now);
                 gain.gain.setValueAtTime(0.15, now); gain.gain.linearRampToValueAtTime(0.01, now + 0.25);
@@ -224,10 +272,72 @@
             reactor.className = `arc-reactor state-${estado}`;
             sysStatus.innerText = texto;
             if (estado === 'ready') sysStatus.style.color = "rgba(209, 247, 255, 0.7)";
+            if (estado === 'listening') sysStatus.style.color = "var(--stark-red)";
             if (estado === 'processing') sysStatus.style.color = "var(--stark-amber)";
             if (estado === 'speaking') sysStatus.style.color = "var(--stark-cyan)";
             if (estado === 'success') sysStatus.style.color = "var(--stark-green)";
             if (estado === 'error') sysStatus.style.color = "var(--stark-red)";
+        }
+
+        /* 🎙️ CONTROL DE MICRÓFONO MANUAL Y SEGURO */
+        if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.lang = 'es-ES';
+            recognition.continuous = false; // Se apaga solo tras capturar la frase
+            recognition.interimResults = false;
+
+            recognition.onstart = () => {
+                isListening = true;
+                micBtn.classList.add("active");
+                setEstado('listening', 'ESCUCHANDO...');
+                playSFX('mic');
+            };
+
+            recognition.onresult = (event) => {
+                const textoCapturado = event.results[0][0].transcript;
+                userInput.value = textoCapturado;
+                apagarMicrofono();
+                enviarMensaje(); // Envía el comando automáticamente
+            };
+
+            recognition.onerror = (e) => {
+                console.warn("Error o cancelación de micrófono:", e.error);
+                apagarMicrofono();
+                setEstado('ready', 'ONLINE');
+            };
+
+            recognition.onend = () => {
+                apagarMicrofono();
+            };
+        }
+
+        function toggleMicrofono() {
+            if (!recognition) {
+                alert("Su navegador no soporta el reconocimiento de voz por micrófono.");
+                return;
+            }
+
+            if (isListening) {
+                recognition.stop();
+                apagarMicrofono();
+            } else {
+                // ACTIVACIÓN EXCLUSIVA POR CLIC MANUAL DEL USUARIO
+                try {
+                    window.speechSynthesis.cancel(); // Silencia a Jarvis si estaba hablando
+                    recognition.start();
+                } catch(e) {
+                    apagarMicrofono();
+                }
+            }
+        }
+
+        function apagarMicrofono() {
+            isListening = false;
+            micBtn.classList.remove("active");
+            if (reactor.classList.contains("state-listening")) {
+                setEstado('ready', 'ONLINE');
+            }
         }
 
         userInput.addEventListener("keypress", (e) => { if (e.key === "Enter") enviarMensaje(); });
@@ -315,7 +425,6 @@
                     msgDiv.className = "message jarvis-message";
                     chatBox.appendChild(msgDiv);
 
-                    // EJECUCIÓN DIRECTA DE NAVEGACIÓN EN PANTALLA
                     if (data.action_url) {
                         try {
                             window.open(data.action_url, '_blank');
