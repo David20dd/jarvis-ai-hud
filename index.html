@@ -18,7 +18,7 @@
     </script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 
-    <!-- 📄 MOTOR CLIENT-SIDE DUAL (TEXTO + VISIÓN) PARA PDFS -->
+    <!-- 📄 MOTOR CLIENT-SIDE CON FONDO BLANCO PARA PDFS -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 
     <style>
@@ -207,7 +207,7 @@
         </div>
 
         <div class="chat-box" id="chatBox">
-            <div class="message jarvis-message">Sistemas en línea, señor Cristian. Escáner Inteligente Dual (Texto + Visión) activo. ¿En qué le puedo asistir hoy?</div>
+            <div class="message jarvis-message">Sistemas en línea, señor Cristian. Memoria visual activa y motor Python configurado. ¿En qué le puedo asistir hoy?</div>
         </div>
 
         <div class="preview-bar" id="previewBar">
@@ -313,7 +313,7 @@
             if (estado === 'error') sysStatus.style.color = "var(--stark-red)";
         }
 
-        /* 📄 ESCÁNER INTELIGENTE DE PDF (TEXTO + VISIÓN DE HOJAS CON PROBLEMAS) */
+        /* 📄 ESCÁNER INTELIGENTE DE PDF CON RENDERIZADO EN FONDO BLANCO PURO */
         async function procesarArchivoSeleccionado(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -322,39 +322,12 @@
             const ext = file.name.split('.').pop().toLowerCase();
 
             if (ext === 'pdf' || file.type === 'application/pdf') {
-                setEstado('processing', 'ESCANEANDO PDF...');
+                setEstado('processing', 'ESCANEANDO PDF EN ALTA DEFINICIÓN...');
                 try {
                     const arrayBuffer = await file.arrayBuffer();
                     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
                     
-                    // PASO 1: EXTRAER TEXTO DIGITAL DE TODAS LAS PÁGINAS
-                    let fullText = "";
-                    for (let i = 1; i <= pdf.numPages; i++) {
-                        const page = await pdf.getPage(i);
-                        const textContent = await page.getTextContent();
-                        const pageStr = textContent.items.map(s => s.str).join(" ");
-                        if (pageStr.trim()) fullText += `\n--- PÁGINA ${i} ---\n` + pageStr;
-                    }
-
-                    // Si el PDF contiene texto digital seleccionable (> 120 caracteres)
-                    if (fullText.trim().length > 120) {
-                        isImage = false;
-                        const reader = new FileReader();
-                        reader.onload = (e) => {
-                            currentFileB64 = e.target.result;
-                            previewIcon.innerHTML = "PDF";
-                            previewText.innerText = `PDF DIGITAL: ${file.name.toUpperCase()}`;
-                            previewBar.classList.add("active");
-                            setEstado('ready', 'ONLINE');
-                            playSFX("mic");
-                        };
-                        reader.readAsDataURL(file);
-                        return;
-                    }
-
-                    // PASO 2: SI ES UN PDF ESCANEADO / A MANO -> RENDERIZAR LAS PÁGINAS CON PROBLEMAS (Páginas 2 a N)
-                    console.log("PDF escaneado/visual detectado. Renderizando páginas con contenido...");
-                    const startPage = pdf.numPages > 1 ? 2 : 1; // Omitir portada si hay más de 1 página
+                    const startPage = pdf.numPages > 1 ? 2 : 1;
                     const endPage = Math.min(pdf.numPages, startPage + 2);
 
                     const pageCanvases = [];
@@ -363,11 +336,15 @@
 
                     for (let i = startPage; i <= endPage; i++) {
                         const page = await pdf.getPage(i);
-                        const viewport = page.getViewport({ scale: 1.0 }); // Escala 1.0 óptima para Groq
+                        const viewport = page.getViewport({ scale: 1.2 });
                         const canvas = document.createElement('canvas');
                         const ctx = canvas.getContext('2d');
+                        
                         canvas.width = viewport.width;
                         canvas.height = viewport.height;
+                        ctx.fillStyle = '#FFFFFF';
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
                         await page.render({ canvasContext: ctx, viewport: viewport }).promise;
 
                         pageCanvases.push(canvas);
@@ -375,7 +352,6 @@
                         totalHeight += viewport.height;
                     }
 
-                    // Canvas ajustado a resolución máxima permitida
                     const MAX_HEIGHT = 1600;
                     let finalScale = 1.0;
                     if (totalHeight > MAX_HEIGHT) {
@@ -387,6 +363,9 @@
                     combinedCanvas.height = Math.round(totalHeight * finalScale);
                     const combinedCtx = combinedCanvas.getContext('2d');
 
+                    combinedCtx.fillStyle = '#FFFFFF';
+                    combinedCtx.fillRect(0, 0, combinedCanvas.width, combinedCanvas.height);
+
                     let currentY = 0;
                     for (const c of pageCanvases) {
                         const drawH = Math.round(c.height * finalScale);
@@ -395,11 +374,11 @@
                         currentY += drawH;
                     }
 
-                    currentFileB64 = combinedCanvas.toDataURL('image/jpeg', 0.75);
+                    currentFileB64 = combinedCanvas.toDataURL('image/jpeg', 0.80);
                     isImage = true;
 
                     previewIcon.innerHTML = `<img src="${currentFileB64}" style="width:100%;height:100%;object-fit:cover;border-radius:3px;">`;
-                    previewText.innerText = `PDF VISUAL: ${file.name.toUpperCase()}`;
+                    previewText.innerText = `PDF ESCANEADO HD: ${file.name.toUpperCase()}`;
                     previewBar.classList.add("active");
                     setEstado('ready', 'ONLINE');
                     playSFX("mic");
@@ -422,6 +401,9 @@
                         if (width > MAX_WIDTH) { height = Math.round((height * MAX_WIDTH) / width); width = MAX_WIDTH; }
                         canvas.width = width; canvas.height = height;
                         const ctx = canvas.getContext("2d");
+                        
+                        ctx.fillStyle = '#FFFFFF';
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
                         ctx.drawImage(img, 0, 0, width, height);
 
                         currentFileB64 = canvas.toDataURL("image/jpeg", 0.8);
@@ -549,7 +531,7 @@
                     renderizarMatematicas(elemento);
                     if (callback) callback();
                 }
-            }, 8);
+            }, 6);
         }
 
         function renderizarMatematicas(elemento) {
