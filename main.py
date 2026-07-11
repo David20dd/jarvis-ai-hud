@@ -59,7 +59,10 @@ PROMPT_SISTEMA = {
         "1. Responde con elegancia, precisión brillante y naturalidad. Dirígete al usuario como 'señor' o 'Cristian'.\n"
         "2. Si el usuario te pide abrir un sitio web o reproducir/buscar contenido (como películas en Netflix, videos en YouTube o música en Spotify), "
         "invoca INMEDIATAMENTE la herramienta 'abrir_sitio_web' pasando la plataforma en 'url' y el título exacto en 'busqueda'. Confirma brevemente que estás desplegando el enlace.\n"
-        "3. Tienes acceso completo a documentos y tareas. Si recibes ejercicios de matemáticas o álgebra, resuélvelos paso a paso con máxima claridad y precisión.\n"
+        "3. FORMATO MATEMÁTICO AVANZADO: Cuando escribas ecuaciones, fórmulas, fracciones, raíces, límites o integrales, utiliza SIEMPRE la sintaxis LaTeX estándar.\n"
+        "   - Para ecuaciones centradas e independientes usa '$$ ecuacion $$'. Ejemplo: $$ x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a} $$\n"
+        "   - Para fórmulas o variables dentro del texto usa '$ ecuacion $'. Ejemplo: $a^2 + b^2 = c^2$\n"
+        "   - NUNCA escribas matemáticas en texto plano descuidado como 'x = (-b +- sqrt(b^2-4ac))/2a'.\n"
         "4. REGLA DE HERRAMIENTAS: Una vez recibida la confirmación de la herramienta, genera tu respuesta final sin bucles ni demoras."
     )
 }
@@ -126,10 +129,9 @@ def procesar_archivo_adjunto(file_b64: str = None, file_name: str = None) -> tup
                     if t.strip():
                         texto_digital += f"\n--- Página {page_num+1} ---\n" + t
 
-                # SI ES UN PDF ESCANEADO / HOJA A MANO (SIN TEXTO DIGITAL)
                 if not texto_digital.strip() and len(doc) > 0:
                     print(f"👁️ [PyMuPDF]: PDF escaneado detectado en '{file_name}'. Renderizando a HD...")
-                    page = doc[0]  # Primera página
+                    page = doc[0]
                     pix = page.get_pixmap(dpi=150)
                     img_bytes = pix.tobytes("jpeg")
                     img_b64 = base64.b64encode(img_bytes).decode('utf-8')
@@ -178,7 +180,7 @@ def procesar_archivo_adjunto(file_b64: str = None, file_name: str = None) -> tup
         return 'none', ""
 
 
-# --- GENERADOR DE VOZ HD EN RAM ---
+# --- GENERADOR DE VOZ HD EN RAM (LIMPIEZA DE LATEX PARA AUDIO NATURAL) ---
 def generar_audio_elevenlabs(texto: str) -> str:
     try:
         if not ELEVENLABS_API_KEY or "sk_" not in ELEVENLABS_API_KEY:
@@ -191,12 +193,16 @@ def generar_audio_elevenlabs(texto: str) -> str:
             "xi-api-key": ELEVENLABS_API_KEY
         }
         
+        # Limpieza de bloques de código y fórmulas LaTeX para que la voz hable de forma fluida
         texto_limpio = re.sub(r'```[\s\S]*?```', '', texto)
-        texto_limpio = re.sub(r'[*_#`]', '', texto_limpio)
+        texto_limpio = re.sub(r'\$\$[\s\S]*?\$\$', ' según la fórmula matemática ', texto_limpio)
+        texto_limpio = re.sub(r'\$[\s\S]*?\$', '', texto_limpio)
+        texto_limpio = re.sub(r'\\[a-zA-Z]+', '', texto_limpio)
+        texto_limpio = re.sub(r'[*_#`{}]', '', texto_limpio)
         texto_limpio = texto_limpio.replace("\n", " ").strip()[:250]
         
         if not texto_limpio:
-            texto_limpio = "Sistemas operativos, señor."
+            texto_limpio = "Sistemas matemáticos desplegados en pantalla, señor."
 
         data = {
             "text": texto_limpio,
@@ -395,7 +401,6 @@ async def consultar_jarvis(data: ChatInput):
         categoria_archivo, contenido_o_b64 = procesar_archivo_adjunto(data.file_b64, data.file_name)
         prompt_usuario = data.message if data.message else "Señor, he recibido un archivo para analizar."
 
-        # MODO VISIÓN ARTIFICIAL (IMÁGENES O PDFS ESCANEADOS)
         if categoria_archivo == 'image':
             historial_usuario.append({"role": "user", "content": prompt_usuario})
             print("👁️ [Jarvis Vision]: Ejecutando análisis visual...")
@@ -406,7 +411,6 @@ async def consultar_jarvis(data: ChatInput):
             audio_b64 = generar_audio_elevenlabs(respuesta_final)
             return {"status": "success", "reply": respuesta_final, "audio_b64": audio_b64, "action_url": None}
 
-        # MODO TEXTO DIGITAL (PDFS DIGITALES, WORD, EXCEL, CÓDIGO)
         if categoria_archivo == 'text_context':
             prompt_usuario += contenido_o_b64
 
