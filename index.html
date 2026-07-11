@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>J.A.R.V.I.S. // STARK HUD 3.0</title>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --stark-cyan: #00f2fe;
+            --stark-amber: #ffb700;
+            --stark-green: #00ff88;
+            --stark-red: #ff3366;
+            --stark-dark: #06090e;
+            --stark-glass: rgba(10, 20, 35, 0.75);
+            --stark-border: rgba(0, 242, 254, 0.35);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Share Tech Mono', monospace; }
+
+        body {
+            background-color: var(--stark-dark);
+            background-image: 
+                radial-gradient(circle at 50% 30%, rgba(0, 242, 254, 0.08) 0%, transparent 70%),
+                linear-gradient(rgba(0, 242, 254, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 242, 254, 0.03) 1px, transparent 1px);
+            background-size: 100% 100%, 25px 25px, 25px 25px;
+            color: #d1f7ff;
+            min-height: 100vh;
+            display: flex; justify-content: center; align-items: center;
+            padding: 15px;
+        }
+
+        .jarvis-container {
+            width: 100%; max-width: 900px; height: 90vh;
+            background: var(--stark-glass);
+            backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--stark-border);
+            border-radius: 12px;
+            box-shadow: 0 0 35px rgba(0, 242, 254, 0.15);
+            display: flex; flex-direction: column; overflow: hidden;
+        }
+
+        .jarvis-header {
+            padding: 18px 25px; border-bottom: 1px solid var(--stark-border);
+            display: flex; justify-content: space-between; align-items: center;
+            background: rgba(0, 0, 0, 0.4);
+        }
+
+        .header-title {
+            font-size: 1.1rem; letter-spacing: 2px; color: var(--stark-cyan);
+            display: flex; align-items: center; gap: 12px;
+        }
+
+        .arc-reactor {
+            width: 18px; height: 18px; border-radius: 50%;
+            background: var(--stark-cyan);
+            box-shadow: 0 0 14px var(--stark-cyan);
+            transition: all 0.3s ease;
+        }
+
+        .arc-reactor.state-ready { background: var(--stark-cyan); box-shadow: 0 0 15px var(--stark-cyan); animation: pulseReady 2s infinite; }
+        .arc-reactor.state-processing { background: var(--stark-amber); box-shadow: 0 0 20px var(--stark-amber); animation: pulseSpin 0.8s infinite; }
+        .arc-reactor.state-speaking { background: #ffffff; box-shadow: 0 0 25px #00f2fe, 0 0 40px #ffffff; animation: speakGlow 0.4s infinite alternate; }
+        .arc-reactor.state-success { background: var(--stark-green); box-shadow: 0 0 20px var(--stark-green); }
+        .arc-reactor.state-error { background: var(--stark-red); box-shadow: 0 0 25px var(--stark-red); animation: strobe 0.3s infinite; }
+
+        @keyframes pulseReady { 0%, 100% { opacity: 0.5; transform: scale(0.9); } 50% { opacity: 1; transform: scale(1.1); } }
+        @keyframes pulseSpin { 0% { opacity: 0.3; } 50% { opacity: 1; } 100% { opacity: 0.3; } }
+        @keyframes speakGlow { 0% { transform: scale(1); filter: brightness(1); } 100% { transform: scale(1.35); filter: brightness(1.6); } }
+        @keyframes strobe { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
+
+        .status-badge { font-size: 0.85rem; color: rgba(209, 247, 255, 0.7); letter-spacing: 1px; }
+
+        .chat-box { flex: 1; padding: 25px; overflow-y: auto; display: flex; flex-direction: column; gap: 18px; }
+        .chat-box::-webkit-scrollbar { width: 5px; }
+        .chat-box::-webkit-scrollbar-thumb { background: var(--stark-border); border-radius: 3px; }
+
+        .message {
+            max-width: 85%; padding: 14px 18px; border-radius: 8px;
+            font-size: 0.95rem; line-height: 1.5; letter-spacing: 0.5px;
+            white-space: pre-wrap; word-break: break-word;
+        }
+
+        .user-message {
+            align-self: flex-end; background: rgba(79, 172, 254, 0.12);
+            border: 1px solid rgba(79, 172, 254, 0.4); color: #e6f7ff;
+            border-bottom-right-radius: 2px;
+        }
+
+        .jarvis-message {
+            align-self: flex-start; background: rgba(0, 242, 254, 0.08);
+            border: 1px solid var(--stark-border); color: #d1f7ff;
+            border-bottom-left-radius: 2px;
+        }
+
+        .code-block {
+            background: #020408; border: 1px solid var(--stark-cyan);
+            border-left: 4px solid var(--stark-cyan); border-radius: 4px;
+            padding: 12px; margin: 10px 0; font-family: 'Consolas', monospace;
+            color: #00ff88; overflow-x: auto; font-size: 0.88rem;
+        }
+
+        .input-panel {
+            padding: 18px 25px; border-top: 1px solid var(--stark-border);
+            background: rgba(0, 0, 0, 0.4); display: flex; gap: 12px;
+        }
+
+        .stark-input {
+            flex: 1; background: rgba(8, 11, 17, 0.9); border: 1px solid var(--stark-border);
+            border-radius: 6px; padding: 12px 18px; color: var(--stark-cyan);
+            font-size: 0.95rem; outline: none;
+        }
+
+        .stark-btn {
+            background: linear-gradient(135deg, rgba(0, 242, 254, 0.2), rgba(79, 172, 254, 0.2));
+            border: 1px solid var(--stark-cyan); color: var(--stark-cyan);
+            padding: 0 22px; border-radius: 6px; font-size: 0.9rem;
+            cursor: pointer; transition: all 0.3s ease;
+        }
+
+        .stark-btn:hover { background: var(--stark-cyan); color: var(--stark-dark); font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div class="jarvis-container" id="mainContainer">
+        <div class="jarvis-header">
+            <div class="header-title">
+                <div class="arc-reactor state-ready" id="reactor"></div>
+                J.A.R.V.I.S. // HUD STARK 3.0
+            </div>
+            <div class="status-badge" id="sys-status">SISTEMAS ONLINE</div>
+        </div>
+
+        <div class="chat-box" id="chatBox">
+            <div class="message jarvis-message">Sistemas en línea, señor Cristian. Interfaz holográfica Stark 3.0 activa. ¿En qué puedo asistirlo hoy?</div>
+        </div>
+
+        <div class="input-panel">
+            <input type="text" id="userInput" class="stark-input" placeholder="Escriba un comando o saludo..." autocomplete="off">
+            <button class="stark-btn" onclick="enviarMensaje()">TRANSMITIR</button>
+        </div>
+    </div>
+
+    <script>
+        // 🚨 CAMBIA ESTA URL CUANDO DESPLIEGUES EL BACKEND EN RENDER:
+        const API_URL = "http://localhost:8080/api/jarvis";
+
+        const chatBox = document.getElementById("chatBox");
+        const userInput = document.getElementById("userInput");
+        const sysStatus = document.getElementById("sys-status");
+        const reactor = document.getElementById("reactor");
+
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playSFX(tipo) {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+
+            const now = audioCtx.currentTime;
+
+            if (tipo === 'send') {
+                osc.type = 'sine'; osc.frequency.setValueAtTime(800, now);
+                osc.frequency.exponentialRampToValueAtTime(1600, now + 0.08);
+                gain.gain.setValueAtTime(0.12, now); gain.gain.linearRampToValueAtTime(0.01, now + 0.08);
+                osc.start(now); osc.stop(now + 0.08);
+            } else if (tipo === 'success') {
+                osc.type = 'triangle'; osc.frequency.setValueAtTime(523.25, now);
+                osc.frequency.setValueAtTime(659.25, now + 0.08);
+                gain.gain.setValueAtTime(0.1, now); gain.gain.linearRampToValueAtTime(0.01, now + 0.2);
+                osc.start(now); osc.stop(now + 0.2);
+            } else if (tipo === 'error') {
+                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(150, now);
+                gain.gain.setValueAtTime(0.15, now); gain.gain.linearRampToValueAtTime(0.01, now + 0.25);
+                osc.start(now); osc.stop(now + 0.25);
+            }
+        }
+
+        function setEstado(estado, texto) {
+            reactor.className = `arc-reactor state-${estado}`;
+            sysStatus.innerText = texto;
+            if (estado === 'ready') sysStatus.style.color = "rgba(209, 247, 255, 0.7)";
+            if (estado === 'processing') sysStatus.style.color = "var(--stark-amber)";
+            if (estado === 'speaking') sysStatus.style.color = "var(--stark-cyan)";
+            if (estado === 'success') sysStatus.style.color = "var(--stark-green)";
+            if (estado === 'error') sysStatus.style.color = "var(--stark-red)";
+        }
+
+        userInput.addEventListener("keypress", (e) => { if (e.key === "Enter") enviarMensaje(); });
+
+        function hablarEstiloJarvisLocal(texto) {
+            if (!('speechSynthesis' in window)) return;
+            window.speechSynthesis.cancel();
+            let textoLimpio = texto.replace(/```[\s\S]*?```/g, " Código desplegado en consola. ").replace(/[*_#`]/g, "");
+            const utterance = new SpeechSynthesisUtterance(textoLimpio);
+            utterance.rate = 0.90; utterance.pitch = 0.85; utterance.lang = 'es-ES';
+            const voces = window.speechSynthesis.getVoices();
+            const vozEspecial = voces.find(v => (v.lang.includes('es') || v.lang.includes('ES')) && (v.name.includes('Pablo') || v.name.includes('Jorge') || v.name.includes('Male') || v.name.includes('Google')));
+            if (vozEspecial) utterance.voice = vozEspecial;
+            
+            utterance.onstart = () => setEstado('speaking', 'SISTEMA DE VOZ ACTIVO');
+            utterance.onend = () => setEstado('ready', 'SISTEMAS ONLINE');
+            utterance.onerror = () => setEstado('ready', 'SISTEMAS ONLINE');
+            window.speechSynthesis.speak(utterance);
+        }
+
+        if ('speechSynthesis' in window) window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+
+        function tipoEscribir(elemento, texto, callback) {
+            let i = 0; elemento.innerText = "";
+            if (texto.includes("```")) {
+                elemento.innerHTML = formatearTextoConCodigo(texto);
+                if (callback) callback();
+                return;
+            }
+            const timer = setInterval(() => {
+                if (i < texto.length) {
+                    elemento.innerText += texto.charAt(i); i++;
+                    chatBox.scrollTop = chatBox.scrollHeight;
+                } else {
+                    clearInterval(timer);
+                    if (callback) callback();
+                }
+            }, 10);
+        }
+
+        function formatearTextoConCodigo(texto) {
+            return texto.replace(/```python([\s\S]*?)```/g, '<pre class="code-block"><code>$1</code></pre>')
+                        .replace(/```([\s\S]*?)```/g, '<pre class="code-block"><code>$1</code></pre>');
+        }
+
+        async function enviarMensaje() {
+            const texto = userInput.value.trim();
+            if (!texto) return;
+
+            playSFX('send');
+            agregarMensajeUsuario(texto);
+            userInput.value = "";
+
+            setEstado('processing', 'PROCESANDO DATOS...');
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ message: texto })
+                });
+
+                const data = await response.json();
+
+                if (data.status === "success") {
+                    playSFX('success');
+                    const msgDiv = document.createElement("div");
+                    msgDiv.className = "message jarvis-message";
+                    chatBox.appendChild(msgDiv);
+
+                    tipoEscribir(msgDiv, data.reply, () => {
+                        if (data.audio_b64) {
+                            const audio = new Audio(data.audio_b64);
+                            audio.volume = 1.0;
+                            audio.onplay = () => setEstado('speaking', 'REPRODUCIENDO VOZ HD');
+                            audio.onended = () => setEstado('ready', 'SISTEMAS ONLINE');
+                            audio.onerror = () => { setEstado('ready', 'SISTEMAS ONLINE'); hablarEstiloJarvisLocal(data.reply); };
+                            audio.play().catch(err => hablarEstiloJarvisLocal(data.reply));
+                        } else {
+                            hablarEstiloJarvisLocal(data.reply);
+                        }
+                    });
+
+                } else {
+                    setEstado('error', 'FALLO EN RESPUESTA');
+                    playSFX('error');
+                    agregarMensajeJarvis("[ALERTA]: " + data.reply);
+                }
+            } catch (error) {
+                setEstado('error', 'DESCONEXIÓN CENTRAL');
+                playSFX('error');
+                agregarMensajeJarvis("[ERROR]: No se pudo conectar con el servidor central de Python.");
+            }
+        }
+
+        function agregarMensajeUsuario(texto) {
+            const msgDiv = document.createElement("div");
+            msgDiv.className = "message user-message";
+            msgDiv.innerText = texto;
+            chatBox.appendChild(msgDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function agregarMensajeJarvis(texto) {
+            const msgDiv = document.createElement("div");
+            msgDiv.className = "message jarvis-message";
+            msgDiv.innerText = texto;
+            chatBox.appendChild(msgDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+    </script>
+</body>
+</html>

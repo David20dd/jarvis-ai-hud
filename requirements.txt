@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+groq
+duckduckgo_search
+requests
+beautifulsoup4
+pydantic
+psutil
+pypdf
