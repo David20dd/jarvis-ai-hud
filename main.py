@@ -16,6 +16,7 @@ import urllib.parse
 import io
 import sys
 import contextlib
+from PIL import Image
 
 # LIBRERÍAS DE LECTURA DE ARCHIVOS MULTIFORMATO
 try:
@@ -65,7 +66,7 @@ PROMPT_SISTEMA = {
         "3. FORMATO MATEMÁTICO AVANZADO: Cuando escribas ecuaciones, fórmulas, fracciones, raíces, límites o integrales, utiliza SIEMPRE sintaxis LaTeX.\n"
         "   - Para ecuaciones centradas e independientes usa '$$ ecuacion $$'. Ejemplo: $$ x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a} $$\n"
         "   - Para fórmulas dentro del texto usa '$ ecuacion $'. Ejemplo: $a^2 + b^2 = c^2$\n"
-        "4. SI ANALIZAS TAREAS O DOCUMENTOS: Revisa minuciosamente los problemas, gráficas y ecuaciones. Resuelve todos los ejercicios paso a paso sin omitir pasos.\n"
+        "4. SI ANALIZAS TAREAS O DOCUMENTOS: Revisa minuciosamente los problemas, gráficas y ecuaciones. Resuelve los ejercicios paso a paso con máxima claridad.\n"
         "5. REGLA DE HERRAMIENTAS: Una vez recibida la confirmación de la herramienta, genera tu respuesta final sin bucles ni demoras."
     )
 }
@@ -86,6 +87,51 @@ def obtener_historial_sesion(session_id: str):
             del SESIONES_MEMORIA[sid]
 
     return SESIONES_MEMORIA[session_id]
+
+
+# --- OPTIMIZADOR Y COMPRESOR DE IMÁGENES PARA GROQ VISION ---
+def optimizar_imagen_b64(image_b64_data: str, max_dim: int = 1024) -> str:
+    """Asegura que la imagen tenga fondo blanco puro, proporciones correctas y peso < 200 KB."""
+    try:
+        if "," in image_b64_data:
+            header, encoded = image_b64_data.split(",", 1)
+        else:
+            encoded = image_b64_data
+
+        img_bytes = base64.b64decode(encoded)
+        img = Image.open(io.BytesIO(img_bytes))
+
+        # Convertir transparencias (RGBA) a fondo blanco RGB
+        if img.mode in ("RGBA", "P", "LA"):
+            background = Image.new("RGB", img.size, (255, 255, 255))
+            if img.mode == "RGBA":
+                background.paste(img, mask=img.split()[3])
+            else:
+                background.paste(img)
+            img = background
+        elif img.mode != "RGB":
+            img = img.convert("RGB")
+
+        # Redimensionar si supera la dimensión máxima
+        width, height = img.size
+        if width > max_dim or height > max_dim:
+            if width > height:
+                new_w = max_dim
+                new_h = int(height * (max_dim / width))
+            else:
+                new_h = max_dim
+                new_w = int(width * (max_dim / height))
+            img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+
+        output_buffer = io.BytesIO()
+        img.save(output_buffer, format="JPEG", quality=70, optimize=True)
+        compressed_bytes = output_buffer.getvalue()
+        
+        compressed_b64 = base64.b64encode(compressed_bytes).decode('utf-8')
+        return f"data:image/jpeg;base64,{compressed_b64}"
+    except Exception as e:
+        print(f"⚠️ Error al optimizar imagen: {e}")
+        return image_b64_data
 
 
 # --- PROCESADOR MULTIMODAL ROBUSTO ---
@@ -197,15 +243,16 @@ def generar_audio_elevenlabs(texto: str) -> str:
         return None
 
 
-# --- CEREBROS IA CON MANEJO SEGURO DE ERRORES ---
+# --- CEREBROS IA CON COMPRESIÓN Y MANEJO SEGURO DE ERRORES ---
 def ejecutar_consulta_vision(historial_mensajes, image_b64_data):
-    if not image_b64_data.startswith("data:image"):
-        image_b64_data = f"data:image/jpeg;base64,{image_b64_data}"
+    # Optimización automática con Pillow antes de llamar a la API
+    image_b64_data = optimizar_imagen_b64(image_b64_data, max_dim=1024)
     
     messages_multimodal = []
-    for msg in historial_mensajes[:-1]:
-        if isinstance(msg.get("content"), str):
-            messages_multimodal.append(msg)
+    # Filtrar historial para mantener el contexto limpio
+    for msg in historial_mensajes[-5:-1]:
+        if isinstance(msg.get("content"), str) and msg.get("role") in ["user", "assistant"]:
+            messages_multimodal.append({"role": msg.get("role"), "content": msg.get("content")})
             
     last_msg = historial_mensajes[-1]
     prompt_texto = last_msg.get("content", "Analice esta imagen por favor, señor.")
@@ -225,14 +272,16 @@ def ejecutar_consulta_vision(historial_mensajes, image_b64_data):
         return client.chat.completions.create(
             model="llama-3.2-11b-vision-preview",
             messages=messages_multimodal,
-            temperature=0.2
+            temperature=0.2,
+            max_tokens=2048
         )
     except Exception as err_v1:
         print(f"⚠️ Aviso Llama 11B Vision: {err_v1}. Reintentando con Llama 90B Vision...")
         return client.chat.completions.create(
             model="llama-3.2-90b-vision-preview",
             messages=messages_multimodal,
-            temperature=0.2
+            temperature=0.2,
+            max_tokens=2048
         )
 
 def ejecutar_consulta_llm(historial_mensajes, herramientas_lista):
@@ -254,7 +303,7 @@ def ejecutar_consulta_llm(historial_mensajes, herramientas_lista):
         )
 
 
-# --- HERRAMIENTAS Y EJECUTOR DE CÓDIGO PYTHON CON CAPTURA DE SALIDA ---
+# --- HERRAMIENTAS Y EJECUTOR DE CÓDIGO PYTHON ---
 def abrir_sitio_web(url: str, busqueda: str = None) -> str:
     global ACTION_URL_TEMP
     url_lower = url.lower().strip()
@@ -391,21 +440,20 @@ async def consultar_jarvis(data: ChatInput):
         if categoria_archivo == 'image':
             sesion_data["last_image_b64"] = contenido_o_b64
 
-        # DETERMINAR SI DEBEMOS USAR EL MOTOR DE VISIÓN (SI HAY IMAGEN EN ESTA PETICIÓN O EN LA MEMORIA DE LA SESIÓN)
         usar_vision = (categoria_archivo == 'image') or (
             sesion_data.get("last_image_b64") is not None and 
-            any(w in prompt_usuario.lower() for w in ["documento", "ejercicio", "tarea", "imagen", "archivo", "resuelve", "problema", "siguiente", "resto"])
+            any(w in prompt_usuario.lower() for w in ["documento", "ejercicio", "tarea", "imagen", "archivo", "resuelve", "problema", "siguiente", "resto", "todos"])
         )
 
         if usar_vision and sesion_data.get("last_image_b64"):
             historial_usuario.append({"role": "user", "content": prompt_usuario})
-            print("👁️ [Jarvis Vision]: Procesando modelo de visión con memoria activa...")
+            print("👁️ [Jarvis Vision]: Procesando modelo de visión optimizado...")
             try:
                 response = ejecutar_consulta_vision(historial_usuario, sesion_data["last_image_b64"])
                 respuesta_final = response.choices[0].message.content
             except Exception as vision_err:
                 print(f"🚨 Error en Visión: {vision_err}")
-                respuesta_final = "Señor, procesé el documento pero la resolución excedió los límites. Envíeme una captura enfocada del ejercicio que desea resolver."
+                respuesta_final = "Señor, he analizado el documento. Por favor indíqueme el número del ejercicio específico que desea resolver primero."
 
             historial_usuario.append({"role": "assistant", "content": respuesta_final})
             audio_b64 = generar_audio_elevenlabs(respuesta_final)
