@@ -61,8 +61,8 @@ PROMPT_SISTEMA = {
         "Eres J.A.R.V.I.S., una Inteligencia Artificial Avanzada especialista en Matemáticas, Física, Estadística, Cálculo, Álgebra y Ciencias Exactas, creada para asistir a Cristian.\n"
         "DIRECTIVAS ESTRICTAS DE RESOLUCIÓN:\n"
         "1. Dirígete al usuario como 'señor' o 'Cristian'. Sé analítico, claro, directo y extremadamente preciso.\n"
-        "2. NUNCA respondas diciendo 'indíqueme qué ejercicio resolver', 'requiero que especifique' ni des respuestas evasivas.\n"
-        "3. SI EL USUARIO PIDE UN NÚMERO O EJERCICIO (ej: '1', 'ejercicio 2', 'resuelve el primero'): Busca en la imagen adjunta dicho ejercicio, transcribe su función/enunciado exacto y resuélvelo paso a paso.\n"
+        "2. NUNCA respondas con anuncios de lo que vas a hacer (ej. 'Procederé a resolverlo' o 'Analicé la imagen'). DÉ LA SOLUCIÓN Y EL PROCEDIMIENTO DIRECTAMENTE EN TU PRIMER ENUNCIADO.\n"
+        "3. SI EL USUARIO PIDE RESOLVER EJERCICIOS (ej: '1', 'resuélvelo', 'todos los ejercicios'): Identifica la ecuación o función en la imagen, escríbela en LaTeX y desglosa todo el cálculo paso a paso.\n"
         "4. FORMATO MATEMÁTICO LaTeX OBLIGATORIO:\n"
         "   - Ecuaciones centradas y paso a paso en bloque: '$$ ecuacion $$'. Ejemplo: $$ f(x) = \\frac{x^2 - 4}{x + 2} = x - 2 $$\n"
         "   - Fórmulas o variables en el texto: '$ ecuacion $'. Ejemplo: $x \\neq -2$\n"
@@ -251,14 +251,19 @@ def ejecutar_consulta_vision(historial_mensajes, image_b64_data):
             messages_multimodal.append({"role": msg.get("role"), "content": msg.get("content")})
             
     last_msg = historial_mensajes[-1]
-    prompt_texto = last_msg.get("content", "Analice esta imagen por favor, señor.")
-    if not prompt_texto.strip():
-        prompt_texto = "Analice esta imagen y resuelva el primer problema mostrado, señor."
+    prompt_texto = last_msg.get("content", "").strip()
+    
+    # INSTRUCCIÓN DE ACCIÓN DIRECTA OBLIGATORIA
+    instruccion_directa = (
+        f"INSTRUCCIÓN OBLIGATORIA: Lee la imagen adjunta y responde de inmediato con la solución matemática completa. "
+        f"Transcribe la ecuación/función seleccionada y muestra el procedimiento paso a paso en LaTeX. "
+        f"Petición del usuario: '{prompt_texto}'"
+    )
 
     multimodal_user_msg = {
         "role": "user",
         "content": [
-            {"type": "text", "text": prompt_texto},
+            {"type": "text", "text": instruccion_directa},
             {"type": "image_url", "image_url": {"url": image_b64_data}}
         ]
     }
@@ -269,7 +274,7 @@ def ejecutar_consulta_vision(historial_mensajes, image_b64_data):
             model="llama-3.2-11b-vision-preview",
             messages=messages_multimodal,
             temperature=0.1,
-            max_tokens=2048
+            max_tokens=3000
         )
     except Exception as err_v1:
         print(f"⚠️ Aviso Llama 11B Vision: {err_v1}. Reintentando con Llama 90B Vision...")
@@ -277,7 +282,7 @@ def ejecutar_consulta_vision(historial_mensajes, image_b64_data):
             model="llama-3.2-90b-vision-preview",
             messages=messages_multimodal,
             temperature=0.1,
-            max_tokens=2048
+            max_tokens=3000
         )
 
 def ejecutar_consulta_llm(historial_mensajes, herramientas_lista):
@@ -430,29 +435,30 @@ async def consultar_jarvis(data: ChatInput):
             historial_usuario = sesion_data["messages"]
 
         categoria_archivo, contenido_o_b64 = procesar_archivo_adjunto(data.file_b64, data.file_name)
-        prompt_usuario = data.message.strip() if data.message else "Señor, he recibido un archivo para analizar."
+        prompt_usuario = data.message.strip() if data.message else "Resuelve los ejercicios presentes en la imagen."
 
         # ALMACENAR IMAGEN EN MEMORIA DE LA SESIÓN
         if categoria_archivo == 'image':
             sesion_data["last_image_b64"] = contenido_o_b64
 
-        # TRADUCTOR DE COMANDOS CORTOS PARA INTERPRETAR NÚMEROS DE EJERCICIO
-        if sesion_data.get("last_image_b64") and (prompt_usuario.isdigit() or re.match(r'^(ejercicio|num|numero|item)?\s*\d+[a-z]?$', prompt_usuario, re.IGNORECASE)):
-            num = re.findall(r'\d+[a-z]?', prompt_usuario, re.IGNORECASE)[0]
-            prompt_usuario = f"Por favor localice en la imagen adjunta el Ejercicio o Numeral {num}, escriba su función o enunciado completo y resuélvelo paso a paso en formato LaTeX."
+        # TRADUCTOR DE COMANDOS CORTOS
+        if sesion_data.get("last_image_b64") and (prompt_usuario.isdigit() or re.match(r'^(ejercicio|num|numero|item|resuelvelo|resuelve)?\s*\d*[a-z]?$', prompt_usuario, re.IGNORECASE)):
+            num_match = re.findall(r'\d+[a-z]?', prompt_usuario, re.IGNORECASE)
+            num_str = num_match[0] if num_match else "1"
+            prompt_usuario = f"Localiza el ejercicio número {num_str} en el documento, escribe su enunciado/función en LaTeX y desglosa todo su procedimiento matemático paso a paso."
 
         # MEMORIA VISUAL ALWAYS-ON
         usar_vision = (sesion_data.get("last_image_b64") is not None) and (categoria_archivo == 'image' or not data.file_b64)
 
         if usar_vision and sesion_data.get("last_image_b64"):
             historial_usuario.append({"role": "user", "content": prompt_usuario})
-            print("👁️ [Jarvis Vision Always-On]: Procesando consulta visual optimizada...")
+            print("👁️ [Jarvis Vision Directa]: Generando cálculo paso a paso...")
             try:
                 response = ejecutar_consulta_vision(historial_usuario, sesion_data["last_image_b64"])
                 respuesta_final = response.choices[0].message.content
             except Exception as vision_err:
                 print(f"🚨 Error en Visión: {vision_err}")
-                respuesta_final = "Señor, he analizado la imagen. Procederé a resolver el primer ejercicio del documento."
+                respuesta_final = "Señor, se presentó una pequeña interrupción. Reintentando la lectura de la ecuación."
 
             historial_usuario.append({"role": "assistant", "content": respuesta_final})
             audio_b64 = generar_audio_elevenlabs(respuesta_final)
