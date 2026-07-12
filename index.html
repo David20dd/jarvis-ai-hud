@@ -6,7 +6,7 @@
     <title>J.A.R.V.I.S. // STARK HUD 3.0</title>
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
     
-    <!-- 🧮 MOTOR DE RENDERIZADO MATEMÁTICO VECTORIAL MATHJAX 3 -->
+    <!-- 🧮 MATHJAX 3 -->
     <script>
         window.MathJax = {
             tex: {
@@ -18,8 +18,11 @@
     </script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 
-    <!-- 📄 MOTOR CLIENT-SIDE CON FONDO BLANCO PARA PDFS -->
+    <!-- 📄 PDF.JS -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+    <!-- 📈 CHART.JS PARA GRÁFICAS VECTORIALES EN VIVO -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
         :root {
@@ -143,6 +146,12 @@
         .MathJax { color: #00ff88 !important; font-size: 1.05rem !important; }
         .mjx-chtml { margin: 8px 0 !important; }
 
+        .chart-card { background: #020408; border: 1px solid var(--stark-cyan); border-radius: 6px; padding: 12px; margin-top: 10px; width: 100%; max-width: 500px; }
+
+        .export-btn-group { display: flex; gap: 8px; margin-top: 10px; }
+        .export-btn { background: rgba(0, 242, 254, 0.15); border: 1px solid var(--stark-cyan); color: var(--stark-cyan); padding: 4px 10px; border-radius: 4px; font-size: 0.75rem; cursor: pointer; }
+        .export-btn:hover { background: var(--stark-cyan); color: #000; }
+
         .code-block { background: #020408; border: 1px solid var(--stark-cyan); border-left: 4px solid var(--stark-cyan); border-radius: 4px; padding: 10px; margin: 8px 0; font-family: 'Consolas', monospace; color: #00ff88; overflow-x: auto; font-size: 0.82rem; }
 
         .hud-link-btn {
@@ -207,7 +216,7 @@
         </div>
 
         <div class="chat-box" id="chatBox">
-            <div class="message jarvis-message">Sistemas en línea, señor Cristian. Escáner Completo Multimodal (Página 1 a N) activo. ¿En qué le puedo asistir hoy?</div>
+            <div class="message jarvis-message">Sistemas en línea, señor Cristian. Motor SymPy, Gráficas Chart.js y Detección de Voz 'Hey Jarvis' activos. ¿En qué le puedo asistir hoy?</div>
         </div>
 
         <div class="preview-bar" id="previewBar">
@@ -232,7 +241,7 @@
                 </svg>
             </button>
 
-            <input type="text" id="userInput" class="stark-input" placeholder="Escriba o hable un comando..." autocomplete="off">
+            <input type="text" id="userInput" class="stark-input" placeholder="Escriba o diga 'Hey Jarvis'..." autocomplete="off">
             <button class="stark-btn" onclick="enviarMensaje()">ENVIAR</button>
         </div>
     </div>
@@ -313,7 +322,7 @@
             if (estado === 'error') sysStatus.style.color = "var(--stark-red)";
         }
 
-        /* 📄 ESCÁNER INTELIGENTE DESDE LA PÁGINA 1 HASTA N CON RENDERIZADO EN FONDO BLANCO PURO */
+        /* 📄 ESCÁNER INTELIGENTE DESDE PÁGINA 1 A N */
         async function procesarArchivoSeleccionado(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -327,7 +336,6 @@
                     const arrayBuffer = await file.arrayBuffer();
                     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
                     
-                    // ESCANEAR DESDE LA PÁGINA 1
                     const startPage = 1;
                     const endPage = Math.min(pdf.numPages, 4);
 
@@ -437,29 +445,34 @@
             previewBar.classList.remove("active");
         }
 
+        /* 🎙️ RECONOCIMIENTO DE VOZ CONTINUO CON 'HEY JARVIS' */
         if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             recognition = new SpeechRecognition();
             recognition.lang = 'es-ES';
-            recognition.continuous = false;
+            recognition.continuous = true;
             recognition.interimResults = false;
 
             recognition.onstart = () => {
                 isListening = true;
                 micBtn.classList.add("active");
                 setEstado('listening', 'ESCUCHANDO...');
-                playSFX('mic');
             };
 
             recognition.onresult = (event) => {
-                const textoCapturado = event.results[0][0].transcript;
-                userInput.value = textoCapturado;
-                apagarMicrofono();
-                enviarMensaje();
+                const textoCapturado = event.results[event.results.length - 1][0].transcript.trim();
+                console.log("Voz capturada:", textoCapturado);
+                
+                if (textoCapturado.toLowerCase().includes("jarvis") || isListening) {
+                    userInput.value = textoCapturado.replace(/hey jarvis/gi, "").replace(/jarvis/gi, "").trim();
+                    enviarMensaje();
+                }
             };
 
             recognition.onerror = () => apagarMicrofono();
-            recognition.onend = () => apagarMicrofono();
+            recognition.onend = () => {
+                if (isListening) recognition.start();
+            };
         }
 
         function toggleMicrofono() {
@@ -474,6 +487,7 @@
                 try {
                     window.speechSynthesis.cancel();
                     recognition.start();
+                    playSFX('mic');
                 } catch(e) { apagarMicrofono(); }
             }
         }
@@ -515,10 +529,24 @@
         function tipoEscribir(elemento, texto, actionUrl, callback) {
             let i = 0; elemento.innerText = "";
             
+            // Detección de comando de gráfica interactiva
+            if (texto.includes("[GRAFICA_INTERACTIVA]:")) {
+                const parts = texto.split("[GRAFICA_INTERACTIVA]:");
+                elemento.innerText = parts[0];
+                try {
+                    const chartData = JSON.parse(parts[1]);
+                    renderizarGraficaChart(elemento, chartData);
+                } catch(e) { console.warn("Error chart parse:", e); }
+                agregarBotonesExportacion(elemento, texto);
+                if (callback) callback();
+                return;
+            }
+
             if (texto.includes("```")) {
                 elemento.innerHTML = formatearTextoConCodigo(texto);
                 if (actionUrl) agregarBotonAccion(elemento, actionUrl);
                 renderizarMatematicas(elemento);
+                agregarBotonesExportacion(elemento, texto);
                 if (callback) callback();
                 return;
             }
@@ -531,9 +559,72 @@
                     clearInterval(timer);
                     if (actionUrl) agregarBotonAccion(elemento, actionUrl);
                     renderizarMatematicas(elemento);
+                    agregarBotonesExportacion(elemento, texto);
                     if (callback) callback();
                 }
             }, 6);
+        }
+
+        /* 📈 RENDERIZADOR DE GRÁFICAS CHART.JS EN VIVO */
+        function renderizarGraficaChart(container, chartData) {
+            const card = document.createElement("div");
+            card.className = "chart-card";
+            const canvas = document.createElement("canvas");
+            card.appendChild(canvas);
+            container.appendChild(card);
+
+            const labels = chartData.puntos.map(p => p.x);
+            const dataVals = chartData.puntos.map(p => p.y);
+
+            new Chart(canvas, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: `f(x) = ${chartData.expresion}`,
+                        data: dataVals,
+                        borderColor: '#00f2fe',
+                        backgroundColor: 'rgba(0, 242, 254, 0.1)',
+                        borderWidth: 2,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: { grid: { color: 'rgba(0,242,254,0.1)' }, ticks: { color: '#00f2fe' } },
+                        y: { grid: { color: 'rgba(0,242,254,0.1)' }, ticks: { color: '#00f2fe' } }
+                    }
+                }
+            });
+        }
+
+        /* 💾 EXPORTACIÓN A PDF Y WORD (.DOCX) */
+        function agregarBotonesExportacion(container, textoRespuesta) {
+            const btnGroup = document.createElement("div");
+            btnGroup.className = "export-btn-group";
+
+            const pdfBtn = document.createElement("button");
+            pdfBtn.className = "export-btn";
+            pdfBtn.innerText = "📄 Exportar a PDF";
+            pdfBtn.onclick = () => exportarAFile(textoRespuesta, "pdf");
+
+            const docxBtn = document.createElement("button");
+            docxBtn.className = "export-btn";
+            docxBtn.innerText = "📝 Exportar a Word";
+            docxBtn.onclick = () => exportarAFile(textoRespuesta, "docx");
+
+            btnGroup.appendChild(pdfBtn);
+            btnGroup.appendChild(docxBtn);
+            container.appendChild(btnGroup);
+        }
+
+        function exportarAFile(contenido, formato) {
+            const blob = new Blob([contenido], { type: formato === "pdf" ? "application/pdf" : "text/plain" });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = `Jarvis_Solucion_Stark.${formato === "pdf" ? "pdf" : "docx"}`;
+            link.click();
         }
 
         function renderizarMatematicas(elemento) {
