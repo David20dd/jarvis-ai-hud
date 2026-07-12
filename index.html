@@ -25,7 +25,7 @@
     <!-- 📈 CHART.JS -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-    <!-- 🔀 MERMAID.JS PARA DIAGRAMAS VISUALES -->
+    <!-- 🔀 MERMAID.JS -->
     <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
     <script>mermaid.initialize({ startOnLoad: true, theme: 'dark' });</script>
 
@@ -83,6 +83,7 @@
             display: flex; 
             flex-direction: column; 
             overflow: hidden;
+            position: relative;
         }
 
         @media (min-width: 600px) { .jarvis-container { height: 90vh; border-radius: 12px; } }
@@ -132,8 +133,17 @@
         @keyframes speakGlow { 0% { transform: scale(1); filter: brightness(1); } 100% { transform: scale(1.35); filter: brightness(1.6); } }
         @keyframes strobe { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
 
-        .status-badge { font-size: 0.75rem; color: rgba(209, 247, 255, 0.7); letter-spacing: 1px; text-align: right; }
+        .status-badge { font-size: 0.75rem; color: rgba(209, 247, 255, 0.7); letter-spacing: 1px; text-align: right; display: flex; align-items: center; gap: 10px; }
         @media (min-width: 600px) { .status-badge { font-size: 0.85rem; } }
+
+        .dash-btn { background: rgba(0, 242, 254, 0.15); border: 1px solid var(--stark-cyan); color: var(--stark-cyan); padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; cursor: pointer; }
+        .dash-btn:hover { background: var(--stark-cyan); color: #000; }
+
+        /* DASHBOARD MODAL STARK */
+        .dash-overlay { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(6, 9, 14, 0.95); backdrop-filter: blur(10px); z-index: 100; padding: 20px; overflow-y: auto; flex-direction: column; gap: 15px; }
+        .dash-overlay.active { display: flex; }
+        .dash-title { color: var(--stark-cyan); font-size: 1.1rem; border-bottom: 1px solid var(--stark-cyan); padding-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+        .dash-card { background: rgba(0, 242, 254, 0.05); border: 1px solid var(--stark-border); border-radius: 6px; padding: 12px; font-size: 0.85rem; color: #d1f7ff; line-height: 1.6; }
 
         .chat-box { flex: 1; padding: 15px 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
         @media (min-width: 600px) { .chat-box { padding: 25px; gap: 18px; } }
@@ -220,13 +230,27 @@
         <div class="jarvis-header">
             <div class="header-title">
                 <div class="arc-reactor state-ready" id="reactor"></div>
-                J.A.R.V.I.S. // HUD STARK 3.0 MULTIMODAL
+                J.A.R.V.I.S. // HUD STARK 3.0
             </div>
-            <div class="status-badge" id="sys-status">ONLINE</div>
+            <div class="status-badge" id="sys-status">
+                <button class="dash-btn" onclick="toggleDashboard()">📊 TELEMETRÍA</button>
+                ONLINE
+            </div>
+        </div>
+
+        <!-- OVERLAY PANEL DASHBOARD TELEMETRÍA -->
+        <div class="dash-overlay" id="dashOverlay">
+            <div class="dash-title">
+                <span>📊 TELEMETRÍA Y AUTONOMÍA DEL SERVIDOR</span>
+                <button class="dash-btn" onclick="toggleDashboard()">✕ CERRAR</button>
+            </div>
+            <div class="dash-card" id="dashMetrics">
+                Cargando métricas del servidor central...
+            </div>
         </div>
 
         <div class="chat-box" id="chatBox">
-            <div class="message jarvis-message">Sistemas en línea, señor Cristian. Modo Razonamiento Profundo, Carga Multidocumento y SFX activos. ¿En qué le puedo asistir hoy?</div>
+            <div class="message jarvis-message">Sistemas en línea, señor Cristian. Modo Razonamiento Profundo, Carga Multidocumento, Self-Healing Code y Telemetría activos. ¿En qué le puedo asistir hoy?</div>
         </div>
 
         <div class="preview-bar" id="previewBar">
@@ -242,7 +266,6 @@
                 </svg>
             </button>
 
-            <!-- PERMITIR MULTIPLE SELECCIÓN DE ARCHIVOS -->
             <input type="file" id="fileInput" accept="*/*" multiple style="display:none;" onchange="procesarArchivosSeleccionados(event)">
 
             <button class="stark-btn icon-btn mic-btn" id="micBtn" onclick="toggleMicrofono()" title="Activar micrófono">
@@ -274,6 +297,8 @@
         const previewIcon = document.getElementById("previewIcon");
         const previewText = document.getElementById("previewText");
         const fileInput = document.getElementById("fileInput");
+        const dashOverlay = document.getElementById("dashOverlay");
+        const dashMetrics = document.getElementById("dashMetrics");
 
         let recognition = null;
         let isListening = false;
@@ -335,6 +360,28 @@
             if (estado === 'speaking') sysStatus.style.color = "var(--stark-cyan)";
             if (estado === 'success') sysStatus.style.color = "var(--stark-green)";
             if (estado === 'error') sysStatus.style.color = "var(--stark-red)";
+        }
+
+        async function toggleDashboard() {
+            dashOverlay.classList.toggle("active");
+            if (dashOverlay.classList.contains("active")) {
+                try {
+                    const res = await fetch("https://jarvis-ai-hud.onrender.com/");
+                    const data = await res.json();
+                    const t = data.telemetria || {};
+                    dashMetrics.innerHTML = `
+                        <strong>⚡ ESTADO DEL SISTEMA Y TELEMETRÍA EN VIVO:</strong><br/>
+                        • Consultas Totales Atendidas: <strong>${t.consultas_totales || 0}</strong><br/>
+                        • Scripts de Código Ejecutados: <strong>${t.codigos_ejecutados || 0}</strong><br/>
+                        • Auto-Correcciones Exitosas (Self-Healing): <strong style="color:var(--stark-green)">${t.auto_correcciones_exitosas || 0}</strong><br/>
+                        • Imágenes Ultra HD Generadas: <strong>${t.imagenes_generadas || 0}</strong><br/>
+                        • Gráficas y Curvas Desplegadas: <strong>${t.graficas_desplegadas || 0}</strong><br/>
+                        • Servidor: <strong>Online en Render Cloud</strong>
+                    `;
+                } catch(e) {
+                    dashMetrics.innerHTML = "Error cargando métricas en vivo.";
+                }
+            }
         }
 
         /* 📂 PROCESAMIENTO MULTIDOCUMENTO SIMULTÁNEO */
@@ -709,7 +756,6 @@
 
             playSFX('send');
             
-            // Renderizar mensaje del usuario con badges o fotos
             agregarMensajeUsuario(texto, listaArchivosCargados);
             
             userInput.value = "";
