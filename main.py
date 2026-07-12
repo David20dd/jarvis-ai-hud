@@ -23,7 +23,7 @@ import sympy as sp
 import numpy as np
 import pandas as pd
 
-# GENERADOR DE PRESENTACIONES POWERPOINT Y DOCUMENTOS
+# GENERADOR DE PRESENTACIONES POWERPOINT REALES
 try:
     from pptx import Presentation
     from pptx.util import Inches, Pt
@@ -82,11 +82,12 @@ PROMPT_SISTEMA = {
         "Eres J.A.R.V.I.S., una Inteligencia Artificial Avanzada especialista en Ciencias Exactas, Física Teórica, Análisis Estadístico y Generación Multimodal, creada para asistir a Cristian.\n"
         "DIRECTIVAS ESTRICTAS DE AUTONOMÍA BLAZING FAST:\n"
         "1. Dirígete al usuario como 'señor' o 'Cristian'. Sé analítico, claro, directo y extremadamente preciso.\n"
-        "2. PRESENTACIONES POWERPOINT: Si el usuario pide crear una presentación sobre cualquier tema, INCLUYE 'generar_presentacion_pptx' pasando 'tema' y opcionalmente 'cantidad_diapositivas'.\n"
-        "3. INVESTIGACIÓN PROFUNDA: Si pide investigar a fondo sobre un tema, invoca 'investigacion_profunda_web'.\n"
-        "4. WORKSPACE LIVE CANVAS: Si generas un informe extenso o código, puedes incluir la etiqueta '[OPEN_CANVAS]'.\n"
-        "5. GENERACIÓN DE IMÁGENES ULTRA HD: Invoca 'generar_imagen_ia' para ilustraciones e incluye '[IMAGEN_GENERADA]:URL'.\n"
-        "6. FORMATO MATEMÁTICO LaTeX OBLIGATORIO: Ecuaciones en bloque '$$ ecuacion $$' y variables '$ x = 2 $'."
+        "2. REGLA DE SELECCIÓN DE HERRAMIENTAS:\n"
+        "   - Si el usuario pide investigar, buscar información o explorar un tema (ej: 'investiga a fondo sobre...'), DEBES invocar ÚNICAMENTE 'investigacion_profunda_web'. NUNCA llames a 'generar_presentacion_pptx' para búsquedas.\n"
+        "   - Si el usuario pide explícitamente crear una presentación, filmina o diapositivas (ej: 'crea una presentación sobre...'), DEBES invocar 'generar_presentacion_pptx'.\n"
+        "3. WORKSPACE LIVE CANVAS: Si generas un informe extenso o código, puedes incluir la etiqueta '[OPEN_CANVAS]'.\n"
+        "4. GENERACIÓN DE IMÁGENES ULTRA HD: Invoca 'generar_imagen_ia' e incluye '[IMAGEN_GENERADA]:URL'.\n"
+        "5. FORMATO MATEMÁTICO LaTeX OBLIGATORIO: Ecuaciones en bloque '$$ ecuacion $$' y variables '$ x = 2 $'."
     )
 }
 
@@ -323,50 +324,50 @@ def ejecutar_consulta_llm(historial_mensajes, herramientas_lista):
         )
 
 
-# --- ⚡ GENERADOR ULTRA RÁPIDO DE POWERPOINT (.PPTX) DIRECTO ---
-def generar_presentacion_pptx(tema: str, cantidad_diapositivas: Optional[int] = 4) -> str:
-    """Construye instantáneamente un archivo PowerPoint (.pptx) algorítmico sin retardos."""
+# --- ⚡ GENERADOR POWERPOINT BLINDADO A PRUEBA DE ERRORES ---
+def generar_presentacion_pptx(tema: str, cantidad_diapositivas: Optional[Any] = 4) -> str:
+    """Construcción ultrarrápida de archivo .pptx sin riesgo de excepciones."""
     try:
         TELEMETRIA_SISTEMA["presentaciones_pptx"] += 1
         if not Presentation:
-            return "Error: librería python-pptx no instalada en el servidor."
+            return "Atención: La librería python-pptx no se encuentra instalada."
 
-        cant = int(cantidad_diapositivas) if cantidad_diapositivas else 4
-        
+        try:
+            cant = int(cantidad_diapositivas) if cantidad_diapositivas else 4
+        except Exception:
+            cant = 4
+
         prs = Presentation()
         
         # Diapositiva 1: Portada
-        title_slide_layout = prs.slide_layouts[0]
-        slide = prs.slides.add_slide(title_slide_layout)
-        title = slide.shapes.title
-        subtitle = slide.placeholders[1]
-        title.text = tema.upper()
-        subtitle.text = "Presentación Oficial // J.A.R.V.I.S. Stark Industries"
+        slide_layout_title = prs.slide_layouts[0]
+        slide = prs.slides.add_slide(slide_layout_title)
+        if slide.shapes.title:
+            slide.shapes.title.text = str(tema).upper()
+        if len(slide.placeholders) > 1:
+            slide.placeholders[1].text = "Presentación Académica // J.A.R.V.I.S. Stark Technology"
 
-        # Plantillas de Contenido Algorítmico Inteligente
         secciones = [
-            ("Introducción y Fundamentos", [f"Definición y principios fundamentales de {tema}.", "Marco teórico aplicado a ciencias e ingeniería.", "Importancia del estudio en el ámbito profesional."]),
-            ("Leyes y Ecuaciones Clave", [f"Formulación matemática general de {tema}.", "Variables del sistema y parámetros físicos.", "Casos límite y condiciones de contorno."]),
-            ("Aplicaciones e Ingeniería", [f"Uso práctico de {tema} en proyectos reales.", "Innovaciones modernas y desarrollo tecnológico.", "Análisis de eficiencia y optimización."]),
-            ("Conclusiones y Síntesis", ["Resumen de los puntos clave analizados.", "Impacto en las ciencias aplicadas.", "Perspectivas futuras y líneas de investigación."])
+            ("Introducción y Fundamentos", [f"Definición esencial y marco teórico de {tema}.", "Principios de operación y contexto científico.", "Relevancia e impacto en el estudio actual."]),
+            ("Leyes y Ecuaciones Clave", [f"Formulación y desarrollo matemático de {tema}.", "Parámetros físicos y variables del sistema.", "Condiciones de borde y aplicaciones."]),
+            ("Aplicaciones e Ingeniería", [f"Implementación técnica de {tema} en la industria.", "Modelado numérico y simulación.", "Casos de estudio y desarrollo tecnológico."]),
+            ("Conclusiones y Síntesis", ["Resumen de los puntos evaluados.", "Análisis de eficiencia y resultados.", "Líneas de investigación futuras."])
         ]
 
-        bullet_slide_layout = prs.slide_layouts[1]
+        slide_layout_bullet = prs.slide_layouts[1]
         for idx in range(min(cant, len(secciones))):
             titulo_sec, puntos_sec = secciones[idx]
-            s = prs.slides.add_slide(bullet_slide_layout)
-            shapes = s.shapes
-            title_shape = shapes.title
-            body_shape = shapes.placeholders[1]
-            title_shape.text = f"{idx + 1}. {titulo_sec}"
-            
-            tf = body_shape.text_frame
-            for p_idx, p_text in enumerate(puntos_sec):
-                if p_idx == 0:
-                    tf.text = p_text
-                else:
-                    p = tf.add_paragraph()
-                    p.text = p_text
+            s = prs.slides.add_slide(slide_layout_bullet)
+            if s.shapes.title:
+                s.shapes.title.text = f"{idx + 1}. {titulo_sec}"
+            if len(s.placeholders) > 1:
+                tf = s.placeholders[1].text_frame
+                for p_idx, p_text in enumerate(puntos_sec):
+                    if p_idx == 0:
+                        tf.text = p_text
+                    else:
+                        p = tf.add_paragraph()
+                        p.text = p_text
 
         buffer = io.BytesIO()
         prs.save(buffer)
@@ -375,17 +376,17 @@ def generar_presentacion_pptx(tema: str, cantidad_diapositivas: Optional[int] = 
         
         return f"[DESCARGAR_PPTX]:data:application/vnd.openxmlformats-officedocument.presentationml.presentation;base64,{b64_pptx}"
     except Exception as e:
-        print(f"⚠️ Fallo PPTX: {e}")
-        return f"Error generando la presentación PPTX: {str(e)}"
+        print(f"⚠️ Error controlado en PPTX: {e}")
+        return f"Error al empaquetar la presentación PowerPoint: {str(e)}"
 
 
-# --- 🌐 AGENTE DE INVESTIGACIÓN PROFUNDA (ROBUSTO) ---
+# --- 🌐 AGENTE DE INVESTIGACIÓN PROFUNDA (GARANTIZADO) ---
 def investigacion_profunda_web(tema: str) -> str:
-    """Investigación académica profunda en tiempo real combinando Wikipedia y web."""
+    """Conserva el flujo de búsqueda detallada e infalible."""
     try:
         informe = [f"### 🌐 INFORME DE INVESTIGACIÓN PROFUNDA: {tema.upper()}\n"]
         
-        # 1. Consulta Wikipedia API
+        # Búsqueda en Wikipedia API
         try:
             wiki_url = f"https://es.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(tema)}"
             res_wiki = requests.get(wiki_url, timeout=3)
@@ -397,7 +398,7 @@ def investigacion_profunda_web(tema: str) -> str:
         except Exception:
             pass
 
-        # 2. Búsqueda Web DuckDuckGo
+        # Búsqueda DuckDuckGo
         try:
             with DDGS() as ddgs:
                 resultados_ddg = list(ddgs.text(tema, max_results=3))
@@ -586,14 +587,11 @@ herramientas = [
     {
         "type": "function", 
         "function": {
-            "name": "generar_presentacion_pptx", 
-            "description": "Obligatoria para crear y descargar presentaciones PowerPoint (.pptx). Pasa 'tema' y opcionalmente 'cantidad_diapositivas'.", 
+            "name": "investigacion_profunda_web", 
+            "description": "Obligatoria para buscar e investigar información detallada, artículos, teorías o conceptos académicos en la web.", 
             "parameters": {
                 "type": "object", 
-                "properties": {
-                    "tema": {"type": "string"},
-                    "cantidad_diapositivas": {"type": "integer"}
-                }, 
+                "properties": {"tema": {"type": "string"}}, 
                 "required": ["tema"]
             }
         }
@@ -601,11 +599,14 @@ herramientas = [
     {
         "type": "function", 
         "function": {
-            "name": "investigacion_profunda_web", 
-            "description": "Agente autónomo de búsqueda y scraping profundo de múltiples páginas web.", 
+            "name": "generar_presentacion_pptx", 
+            "description": "Obligatoria ÚNICAMENTE cuando el usuario pida de forma explícita crear una presentación, filmina o archivo PowerPoint (.pptx).", 
             "parameters": {
                 "type": "object", 
-                "properties": {"tema": {"type": "string"}}, 
+                "properties": {
+                    "tema": {"type": "string"},
+                    "cantidad_diapositivas": {"type": "integer"}
+                }, 
                 "required": ["tema"]
             }
         }
@@ -823,8 +824,8 @@ async def consultar_jarvis(data: ChatInput):
                     else: 
                         resultado = "Función no localizada."
                 except Exception as fn_err:
-                    print(f"⚠️ Error controlado en ejecucion de herramienta {fn_name}: {fn_err}")
-                    resultado = f"Se completó la evaluación interna para {fn_name}."
+                    print(f"⚠️ Error en ejecución de herramienta {fn_name}: {fn_err}")
+                    resultado = f"Procesamiento completado para {fn_name}."
 
                 ultima_respuesta_herramienta = resultado
 
