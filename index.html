@@ -175,14 +175,14 @@
 
         .preview-bar {
             display: none; padding: 8px 15px; background: rgba(0, 0, 0, 0.8);
-            border-top: 1px solid var(--stark-border); align-items: center; gap: 12px;
+            border-top: 1px solid var(--stark-border); align-items: center; gap: 12px; overflow-x: auto;
         }
         .preview-bar.active { display: flex; }
         .preview-thumb {
             width: 42px; height: 42px; border-radius: 4px; object-fit: cover;
             border: 1px solid var(--stark-cyan); box-shadow: 0 0 8px var(--stark-cyan);
             display: flex; align-items: center; justify-content: center;
-            background: rgba(0, 242, 254, 0.1); color: var(--stark-cyan); font-weight: bold; font-size: 0.75rem;
+            background: rgba(0, 242, 254, 0.1); color: var(--stark-cyan); font-weight: bold; font-size: 0.75rem; flex-shrink: 0;
         }
         .preview-info { flex: 1; font-size: 0.8rem; color: var(--stark-cyan); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .preview-close { background: transparent; border: none; color: var(--stark-red); font-size: 1.2rem; cursor: pointer; font-weight: bold; padding: 0 8px; }
@@ -226,23 +226,24 @@
         </div>
 
         <div class="chat-box" id="chatBox">
-            <div class="message jarvis-message">Sistemas en línea, señor Cristian. Generador de Imágenes IA Ultra HD, Diagramas Mermaid.js y Exportación Inteligente activos. ¿En qué le puedo asistir hoy?</div>
+            <div class="message jarvis-message">Sistemas en línea, señor Cristian. Modo Razonamiento Profundo, Carga Multidocumento y SFX activos. ¿En qué le puedo asistir hoy?</div>
         </div>
 
         <div class="preview-bar" id="previewBar">
-            <div id="previewIcon" class="preview-thumb">FILE</div>
-            <div class="preview-info" id="previewText">ARCHIVO DETECTADO</div>
-            <button class="preview-close" onclick="cancelarArchivo()">✕</button>
+            <div id="previewIcon" class="preview-thumb">FILES</div>
+            <div class="preview-info" id="previewText">ARCHIVOS DETECTADOS</div>
+            <button class="preview-close" onclick="cancelarArchivos()">✕</button>
         </div>
 
         <div class="input-panel">
-            <button class="stark-btn icon-btn" onclick="document.getElementById('fileInput').click()" title="Adjuntar Archivo o Foto">
+            <button class="stark-btn icon-btn" onclick="document.getElementById('fileInput').click()" title="Adjuntar Archivos o Fotos">
                 <svg viewBox="0 0 24 24">
                     <path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"/>
                 </svg>
             </button>
 
-            <input type="file" id="fileInput" accept="*/*" style="display:none;" onchange="procesarArchivoSeleccionado(event)">
+            <!-- PERMITIR MULTIPLE SELECCIÓN DE ARCHIVOS -->
+            <input type="file" id="fileInput" accept="*/*" multiple style="display:none;" onchange="procesarArchivosSeleccionados(event)">
 
             <button class="stark-btn icon-btn mic-btn" id="micBtn" onclick="toggleMicrofono()" title="Activar micrófono">
                 <svg viewBox="0 0 24 24">
@@ -276,9 +277,7 @@
 
         let recognition = null;
         let isListening = false;
-        let currentFileB64 = null;
-        let currentFileName = null;
-        let isImage = false;
+        let listaArchivosCargados = [];
 
         function obtenerSessionId() {
             let sid = localStorage.getItem("jarvis_session_id");
@@ -291,6 +290,7 @@
 
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
+        /* FEEDBACK AUDITIVO SCI-FI SUTIL */
         function playSFX(tipo) {
             if (audioCtx.state === 'suspended') audioCtx.resume();
             const osc = audioCtx.createOscillator();
@@ -318,6 +318,11 @@
                 osc.type = 'sawtooth'; osc.frequency.setValueAtTime(150, now);
                 gain.gain.setValueAtTime(0.15, now); gain.gain.linearRampToValueAtTime(0.01, now + 0.25);
                 osc.start(now); osc.stop(now + 0.25);
+            } else if (tipo === 'chart') {
+                osc.type = 'sine'; osc.frequency.setValueAtTime(1200, now);
+                osc.frequency.exponentialRampToValueAtTime(2400, now + 0.15);
+                gain.gain.setValueAtTime(0.08, now); gain.gain.linearRampToValueAtTime(0.01, now + 0.15);
+                osc.start(now); osc.stop(now + 0.15);
             }
         }
 
@@ -332,125 +337,81 @@
             if (estado === 'error') sysStatus.style.color = "var(--stark-red)";
         }
 
-        /* 📄 ESCÁNER INTELIGENTE DE PDF */
-        async function procesarArchivoSeleccionado(event) {
-            const file = event.target.files[0];
-            if (!file) return;
+        /* 📂 PROCESAMIENTO MULTIDOCUMENTO SIMULTÁNEO */
+        async function procesarArchivosSeleccionados(event) {
+            const files = Array.from(event.target.files);
+            if (!files || files.length === 0) return;
 
-            currentFileName = file.name;
-            const ext = file.name.split('.').pop().toLowerCase();
+            setEstado('processing', `PROCESANDO ${files.length} ARCHIVO(S)...`);
+            listaArchivosCargados = [];
 
-            if (ext === 'pdf' || file.type === 'application/pdf') {
-                setEstado('processing', 'ESCANEANDO PDF COMPLETO (PÁG 1 A N)...');
-                try {
-                    const arrayBuffer = await file.arrayBuffer();
-                    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-                    
-                    const startPage = 1;
-                    const endPage = Math.min(pdf.numPages, 4);
+            for (const file of files) {
+                const ext = file.name.split('.').pop().toLowerCase();
+                const item = { name: file.name, b64: null, isImg: false };
 
-                    const pageCanvases = [];
-                    let maxWidth = 0;
-                    let totalHeight = 0;
-
-                    for (let i = startPage; i <= endPage; i++) {
-                        const page = await pdf.getPage(i);
-                        const viewport = page.getViewport({ scale: 1.2 });
-                        const canvas = document.createElement('canvas');
-                        const ctx = canvas.getContext('2d');
+                if (ext === 'pdf' || file.type === 'application/pdf') {
+                    try {
+                        const arrayBuffer = await file.arrayBuffer();
+                        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
                         
-                        canvas.width = viewport.width;
-                        canvas.height = viewport.height;
-                        ctx.fillStyle = '#FFFFFF';
-                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        const pageCanvases = [];
+                        let maxWidth = 0, totalHeight = 0;
 
-                        await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+                        for (let i = 1; i <= Math.min(pdf.numPages, 3); i++) {
+                            const page = await pdf.getPage(i);
+                            const viewport = page.getViewport({ scale: 1.2 });
+                            const canvas = document.createElement('canvas');
+                            const ctx = canvas.getContext('2d');
+                            canvas.width = viewport.width; canvas.height = viewport.height;
+                            ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+                            await page.render({ canvasContext: ctx, viewport: viewport }).promise;
 
-                        pageCanvases.push(canvas);
-                        maxWidth = Math.max(maxWidth, viewport.width);
-                        totalHeight += viewport.height;
-                    }
+                            pageCanvases.push(canvas);
+                            maxWidth = Math.max(maxWidth, viewport.width);
+                            totalHeight += viewport.height;
+                        }
 
-                    const MAX_HEIGHT = 1600;
-                    let finalScale = 1.0;
-                    if (totalHeight > MAX_HEIGHT) {
-                        finalScale = MAX_HEIGHT / totalHeight;
-                    }
+                        const combinedCanvas = document.createElement('canvas');
+                        combinedCanvas.width = maxWidth; combinedCanvas.height = totalHeight;
+                        const combinedCtx = combinedCanvas.getContext('2d');
+                        combinedCtx.fillStyle = '#FFFFFF'; combinedCtx.fillRect(0, 0, combinedCanvas.width, combinedCanvas.height);
 
-                    const combinedCanvas = document.createElement('canvas');
-                    combinedCanvas.width = Math.round(maxWidth * finalScale);
-                    combinedCanvas.height = Math.round(totalHeight * finalScale);
-                    const combinedCtx = combinedCanvas.getContext('2d');
+                        let currentY = 0;
+                        for (const c of pageCanvases) {
+                            combinedCtx.drawImage(c, 0, currentY);
+                            currentY += c.height;
+                        }
 
-                    combinedCtx.fillStyle = '#FFFFFF';
-                    combinedCtx.fillRect(0, 0, combinedCanvas.width, combinedCanvas.height);
-
-                    let currentY = 0;
-                    for (const c of pageCanvases) {
-                        const drawH = Math.round(c.height * finalScale);
-                        const drawW = Math.round(c.width * finalScale);
-                        combinedCtx.drawImage(c, 0, currentY, drawW, drawH);
-                        currentY += drawH;
-                    }
-
-                    currentFileB64 = combinedCanvas.toDataURL('image/jpeg', 0.80);
-                    isImage = true;
-
-                    previewIcon.innerHTML = `<img src="${currentFileB64}" style="width:100%;height:100%;object-fit:cover;border-radius:3px;">`;
-                    previewText.innerText = `PDF COMPLETO HD: ${file.name.toUpperCase()}`;
-                    previewBar.classList.add("active");
-                    setEstado('ready', 'ONLINE');
-                    playSFX("mic");
-                    return;
-
-                } catch(err) {
-                    console.warn("Aviso PDF.js:", err);
+                        item.b64 = combinedCanvas.toDataURL('image/jpeg', 0.80);
+                        item.isImg = true;
+                    } catch(err) { console.warn("Aviso PDF.js:", err); }
+                } else if (file.type.startsWith('image/')) {
+                    item.isImg = true;
+                    item.b64 = await leerArchivoB64(file);
+                } else {
+                    item.isImg = false;
+                    item.b64 = await leerArchivoB64(file);
                 }
+
+                listaArchivosCargados.push(item);
             }
 
-            const reader = new FileReader();
-            if (file.type.startsWith('image/')) {
-                isImage = true;
-                reader.onload = (e) => {
-                    const img = new Image();
-                    img.onload = () => {
-                        const canvas = document.createElement("canvas");
-                        const MAX_WIDTH = 1280;
-                        let width = img.width, height = img.height;
-                        if (width > MAX_WIDTH) { height = Math.round((height * MAX_WIDTH) / width); width = MAX_WIDTH; }
-                        canvas.width = width; canvas.height = height;
-                        const ctx = canvas.getContext("2d");
-                        
-                        ctx.fillStyle = '#FFFFFF';
-                        ctx.fillRect(0, 0, canvas.width, canvas.height);
-                        ctx.drawImage(img, 0, 0, width, height);
-
-                        currentFileB64 = canvas.toDataURL("image/jpeg", 0.8);
-                        previewIcon.innerHTML = `<img src="${currentFileB64}" style="width:100%;height:100%;object-fit:cover;border-radius:3px;">`;
-                        previewText.innerText = `IMAGEN: ${file.name.toUpperCase()}`;
-                        previewBar.classList.add("active");
-                        playSFX("mic");
-                    };
-                    img.src = e.target.result;
-                };
-                reader.readAsDataURL(file);
-            } else {
-                isImage = false;
-                reader.onload = (e) => {
-                    currentFileB64 = e.target.result;
-                    previewIcon.innerHTML = ext.substring(0, 4).toUpperCase();
-                    previewText.innerText = `ARCHIVO: ${file.name.toUpperCase()}`;
-                    previewBar.classList.add("active");
-                    playSFX("mic");
-                };
-                reader.readAsDataURL(file);
-            }
+            previewText.innerText = `${listaArchivosCargados.length} ARCHIVO(S) LISTO(S)`;
+            previewBar.classList.add("active");
+            setEstado('ready', 'ONLINE');
+            playSFX("mic");
         }
 
-        function cancelarArchivo() {
-            currentFileB64 = null;
-            currentFileName = null;
-            isImage = false;
+        function leerArchivoB64(file) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function cancelarArchivos() {
+            listaArchivosCargados = [];
             fileInput.value = "";
             previewBar.classList.remove("active");
         }
@@ -471,8 +432,6 @@
 
             recognition.onresult = (event) => {
                 const textoCapturado = event.results[event.results.length - 1][0].transcript.trim();
-                console.log("Voz capturada:", textoCapturado);
-                
                 if (textoCapturado.toLowerCase().includes("jarvis") || isListening) {
                     userInput.value = textoCapturado.replace(/hey jarvis/gi, "").replace(/jarvis/gi, "").trim();
                     enviarMensaje();
@@ -480,9 +439,7 @@
             };
 
             recognition.onerror = () => apagarMicrofono();
-            recognition.onend = () => {
-                if (isListening) recognition.start();
-            };
+            recognition.onend = () => { if (isListening) recognition.start(); };
         }
 
         function toggleMicrofono() {
@@ -541,10 +498,9 @@
         function tipoEscribir(elemento, texto, actionUrl, callback) {
             let i = 0; elemento.innerText = "";
             
-            // Renderizado de Imagen Generada por IA (Flux Ultra HD)
             if (texto.includes("[IMAGEN_GENERADA]:")) {
                 const parts = texto.split("[IMAGEN_GENERADA]:");
-                elemento.innerText = parts[0] + "\nDesplegando renderizado de imagen Ultra HD:";
+                elemento.innerText = parts[0] + "\nDesplegando renderizado Ultra HD:";
                 const imgElem = document.createElement("img");
                 imgElem.src = parts[1].trim();
                 imgElem.className = "gen-ia-img";
@@ -554,13 +510,13 @@
                 return;
             }
 
-            // Renderizado de Gráfica Interactiva
             if (texto.includes("[GRAFICA_INTERACTIVA]:")) {
                 const parts = texto.split("[GRAFICA_INTERACTIVA]:");
                 elemento.innerText = parts[0];
                 try {
                     const chartData = JSON.parse(parts[1]);
                     renderizarGraficaChart(elemento, chartData);
+                    playSFX('chart');
                 } catch(e) { console.warn("Error chart parse:", e); }
                 evaluarYAgregarBotonesExportacion(elemento, texto);
                 if (callback) callback();
@@ -633,19 +589,15 @@
             }
         }
 
-        /* 💾 EXPORTACIÓN CONDICIONAL DE DOCUMENTOS (SOLO EN SOLUCIONES TÉCNICAS O MULTIMODALES) */
         function evaluarYAgregarBotonesExportacion(msgElement, textoRespuesta) {
             const contieneSolucionCompleja = 
                 textoRespuesta.includes("$$") || 
                 textoRespuesta.includes("```") || 
                 textoRespuesta.includes("[IMAGEN_GENERADA]:") || 
                 textoRespuesta.includes("[GRAFICA_INTERACTIVA]:") ||
-                /(\bpaso\b|\bejercicio\b|\bdesarrollo\b|\bresultado\b|\bfórmula\b)/i.test(textoRespuesta);
+                /(\bpaso\b|\bejercicio\b|\bdesarrollo\b|\bresultado\b|\bfórmula\b|\banálisis\b)/i.test(textoRespuesta);
 
-            // Si es un saludo simple o conversación cotidiana, no agregar botones de exportación
-            if (!contieneSolucionCompleja) {
-                return;
-            }
+            if (!contieneSolucionCompleja) return;
 
             const btnGroup = document.createElement("div");
             btnGroup.className = "export-btn-group";
@@ -684,34 +636,23 @@
 
         function exportarElementoAPDF(msgElement) {
             setEstado('processing', 'GENERANDO PDF...');
-            
             const clone = prepararElementoConGrafica(msgElement);
-
-            clone.style.background = "#ffffff";
-            clone.style.color = "#000000";
-            clone.style.padding = "20px";
-            clone.style.fontSize = "12pt";
+            clone.style.background = "#ffffff"; clone.style.color = "#000000"; clone.style.padding = "20px"; clone.style.fontSize = "12pt";
 
             const opt = {
-                margin:       10,
-                filename:     'Jarvis_Solucion_Stark.pdf',
-                image:        { type: 'jpeg', quality: 0.98 },
-                html2canvas:  { scale: 2, backgroundColor: '#ffffff' },
-                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                margin: 10, filename: 'Jarvis_Solucion_Stark.pdf',
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, backgroundColor: '#ffffff' },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
             };
 
             html2pdf().set(opt).from(clone).save().then(() => {
-                setEstado('ready', 'ONLINE');
-                playSFX('success');
-            }).catch(err => {
-                console.error("Error al generar PDF:", err);
-                setEstado('ready', 'ONLINE');
-            });
+                setEstado('ready', 'ONLINE'); playSFX('success');
+            }).catch(() => setEstado('ready', 'ONLINE'));
         }
 
         function exportarElementoAWord(msgElement) {
             setEstado('processing', 'GENERANDO WORD...');
-
             const clone = prepararElementoConGrafica(msgElement);
 
             const htmlContent = `
@@ -731,21 +672,11 @@
                 </html>
             `;
 
-            const blob = new Blob(['\ufeff' + htmlContent], {
-                type: 'application/msword'
-            });
-
+            const blob = new Blob(['\ufeff' + htmlContent], { type: 'application/msword' });
             const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'Jarvis_Solucion_Stark.doc';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-
-            setEstado('ready', 'ONLINE');
-            playSFX('success');
+            const a = document.createElement('a'); a.href = url; a.download = 'Jarvis_Solucion_Stark.doc';
+            document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+            setEstado('ready', 'ONLINE'); playSFX('success');
         }
 
         function renderizarMatematicas(elemento) {
@@ -772,18 +703,17 @@
 
         async function enviarMensaje() {
             const texto = userInput.value.trim();
-            const fileEnviar = currentFileB64;
-            const fileNameEnviar = currentFileName;
-            const esImagenEnviar = isImage;
+            const archivosEnviar = listaArchivosCargados.map(a => ({ file_b64: a.b64, file_name: a.name }));
 
-            if (!texto && !fileEnviar) return;
+            if (!texto && archivosEnviar.length === 0) return;
 
             playSFX('send');
             
-            agregarMensajeUsuario(texto, fileEnviar, fileNameEnviar, esImagenEnviar);
+            // Renderizar mensaje del usuario con badges o fotos
+            agregarMensajeUsuario(texto, listaArchivosCargados);
             
             userInput.value = "";
-            cancelarArchivo();
+            cancelarArchivos();
 
             setEstado('processing', 'PROCESANDO...');
 
@@ -794,8 +724,7 @@
                     body: JSON.stringify({ 
                         message: texto || "Señor, he enviado una consulta.",
                         session_id: obtenerSessionId(),
-                        file_b64: fileEnviar,
-                        file_name: fileNameEnviar
+                        files: archivosEnviar
                     })
                 });
 
@@ -819,7 +748,7 @@
                             audio.onplay = () => setEstado('speaking', 'REPRODUCIENDO');
                             audio.onended = () => setEstado('ready', 'ONLINE');
                             audio.onerror = () => { setEstado('ready', 'ONLINE'); hablarEstiloJarvisLocal(data.reply); };
-                            audio.play().catch(err => hablarEstiloJarvisLocal(data.reply));
+                            audio.play().catch(() => hablarEstiloJarvisLocal(data.reply));
                         } else {
                             hablarEstiloJarvisLocal(data.reply);
                         }
@@ -828,16 +757,7 @@
                 } else {
                     setEstado('error', 'FALLO EN RESPUESTA');
                     playSFX('error');
-                    
-                    let errorTexto = "Error en el servidor central.";
-                    if (data && data.reply) {
-                        errorTexto = data.reply;
-                    } else if (data && typeof data.detail === 'string') {
-                        errorTexto = data.detail;
-                    } else if (data && Array.isArray(data.detail)) {
-                        errorTexto = data.detail.map(e => e.msg || JSON.stringify(e)).join(', ');
-                    }
-                    
+                    let errorTexto = (data && data.reply) ? data.reply : "Error en el servidor central.";
                     agregarMensajeJarvis("[ALERTA]: " + errorTexto);
                 }
             } catch (error) {
@@ -847,21 +767,23 @@
             }
         }
 
-        function agregarMensajeUsuario(texto, fileB64, fileName, esImagen) {
+        function agregarMensajeUsuario(texto, listaArchivos) {
             const msgDiv = document.createElement("div");
             msgDiv.className = "message user-message";
             
-            if (fileB64) {
-                if (esImagen) {
-                    const imgElem = document.createElement("img");
-                    imgElem.src = fileB64;
-                    imgElem.className = "chat-img-thumb";
-                    msgDiv.appendChild(imgElem);
-                } else {
-                    const badgeElem = document.createElement("div");
-                    badgeElem.className = "file-badge-chat";
-                    badgeElem.innerText = `📎 ARCHIVO: ${fileName}`;
-                    msgDiv.appendChild(badgeElem);
+            if (listaArchivos && listaArchivos.length > 0) {
+                for (const fileItem of listaArchivos) {
+                    if (fileItem.isImg) {
+                        const imgElem = document.createElement("img");
+                        imgElem.src = fileItem.b64;
+                        imgElem.className = "chat-img-thumb";
+                        msgDiv.appendChild(imgElem);
+                    } else {
+                        const badgeElem = document.createElement("div");
+                        badgeElem.className = "file-badge-chat";
+                        badgeElem.innerText = `📎 ARCHIVO: ${fileItem.name}`;
+                        msgDiv.appendChild(badgeElem);
+                    }
                 }
             }
             
