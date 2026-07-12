@@ -25,7 +25,7 @@
     <!-- 📈 CHART.JS -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-    <!-- 🔀 MERMAID.JS PARA DIAGRAMAS VISUALES EN VIVO -->
+    <!-- 🔀 MERMAID.JS PARA DIAGRAMAS VISUALES -->
     <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
     <script>mermaid.initialize({ startOnLoad: true, theme: 'dark' });</script>
 
@@ -226,7 +226,7 @@
         </div>
 
         <div class="chat-box" id="chatBox">
-            <div class="message jarvis-message">Sistemas en línea, señor Cristian. Generador de Imágenes IA Flux.1, Diagramas Mermaid.js y Motor Simbólico SymPy activos. ¿En qué le puedo asistir hoy?</div>
+            <div class="message jarvis-message">Sistemas en línea, señor Cristian. Generador de Imágenes IA Ultra HD, Diagramas Mermaid.js y Exportación Inteligente activos. ¿En qué le puedo asistir hoy?</div>
         </div>
 
         <div class="preview-bar" id="previewBar">
@@ -541,15 +541,15 @@
         function tipoEscribir(elemento, texto, actionUrl, callback) {
             let i = 0; elemento.innerText = "";
             
-            // Renderizado de Imagen Generada por IA (Flux)
+            // Renderizado de Imagen Generada por IA (Flux Ultra HD)
             if (texto.includes("[IMAGEN_GENERADA]:")) {
                 const parts = texto.split("[IMAGEN_GENERADA]:");
-                elemento.innerText = parts[0] + "\nDesplegando renderizado de imagen:";
+                elemento.innerText = parts[0] + "\nDesplegando renderizado de imagen Ultra HD:";
                 const imgElem = document.createElement("img");
                 imgElem.src = parts[1].trim();
                 imgElem.className = "gen-ia-img";
                 elemento.appendChild(imgElem);
-                agregarBotonesExportacion(elemento);
+                evaluarYAgregarBotonesExportacion(elemento, texto);
                 if (callback) callback();
                 return;
             }
@@ -562,7 +562,7 @@
                     const chartData = JSON.parse(parts[1]);
                     renderizarGraficaChart(elemento, chartData);
                 } catch(e) { console.warn("Error chart parse:", e); }
-                agregarBotonesExportacion(elemento);
+                evaluarYAgregarBotonesExportacion(elemento, texto);
                 if (callback) callback();
                 return;
             }
@@ -572,7 +572,7 @@
                 if (actionUrl) agregarBotonAccion(elemento, actionUrl);
                 renderizarMatematicas(elemento);
                 renderizarDiagramasMermaid(elemento);
-                agregarBotonesExportacion(elemento);
+                evaluarYAgregarBotonesExportacion(elemento, texto);
                 if (callback) callback();
                 return;
             }
@@ -586,7 +586,7 @@
                     if (actionUrl) agregarBotonAccion(elemento, actionUrl);
                     renderizarMatematicas(elemento);
                     renderizarDiagramasMermaid(elemento);
-                    agregarBotonesExportacion(elemento);
+                    evaluarYAgregarBotonesExportacion(elemento, texto);
                     if (callback) callback();
                 }
             }, 6);
@@ -625,7 +625,6 @@
             });
         }
 
-        /* 🔀 RENDERIZADOR DE DIAGRAMAS MERMAID.JS EN VIVO */
         function renderizarDiagramasMermaid(container) {
             if (window.mermaid) {
                 try {
@@ -634,8 +633,20 @@
             }
         }
 
-        /* 💾 BOTONES DE EXPORTACIÓN DIRECTA CON GENERACIÓN DE CANVAS A IMAGEN */
-        function agregarBotonesExportacion(msgElement) {
+        /* 💾 EXPORTACIÓN CONDICIONAL DE DOCUMENTOS (SOLO EN SOLUCIONES TÉCNICAS O MULTIMODALES) */
+        function evaluarYAgregarBotonesExportacion(msgElement, textoRespuesta) {
+            const contieneSolucionCompleja = 
+                textoRespuesta.includes("$$") || 
+                textoRespuesta.includes("```") || 
+                textoRespuesta.includes("[IMAGEN_GENERADA]:") || 
+                textoRespuesta.includes("[GRAFICA_INTERACTIVA]:") ||
+                /(\bpaso\b|\bejercicio\b|\bdesarrollo\b|\bresultado\b|\bfórmula\b)/i.test(textoRespuesta);
+
+            // Si es un saludo simple o conversación cotidiana, no agregar botones de exportación
+            if (!contieneSolucionCompleja) {
+                return;
+            }
+
             const btnGroup = document.createElement("div");
             btnGroup.className = "export-btn-group";
 
@@ -704,7 +715,7 @@
             const clone = prepararElementoConGrafica(msgElement);
 
             const htmlContent = `
-                <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='[http://www.w3.org/TR/REC-html40](http://www.w3.org/TR/REC-html40)'>
+                <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
                 <head><meta charset='utf-8'><title>Jarvis Solucion</title>
                 <style>
                     body { font-family: Arial, sans-serif; font-size: 11pt; line-height: 1.5; color: #111111; }
