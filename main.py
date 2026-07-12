@@ -83,9 +83,10 @@ PROMPT_SISTEMA = {
         "Eres J.A.R.V.I.S., una Inteligencia Artificial Avanzada especialista en Ciencias Exactas, Física Teórica, Análisis de Datos y Generación Multimodal, creada para asistir a Cristian.\n"
         "DIRECTIVAS ESTRICTAS DE AUTONOMÍA BLAZING FAST:\n"
         "1. Dirígete al usuario como 'señor' o 'Cristian'. Sé analítico, claro, directo y extremadamente preciso.\n"
-        "2. WORKSPACE LIVE CANVAS: Si generas un informe extenso o código, puedes incluir la etiqueta '[OPEN_CANVAS]'.\n"
-        "3. GENERACIÓN DE IMÁGENES ULTRA HD: Invoca 'generar_imagen_ia' e incluye '[IMAGEN_GENERADA]:URL'.\n"
-        "4. FORMATO MATEMÁTICO LaTeX OBLIGATORIO: Ecuaciones en bloque '$$ ecuacion $$' y variables '$ x = 2 $'."
+        "2. MERCADO FINANCIERO: Si el usuario pregunta por criptomonedas o finanzas, invoca 'obtener_mercado_cripto'.\n"
+        "3. WORKSPACE LIVE CANVAS: Si generas un informe extenso o código, puedes incluir la etiqueta '[OPEN_CANVAS]'.\n"
+        "4. GENERACIÓN DE IMÁGENES ULTRA HD: Invoca 'generar_imagen_ia' e incluye '[IMAGEN_GENERADA]:URL'.\n"
+        "5. FORMATO MATEMÁTICO LaTeX OBLIGATORIO: Ecuaciones en bloque '$$ ecuacion $$' y variables '$ x = 2 $'."
     )
 }
 
@@ -277,23 +278,9 @@ def ejecutar_consulta_llm(historial_mensajes, herramientas_lista):
         )
 
 
-def obtener_mercado_cripto(criptomoneda: str) -> str:
-    """Obtiene precios en vivo desde la API de Binance."""
-    try:
-        symbol = criptomoneda.upper().strip()
-        if symbol in ["BITCOIN", "BTC"]: symbol = "BTC"
-        elif symbol in ["ETHEREUM", "ETH"]: symbol = "ETH"
-        elif symbol in ["SOLANA", "SOL"]: symbol = "SOL"
-
-        url = f"https://api.binance.com/api/v3/ticker/price?symbol={symbol}USDT"
-        res = requests.get(url, timeout=3).json()
-        precio = float(res['price'])
-        return f"El precio actual de **{symbol}** en el mercado financiero Binance es de **${precio:,.2f} USD**."
-    except Exception:
-        return f"No se pudo obtener la cotización para {criptomoneda}."
-
-
+# --- ⚡ NUEVAS FUNCIONES DE GENERACIÓN DIRECTA (ANTI-ALUCINACIÓN) ---
 def generar_presentacion_pptx(tema: str) -> str:
+    """Genera PowerPoint algorítmico inmune a fallos."""
     try:
         TELEMETRIA_SISTEMA["presentaciones_pptx"] += 1
         if not Presentation: return "Error: librería python-pptx no instalada."
@@ -327,6 +314,7 @@ def generar_presentacion_pptx(tema: str) -> str:
         return f"Error PPTX: {str(e)}"
 
 def generar_reporte_excel(tema: str) -> str:
+    """Genera Archivo Excel tabulado."""
     try:
         TELEMETRIA_SISTEMA["reportes_excel"] += 1
         if not openpyxl: return "Error: openpyxl no está instalado."
@@ -346,6 +334,7 @@ def generar_reporte_excel(tema: str) -> str:
         return f"Error Excel: {str(e)}"
 
 def investigacion_profunda_web(tema: str) -> str:
+    """Investigación web infalible."""
     try:
         informe = [f"### 🌐 INFORME DE INVESTIGACIÓN PROFUNDA: {tema.upper()}\n"]
         try:
@@ -379,6 +368,27 @@ def generar_imagen_ia(prompt_ingles: str) -> str:
         return f"[IMAGEN_GENERADA]:{img_url}"
     except Exception as e:
         return f"Error generando imagen: {str(e)}"
+
+def obtener_mercado_cripto(criptomoneda: str) -> str:
+    """Obtiene precios usando la API de Coinbase (Amigable con servidores Cloud en EE.UU)"""
+    try:
+        symbol = criptomoneda.upper().strip()
+        if symbol in ["BITCOIN", "BTC"]: symbol = "BTC"
+        elif symbol in ["ETHEREUM", "ETH"]: symbol = "ETH"
+        elif symbol in ["SOLANA", "SOL"]: symbol = "SOL"
+
+        url = f"https://api.coinbase.com/v2/prices/{symbol}-USD/spot"
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        res = requests.get(url, headers=headers, timeout=5)
+        
+        if res.status_code == 200:
+            data = res.json()
+            precio = float(data['data']['amount'])
+            return f"El precio actual de **{symbol}** en el mercado financiero es de **${precio:,.2f} USD**."
+        else:
+            return f"Error en la conexión financiera. Status: {res.status_code}"
+    except Exception as e:
+        return f"No se pudo obtener la cotización para {criptomoneda} debido a un bloqueo de red."
 
 def generar_grafica_interactiva(expresion: str) -> str:
     try:
@@ -419,6 +429,7 @@ def ejecutar_codigo_python(codigo: str) -> str:
     return f"Fallo al ejecutar código: {str(e)}"
 
 herramientas = [
+    {"type": "function", "function": {"name": "obtener_mercado_cripto", "description": "Obtiene el precio en vivo de una criptomoneda (ej. BTC, ETH).", "parameters": {"type": "object", "properties": {"criptomoneda": {"type": "string"}}, "required": ["criptomoneda"]}}},
     {"type": "function", "function": {"name": "generar_imagen_ia", "description": "Genera una imagen ultra HD/4K con IA.", "parameters": {"type": "object", "properties": {"prompt_ingles": {"type": "string"}}, "required": ["prompt_ingles"]}}},
     {"type": "function", "function": {"name": "generar_grafica_interactiva", "description": "Grafica funciones en x.", "parameters": {"type": "object", "properties": {"expresion": {"type": "string"}}, "required": ["expresion"]}}},
     {"type": "function", "function": {"name": "ejecutar_codigo_python", "description": "Intérprete Python (NumPy, Pandas, SymPy).", "parameters": {"type": "object", "properties": {"codigo": {"type": "string"}}, "required": ["codigo"]}}}
@@ -457,9 +468,9 @@ async def consultar_jarvis(data: ChatInput):
             historial_usuario = sesion_data["messages"]
 
         prompt_usuario = data.message.strip() if data.message else "Analice la información, señor."
-        prompt_lower = prompt_usuario.lower()
 
         # === 🛡️ ENRUTADOR DIRECTO ANTI-ALUCINACIÓN (CERO FALLOS) ===
+        prompt_lower = prompt_usuario.lower()
 
         # 1. Interceptor de Cotizaciones Cripto / Mercado Financiero
         if any(w in prompt_lower for w in ["bitcoin", "btc", "ethereum", "eth", "solana", "sol", "precio del", "precio de"]):
@@ -540,7 +551,8 @@ async def consultar_jarvis(data: ChatInput):
             except: args = {}
             
             try:
-                if fn_name == "generar_imagen_ia": resultado = generar_imagen_ia(prompt_ingles=args.get("prompt_ingles", "futuristic stark tech"))
+                if fn_name == "obtener_mercado_cripto": resultado = obtener_mercado_cripto(criptomoneda=args.get("criptomoneda", "BTC"))
+                elif fn_name == "generar_imagen_ia": resultado = generar_imagen_ia(prompt_ingles=args.get("prompt_ingles", "futuristic stark tech"))
                 elif fn_name == "generar_grafica_interactiva": resultado = generar_grafica_interactiva(expresion=args.get("expresion", "x**2"))
                 elif fn_name == "ejecutar_codigo_python": resultado = ejecutar_codigo_python(codigo=args.get("codigo", ""))
                 else: resultado = "Ejecutado."
