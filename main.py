@@ -62,15 +62,15 @@ PROMPT_SISTEMA = {
     "role": "system",
     "content": (
         "Eres J.A.R.V.I.S., una Inteligencia Artificial Avanzada especialista en Ciencias Exactas, Programación y Generación Multimodal, creada para asistir a Cristian.\n"
-        "DIRECTIVAS ESTRICTAS:\n"
+        "DIRECTIVAS ESTRICTAS BLAZING FAST:\n"
         "1. Dirígete al usuario como 'señor' o 'Cristian'. Sé analítico, claro, directo y extremadamente preciso.\n"
-        "2. GENERACIÓN DE IMÁGENES: Cuando el usuario te pida crear, generar o dibujar una imagen o ilustración con IA, INVISA OBLIGATORIAMENTE la herramienta 'generar_imagen_ia' pasando una descripción detallada en inglés.\n"
-        "   - EN TU RESPUESTA FINAL: Incluye SIEMPRE la etiqueta devuelta por la herramienta '[IMAGEN_GENERADA]:URL' para que el cliente la muestre en pantalla.\n"
-        "3. GRÁFICAS Y CURVAS: Cuando el usuario te pida graficar una función matemática en x, INVISA 'generar_grafica_interactiva' pasando la función en Python (ej: 'x**2 - 4*x + 3').\n"
+        "2. GENERACIÓN DE IMÁGENES ULTRA HD / 4K: Cuando el usuario te pida crear, generar o dibujar una imagen o ilustración con IA, INVOLUCRAR OBLIGATORIAMENTE la herramienta 'generar_imagen_ia' pasando una descripción hiperdetallada en inglés enriquecida con '4k resolution, ultra-detailed, cinematic lighting, photorealistic, 8k render'.\n"
+        "   - EN TU RESPUESTA FINAL: Incluye SIEMPRE la etiqueta devuelta por la herramienta '[IMAGEN_GENERADA]:URL'.\n"
+        "3. GRÁFICAS Y CURVAS: Cuando el usuario te pida graficar una función matemática en x, INCLUYE 'generar_grafica_interactiva' pasando la función en Python (ej: 'x**2 - 4*x + 3').\n"
         "4. DIAGRAMAS Y MAPAS CONCEPTUALES: Para diagramas de flujo, circuitos o esquemas de física/procesos, escribe bloques de código ```mermaid ... ```.\n"
         "5. FORMATO MATEMÁTICO LaTeX OBLIGATORIO:\n"
-        "   - Ecuaciones centradas en bloque: '$$ ecuacion $$'.\n"
-        "   - Variables dentro del texto: '$ x = 2 $'.\n"
+        "   - Ecuaciones centradas en bloque: '$$ecuacion$$'.\n"
+        "   - Variables dentro del texto: '$x = 2$'.\n"
         "6. NAVEGACIÓN Y BÚSQUEDA: Si el usuario pide abrir un sitio web o buscar contenido, invoca 'abrir_sitio_web'."
     )
 }
@@ -301,12 +301,13 @@ def ejecutar_consulta_llm(historial_mensajes, herramientas_lista):
         )
 
 
-# --- HERRAMIENTAS MULTIMODALES ---
+# --- HERRAMIENTAS MULTIMODALES ULTRA HD ---
 def generar_imagen_ia(prompt_ingles: str) -> str:
-    """Genera una imagen con IA a partir de una descripción en inglés usando Pollinations FLUX."""
+    """Genera una imagen ultra HD/4K con IA usando Pollinations FLUX.1 con parámetros de máxima calidad."""
     try:
-        prompt_encoded = urllib.parse.quote(prompt_ingles.strip())
-        img_url = f"https://image.pollinations.ai/prompt/{prompt_encoded}?width=1024&height=1024&model=flux&nologo=true"
+        prompt_enriquecido = f"{prompt_ingles.strip()}, highly detailed, 4k resolution, photorealistic, masterpiece, 8k render, cinematic lighting"
+        prompt_encoded = urllib.parse.quote(prompt_enriquecido)
+        img_url = f"https://image.pollinations.ai/prompt/{prompt_encoded}?width=2048&height=2048&model=flux&nologo=true&seed=42"
         return f"[IMAGEN_GENERADA]:{img_url}"
     except Exception as e:
         return f"Error generando imagen: {str(e)}"
@@ -440,7 +441,7 @@ herramientas = [
         "type": "function", 
         "function": {
             "name": "generar_imagen_ia", 
-            "description": "Obligatoria para generar, crear o ilustrar una imagen con IA. Pasa 'prompt_ingles' en inglés.", 
+            "description": "Obligatoria para generar o crear una imagen ultra HD/4K con IA. Pasa 'prompt_ingles' en inglés.", 
             "parameters": {
                 "type": "object", 
                 "properties": {"prompt_ingles": {"type": "string"}}, 
@@ -609,9 +610,8 @@ async def consultar_jarvis(data: ChatInput):
 
                 ultima_respuesta_herramienta = resultado
 
-                # SI SE GENERÓ UNA IMAGEN, GARANTIZAR QUE LA RESPUESTA FINAL CONTENGA EL LINK
                 if fn_name == "generar_imagen_ia":
-                    respuesta_final = f"Señor, he generado la imagen que solicitó:\n\n{resultado}"
+                    respuesta_final = f"Señor, he renderizado la imagen en calidad Ultra HD:\n\n{resultado}"
                     historial_usuario.append({"role": "tool", "tool_call_id": tool_call.id, "name": fn_name, "content": resultado})
                     historial_usuario.append({"role": "assistant", "content": respuesta_final})
                     audio_b64 = generar_audio_elevenlabs(respuesta_final)
