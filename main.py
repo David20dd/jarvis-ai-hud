@@ -61,14 +61,16 @@ ACTION_URL_TEMP = None
 PROMPT_SISTEMA = {
     "role": "system",
     "content": (
-        "Eres J.A.R.V.I.S., una Inteligencia Artificial Avanzada especialista en Ciencias Exactas, creada para asistir a Cristian.\n"
-        "DIRECTIVAS ESTRICTAS DE GRÁFICAS Y MATEMÁTICAS:\n"
+        "Eres J.A.R.V.I.S., una Inteligencia Artificial Avanzada especialista en Ciencias Exactas, Programación y Generación Multimodal, creada para asistir a Cristian.\n"
+        "DIRECTIVAS ESTRICTAS BLAZING FAST:\n"
         "1. Dirígete al usuario como 'señor' o 'Cristian'. Sé analítico, claro, directo y extremadamente preciso.\n"
-        "2. REGLA OBLIGATORIA DE GRÁFICAS: Cuando el usuario te pida graficar o dibujar una función (ej: 'grafica x^2 - 4x + 3'), DEBES INVOCAR SIEMPRE la herramienta 'generar_grafica_interactiva' pasando la expresión en sintaxis matemática limpia de Python (ej: 'x**2 - 4*x + 3').\n"
-        "3. FORMATO MATEMÁTICO LaTeX OBLIGATORIO:\n"
-        "   - Ecuaciones centradas en bloque: '$$ ecuacion $$'. Ejemplo: $$ f(x) = x^2 - 4x + 3 = (x-2)^2 - 1 $$\n"
-        "   - Variables en texto: '$ x = 1 $'\n"
-        "4. NAVEGACIÓN Y BÚSQUEDA: Si el usuario pide ir a un sitio web, invoca 'abrir_sitio_web'."
+        "2. GENERACIÓN DE IMÁGENES: Cuando el usuario te pida crear, generar o dibujar una imagen/ilustración, INVISA SIEMPRE 'generar_imagen_ia' pasando la descripción detallada en inglés.\n"
+        "3. GRÁFICAS Y CURVAS: Cuando el usuario te pida graficar una función matemática en x, INVISA 'generar_grafica_interactiva' pasando la función en Python (ej: 'x**2 - 4*x + 3').\n"
+        "4. DIAGRAMAS Y MAPAS CONCEPTUALES: Para diagramas de flujo, circuitos o esquemas de física/procesos, escribe bloques de código ```mermaid ... ```.\n"
+        "5. FORMATO MATEMÁTICO LaTeX OBLIGATORIO:\n"
+        "   - Ecuaciones centradas en bloque: '$$ ecuacion $$'.\n"
+        "   - Variables dentro del texto: '$ x = 2 $'.\n"
+        "6. NAVEGACIÓN Y BÚSQUEDA: Si el usuario pide abrir un sitio web o buscar contenido, invoca 'abrir_sitio_web'."
     )
 }
 
@@ -213,6 +215,7 @@ def generar_audio_elevenlabs(texto: str) -> str:
         
         texto_limpio = re.sub(r'```[\s\S]*?```', '', texto)
         texto_limpio = re.sub(r'\[GRAFICA_INTERACTIVA\]:[\s\S]*', ' Gráfica generada en pantalla. ', texto_limpio)
+        texto_limpio = re.sub(r'\[IMAGEN_GENERADA\]:[\s\S]*', ' Imagen desplegada en pantalla. ', texto_limpio)
         texto_limpio = re.sub(r'\$\$[\s\S]*?\$\$', ' según la fórmula mostrada ', texto_limpio)
         texto_limpio = re.sub(r'\$[\s\S]*?\$', '', texto_limpio)
         texto_limpio = re.sub(r'\\[a-zA-Z]+', '', texto_limpio)
@@ -220,7 +223,7 @@ def generar_audio_elevenlabs(texto: str) -> str:
         texto_limpio = texto_limpio.replace("\n", " ").strip()[:250]
         
         if not texto_limpio:
-            texto_limpio = "Gráfica y cálculo desplegados en pantalla, señor."
+            texto_limpio = "Información desplegada en pantalla, señor."
 
         data = {
             "text": texto_limpio,
@@ -297,7 +300,16 @@ def ejecutar_consulta_llm(historial_mensajes, herramientas_lista):
         )
 
 
-# --- HERRAMIENTAS DE NAVEGACIÓN Y CÁLCULO ---
+# --- HERRAMIENTAS MULTIMODALES ---
+def generar_imagen_ia(prompt_ingles: str) -> str:
+    """Genera una imagen con IA a partir de una descripción en inglés usando Pollinations FLUX."""
+    try:
+        prompt_encoded = urllib.parse.quote(prompt_ingles.strip())
+        img_url = f"https://image.pollinations.ai/prompt/{prompt_encoded}?width=1024&height=1024&model=flux&nologo=true"
+        return f"[IMAGEN_GENERADA]:{img_url}"
+    except Exception as e:
+        return f"Error generando imagen: {str(e)}"
+
 def abrir_sitio_web(url: str, busqueda: Optional[str] = None) -> str:
     global ACTION_URL_TEMP
     try:
@@ -333,19 +345,17 @@ def abrir_sitio_web(url: str, busqueda: Optional[str] = None) -> str:
         return "Redirigiendo a Google."
 
 def generar_grafica_interactiva(expresion: str) -> str:
-    """Genera datos de trazado preciso para la gráfica."""
     try:
-        # Limpieza de sintaxis (ej: x^2 -> x**2)
         expr_clean = expresion.replace("^", "**").replace("x2", "x**2")
         x = sp.Symbol('x')
         expr = sp.sympify(expr_clean)
         f = sp.lambdify(x, expr, 'math')
         
         puntos = []
-        for v in [i * 0.2 for i in range(-40, 41)]: # Rango de -8 a 8
+        for v in [i * 0.2 for i in range(-40, 41)]:
             try:
                 y_val = float(f(v))
-                if abs(y_val) < 200: # Evitar asíntotas desproporcionadas
+                if abs(y_val) < 200:
                     puntos.append({"x": round(v, 2), "y": round(y_val, 2)})
             except Exception:
                 pass
@@ -428,8 +438,20 @@ herramientas = [
     {
         "type": "function", 
         "function": {
+            "name": "generar_imagen_ia", 
+            "description": "Obligatoria para generar, crear o ilustrar una imagen con IA. Pasa 'prompt_ingles' en inglés.", 
+            "parameters": {
+                "type": "object", 
+                "properties": {"prompt_ingles": {"type": "string"}}, 
+                "required": ["prompt_ingles"]
+            }
+        }
+    },
+    {
+        "type": "function", 
+        "function": {
             "name": "generar_grafica_interactiva", 
-            "description": "Obligatoria para graficar o dibujar cualquier función matemática en x.", 
+            "description": "Grafica funciones matemáticas en x.", 
             "parameters": {
                 "type": "object", 
                 "properties": {"expresion": {"type": "string"}}, 
@@ -453,7 +475,7 @@ herramientas = [
         "type": "function", 
         "function": {
             "name": "calcular_simbolico_exacto", 
-            "description": "Cálculo exacto con SymPy.", 
+            "description": "SymPy.", 
             "parameters": {
                 "type": "object", 
                 "properties": {
@@ -563,7 +585,9 @@ async def consultar_jarvis(data: ChatInput):
                 except Exception:
                     arguments = {}
                 
-                if fn_name == "generar_grafica_interactiva": 
+                if fn_name == "generar_imagen_ia": 
+                    resultado = generar_imagen_ia(prompt_ingles=arguments.get("prompt_ingles", "a futuristic iron man suit"))
+                elif fn_name == "generar_grafica_interactiva": 
                     resultado = generar_grafica_interactiva(expresion=arguments.get("expresion", "x**2 - 4*x + 3"))
                 elif fn_name == "abrir_sitio_web": 
                     resultado = abrir_sitio_web(url=arguments.get("url", "google"), busqueda=arguments.get("busqueda"))
