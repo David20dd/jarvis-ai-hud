@@ -18,7 +18,7 @@ import sys
 import contextlib
 from PIL import Image
 
-# MOTOR MATEMÁTICO SIMBÓLICO EXACTO
+# MOTOR MATEMÁTICO SIMBÓLICO
 import sympy as sp
 
 # LIBRERÍAS DE LECTURA DE ARCHIVOS MULTIFORMATO
@@ -39,7 +39,7 @@ except ImportError:
 
 app = FastAPI()
 
-# --- CONFIGURACIÓN DE CORS PARA CONEXIÓN PÚBLICA ---
+# --- CONFIGURACIÓN DE CORS ---
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], 
@@ -61,14 +61,14 @@ ACTION_URL_TEMP = None
 PROMPT_SISTEMA = {
     "role": "system",
     "content": (
-        "Eres J.A.R.V.I.S., una Inteligencia Artificial Avanzada especialista en Matemáticas, Física, Estadística, Cálculo, Álgebra y Ciencias Exactas, creada para asistir a Cristian.\n"
-        "DIRECTIVAS ESTRICTAS DE RESOLUCIÓN Y GRÁFICAS:\n"
+        "Eres J.A.R.V.I.S., una Inteligencia Artificial Avanzada especialista en Ciencias Exactas, creada para asistir a Cristian.\n"
+        "DIRECTIVAS ESTRICTAS DE GRÁFICAS Y MATEMÁTICAS:\n"
         "1. Dirígete al usuario como 'señor' o 'Cristian'. Sé analítico, claro, directo y extremadamente preciso.\n"
-        "2. FORMATO MATEMÁTICO LaTeX OBLIGATORIO:\n"
-        "   - Ecuaciones centradas y paso a paso en bloque: '$$ ecuacion $$'. Ejemplo: $$ f(x) = \\frac{x^2 - 4}{x + 2} = x - 2 $$\n"
-        "   - Fórmulas o variables en el texto: '$ ecuacion $'. Ejemplo: $x \\neq -2$\n"
-        "3. HERRAMIENTA DE GRÁFICAS: Cuando se te pida graficar una función, invoca 'generar_grafica_interactiva' pasando la expresion en formato Python (ej: 'x**2 - 4*x + 3').\n"
-        "4. NAVEGACIÓN Y BÚSQUEDA: Si el usuario pide ir a un sitio web o buscar contenido, invoca 'abrir_sitio_web'."
+        "2. REGLA OBLIGATORIA DE GRÁFICAS: Cuando el usuario te pida graficar o dibujar una función (ej: 'grafica x^2 - 4x + 3'), DEBES INVOCAR SIEMPRE la herramienta 'generar_grafica_interactiva' pasando la expresión en sintaxis matemática limpia de Python (ej: 'x**2 - 4*x + 3').\n"
+        "3. FORMATO MATEMÁTICO LaTeX OBLIGATORIO:\n"
+        "   - Ecuaciones centradas en bloque: '$$ ecuacion $$'. Ejemplo: $$ f(x) = x^2 - 4x + 3 = (x-2)^2 - 1 $$\n"
+        "   - Variables en texto: '$ x = 1 $'\n"
+        "4. NAVEGACIÓN Y BÚSQUEDA: Si el usuario pide ir a un sitio web, invoca 'abrir_sitio_web'."
     )
 }
 
@@ -90,7 +90,7 @@ def obtener_historial_sesion(session_id: str):
     return SESIONES_MEMORIA[session_id]
 
 
-# --- OPTIMIZADOR Y COMPRESOR DE IMÁGENES ---
+# --- OPTIMIZADOR DE IMÁGENES ---
 def optimizar_imagen_b64(image_b64_data: str, max_dim: int = 1280) -> str:
     try:
         if "," in image_b64_data:
@@ -198,7 +198,7 @@ def procesar_archivo_adjunto(file_b64: Optional[str] = None, file_name: Optional
         return 'none', ""
 
 
-# --- GENERADOR DE VOZ HD EN RAM ---
+# --- GENERADOR DE VOZ HD ---
 def generar_audio_elevenlabs(texto: str) -> str:
     try:
         if not ELEVENLABS_API_KEY or "sk_" not in ELEVENLABS_API_KEY:
@@ -212,14 +212,15 @@ def generar_audio_elevenlabs(texto: str) -> str:
         }
         
         texto_limpio = re.sub(r'```[\s\S]*?```', '', texto)
-        texto_limpio = re.sub(r'\$\$[\s\S]*?\$\$', ' según el cálculo desplegado en pantalla ', texto_limpio)
+        texto_limpio = re.sub(r'\[GRAFICA_INTERACTIVA\]:[\s\S]*', ' Gráfica generada en pantalla. ', texto_limpio)
+        texto_limpio = re.sub(r'\$\$[\s\S]*?\$\$', ' según la fórmula mostrada ', texto_limpio)
         texto_limpio = re.sub(r'\$[\s\S]*?\$', '', texto_limpio)
         texto_limpio = re.sub(r'\\[a-zA-Z]+', '', texto_limpio)
         texto_limpio = re.sub(r'[*_#`{}]', '', texto_limpio)
         texto_limpio = texto_limpio.replace("\n", " ").strip()[:250]
         
         if not texto_limpio:
-            texto_limpio = "Procedimiento desplegado en pantalla, señor."
+            texto_limpio = "Gráfica y cálculo desplegados en pantalla, señor."
 
         data = {
             "text": texto_limpio,
@@ -236,7 +237,7 @@ def generar_audio_elevenlabs(texto: str) -> str:
         return None
 
 
-# --- CEREBROS IA CON COMPRESIÓN Y MANEJO SEGURO DE ERRORES ---
+# --- CEREBROS IA ---
 def ejecutar_consulta_vision(historial_mensajes, image_b64_data):
     image_b64_data = optimizar_imagen_b64(image_b64_data, max_dim=1280)
     
@@ -249,9 +250,8 @@ def ejecutar_consulta_vision(historial_mensajes, image_b64_data):
     prompt_texto = last_msg.get("content", "").strip()
     
     instruccion_directa = (
-        f"INSTRUCCIÓN DE RESOLUCIÓN COMPLETA: Examina todo el documento desde la primera página. "
-        f"Encuentra los ejercicios o el problema indicado, escribe la función o enunciado exacto en LaTeX y proporciona la solución matemática desglosada paso a paso. "
-        f"Petición del usuario: '{prompt_texto}'"
+        f"INSTRUCCIÓN: Resuelve los ejercicios del documento. Muestra la ecuación en LaTeX y desglosa el cálculo. "
+        f"Petición: '{prompt_texto}'"
     )
 
     multimodal_user_msg = {
@@ -270,8 +270,7 @@ def ejecutar_consulta_vision(historial_mensajes, image_b64_data):
             temperature=0.1,
             max_tokens=3000
         )
-    except Exception as err_v1:
-        print(f"⚠️ Aviso Llama 11B Vision: {err_v1}. Reintentando con Llama 90B Vision...")
+    except Exception:
         return client.chat.completions.create(
             model="llama-3.2-90b-vision-preview",
             messages=messages_multimodal,
@@ -298,7 +297,7 @@ def ejecutar_consulta_llm(historial_mensajes, herramientas_lista):
         )
 
 
-# --- HERRAMIENTAS Y NAVEGACIÓN ---
+# --- HERRAMIENTAS DE NAVEGACIÓN Y CÁLCULO ---
 def abrir_sitio_web(url: str, busqueda: Optional[str] = None) -> str:
     global ACTION_URL_TEMP
     try:
@@ -328,36 +327,37 @@ def abrir_sitio_web(url: str, busqueda: Optional[str] = None) -> str:
                 target_url = url
 
         ACTION_URL_TEMP = target_url
-        if busqueda_str:
-            return f"Desplegando '{busqueda_str}' en {url_lower.capitalize()}."
         return f"Redirigiendo a {target_url}."
-    except Exception as err:
-        print(f"⚠️ Error en abrir_sitio_web: {err}")
+    except Exception:
         ACTION_URL_TEMP = "https://www.google.com"
         return "Redirigiendo a Google."
 
 def generar_grafica_interactiva(expresion: str) -> str:
-    """Genera datos de trazado para la interfaz gráfica interactiva."""
+    """Genera datos de trazado preciso para la gráfica."""
     try:
+        # Limpieza de sintaxis (ej: x^2 -> x**2)
+        expr_clean = expresion.replace("^", "**").replace("x2", "x**2")
         x = sp.Symbol('x')
-        expr = sp.sympify(expresion)
+        expr = sp.sympify(expr_clean)
         f = sp.lambdify(x, expr, 'math')
+        
         puntos = []
-        for v in [i * 0.25 for i in range(-50, 51)]:
+        for v in [i * 0.2 for i in range(-40, 41)]: # Rango de -8 a 8
             try:
                 y_val = float(f(v))
-                puntos.append({"x": round(v, 2), "y": round(y_val, 2)})
+                if abs(y_val) < 200: # Evitar asíntotas desproporcionadas
+                    puntos.append({"x": round(v, 2), "y": round(y_val, 2)})
             except Exception:
                 pass
-        return f"[GRAFICA_INTERACTIVA]:{json.dumps({'expresion': expresion, 'puntos': puntos})}"
+        return f"[GRAFICA_INTERACTIVA]:{json.dumps({'expresion': str(expr), 'puntos': puntos})}"
     except Exception as e:
-        return f"Error al generar gráfica: {str(e)}"
+        return f"Error en trazado de gráfica: {str(e)}"
 
 def calcular_simbolico_exacto(operacion: str, expresion: str) -> str:
-    """Cálculo exacto mediante SymPy para derivadas, integrales, límites y ecuaciones."""
     try:
         x = sp.Symbol('x')
-        expr = sp.sympify(expresion)
+        expr_clean = expresion.replace("^", "**")
+        expr = sp.sympify(expr_clean)
         
         if operacion == "derivada":
             resultado = sp.diff(expr, x)
@@ -370,9 +370,9 @@ def calcular_simbolico_exacto(operacion: str, expresion: str) -> str:
         else:
             resultado = sp.simplify(expr)
             
-        return f"Resultado Simbólico Exacto ({operacion}): {sp.latex(resultado)}"
+        return f"Resultado Simbólico ({operacion}): $${sp.latex(resultado)}$$"
     except Exception as e:
-        return f"Error en cálculo simbólico: {str(e)}"
+        return f"Error en SymPy: {str(e)}"
 
 def obtener_clima_en_vivo(ciudad: str) -> str:
     try:
@@ -419,7 +419,7 @@ def ejecutar_codigo_python(codigo: str) -> str:
         output = f.getvalue().strip()
         if not output and local_scope:
             output = f"Variables resultantes: {local_scope}"
-        return output if output else "Código ejecutado exitosamente sin salida de texto."
+        return output if output else "Código ejecutado exitosamente."
     except Exception as e:
         return f"Error de ejecución: {str(e)}"
 
@@ -428,20 +428,8 @@ herramientas = [
     {
         "type": "function", 
         "function": {
-            "name": "abrir_sitio_web", 
-            "description": "Abre webs o busca en plataformas.", 
-            "parameters": {
-                "type": "object", 
-                "properties": {"url": {"type": "string"}, "busqueda": {"type": "string"}}, 
-                "required": ["url"]
-            }
-        }
-    },
-    {
-        "type": "function", 
-        "function": {
             "name": "generar_grafica_interactiva", 
-            "description": "Genera trazado gráfico interactivo para funciones en x.", 
+            "description": "Obligatoria para graficar o dibujar cualquier función matemática en x.", 
             "parameters": {
                 "type": "object", 
                 "properties": {"expresion": {"type": "string"}}, 
@@ -452,8 +440,20 @@ herramientas = [
     {
         "type": "function", 
         "function": {
+            "name": "abrir_sitio_web", 
+            "description": "Abre webs.", 
+            "parameters": {
+                "type": "object", 
+                "properties": {"url": {"type": "string"}, "busqueda": {"type": "string"}}, 
+                "required": ["url"]
+            }
+        }
+    },
+    {
+        "type": "function", 
+        "function": {
             "name": "calcular_simbolico_exacto", 
-            "description": "Ejecuta cálculo simbólico exacto con SymPy.", 
+            "description": "Cálculo exacto con SymPy.", 
             "parameters": {
                 "type": "object", 
                 "properties": {
@@ -465,7 +465,7 @@ herramientas = [
         }
     },
     {"type": "function", "function": {"name": "buscar_en_internet", "description": "Busca en la web.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}},
-    {"type": "function", "function": {"name": "leer_pagina_web", "description": "Lee una URL.", "parameters": {"type": "object", "properties": {"url": {"type": "string"}}, "required": ["query"]}}},
+    {"type": "function", "function": {"name": "leer_pagina_web", "description": "Lee URL.", "parameters": {"type": "object", "properties": {"url": {"type": "string"}}, "required": ["query"]}}},
     {"type": "function", "function": {"name": "obtener_estado_pc", "description": "Diagnóstico.", "parameters": {"type": "object", "properties": {}}}},
     {"type": "function", "function": {"name": "ejecutar_codigo_python", "description": "Ejecuta Python.", "parameters": {"type": "object", "properties": {"codigo": {"type": "string"}}, "required": ["codigo"]}}},
     {"type": "function", "function": {"name": "obtener_clima_en_vivo", "description": "Clima.", "parameters": {"type": "object", "properties": {"ciudad": {"type": "string"}}, "required": ["ciudad"]}}}
@@ -498,24 +498,21 @@ async def consultar_jarvis(data: ChatInput):
             historial_usuario = sesion_data["messages"]
 
         categoria_archivo, contenido_o_b64 = procesar_archivo_adjunto(data.file_b64, data.file_name)
-        prompt_usuario = data.message.strip() if data.message else "Resuelve los ejercicios del documento completo."
+        prompt_usuario = data.message.strip() if data.message else "Resuelve los ejercicios del documento."
 
         if categoria_archivo == 'image':
             sesion_data["last_images_b64"].append(contenido_o_b64)
-            # Conservar últimas 3 imágenes
             sesion_data["last_images_b64"] = sesion_data["last_images_b64"][-3:]
 
-        usar_vision = len(sesion_data.get("last_images_b64", [])) > 0 and (categoria_archivo == 'image' or not data.file_b64)
+        usar_vision = len(sesion_data.get("last_images_b64", [])) > 0 and (categoria_archivo == 'image' or (not data.file_b64 and any(w in prompt_usuario.lower() for w in ["documento", "ejercicio", "tarea", "imagen", "archivo", "resuelve"])))
 
         if usar_vision:
             historial_usuario.append({"role": "user", "content": prompt_usuario})
-            print("👁️ [Jarvis Vision Ultra]: Procesando imagen...")
+            print("👁️ [Jarvis Vision]: Procesando...")
             try:
-                # Usar la última imagen registrada
                 response = ejecutar_consulta_vision(historial_usuario, sesion_data["last_images_b64"][-1])
                 respuesta_final = response.choices[0].message.content
-            except Exception as vision_err:
-                print(f"🚨 Error de Visión: {vision_err}")
+            except Exception:
                 response_fallback = ejecutar_consulta_llm(historial_usuario, herramientas)
                 respuesta_final = response_fallback.choices[0].message.content
 
@@ -566,10 +563,10 @@ async def consultar_jarvis(data: ChatInput):
                 except Exception:
                     arguments = {}
                 
-                if fn_name == "abrir_sitio_web": 
+                if fn_name == "generar_grafica_interactiva": 
+                    resultado = generar_grafica_interactiva(expresion=arguments.get("expresion", "x**2 - 4*x + 3"))
+                elif fn_name == "abrir_sitio_web": 
                     resultado = abrir_sitio_web(url=arguments.get("url", "google"), busqueda=arguments.get("busqueda"))
-                elif fn_name == "generar_grafica_interactiva": 
-                    resultado = generar_grafica_interactiva(expresion=arguments.get("expresion", "x**2"))
                 elif fn_name == "calcular_simbolico_exacto": 
                     resultado = calcular_simbolico_exacto(operacion=arguments.get("operacion", "simplificar"), expresion=arguments.get("expresion", "x"))
                 elif fn_name == "buscar_en_internet": 
