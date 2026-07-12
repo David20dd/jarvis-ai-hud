@@ -18,7 +18,7 @@ import sys
 import contextlib
 from PIL import Image
 
-# MOTOR MATEMÁTICO SIMBÓLICO Y CÁLCULO
+# MOTOR MATEMÁTICO SIMBÓLICO Y CÁLCULO AVANZADO
 import sympy as sp
 import numpy as np
 import pandas as pd
@@ -58,15 +58,25 @@ client = Groq(api_key=GROQ_API_KEY)
 SESIONES_MEMORIA = {}
 ACTION_URL_TEMP = None
 
+# REGISTRO GLOBAL DE TELEMETRÍA
+TELEMETRIA_SISTEMA = {
+    "consultas_totales": 0,
+    "codigos_ejecutados": 0,
+    "auto_correcciones_exitosas": 0,
+    "imagenes_generadas": 0,
+    "graficas_desplegadas": 0,
+    "inicio_tiempo": time.time()
+}
+
 PROMPT_SISTEMA = {
     "role": "system",
     "content": (
         "Eres J.A.R.V.I.S., una Inteligencia Artificial Avanzada especialista en Ciencias Exactas, Física Teórica, Análisis Estadístico, Álgebra Multivariable y Generación Multimodal, creada para asistir a Cristian.\n"
-        "DIRECTIVAS ESTRICTAS BLAZING FAST:\n"
+        "DIRECTIVAS ESTRICTAS BLAZING FAST Y AUTONOMÍA:\n"
         "1. Dirígete al usuario como 'señor' o 'Cristian'. Sé analítico, claro, directo y extremadamente preciso.\n"
-        "2. MODO RAZONAMIENTO PROFUNDO (DEEP THINK): Si el usuario solicita 'analiza esto a fondo' o 'razonamiento profundo', activa la fase de desglose lógico e hipótesis antes de la respuesta final.\n"
-        "3. PROCESAMIENTO MULTIDOCUMENTO: Cuando recibas múltiples archivos o imágenes adjuntas, realiza un análisis cruzado comparando la información de cada documento.\n"
-        "4. CÓDIGO E INTÉRPRETE AVANZADO: Puedes usar Python con numpy, pandas, scipy, sympy y tabulate para procesamiento matricial y análisis de datos en formato de tabla Sci-Fi.\n"
+        "2. AUTO-CORRECCIÓN Y CÓDIGO AVANZADO: Para problemas numéricos, matriciales o estadísticos, puedes escribir y ejecutar código Python. Si ocurre un fallo interno, corrígelo automáticamente sin mostrar excepciones crudas.\n"
+        "3. MODO RAZONAMIENTO PROFUNDIZADO (DEEP THINK): Si el usuario solicita 'analiza esto a fondo' o 'razonamiento profundo', desglosa la estrategia lógica e hipótesis antes de la respuesta final.\n"
+        "4. PROCESAMIENTO MULTIDOCUMENTO: Cuando recibas múltiples archivos o imágenes adjuntas, realiza un análisis cruzado comparando la información de cada documento.\n"
         "5. GENERACIÓN DE IMÁGENES ULTRA HD / 4K: Para crear o ilustrar imágenes con IA, invoca 'generar_imagen_ia' con descripción hiperdetallada en inglés e incluye la etiqueta '[IMAGEN_GENERADA]:URL'.\n"
         "6. GRÁFICAS Y CURVAS: Para graficar funciones en x, invoca 'generar_grafica_interactiva'.\n"
         "7. FORMATO MATEMÁTICO LaTeX OBLIGATORIO: Ecuaciones en bloque '$$ecuacion$$' y variables '$x = 2$'."
@@ -79,7 +89,8 @@ def obtener_historial_sesion(session_id: str):
         SESIONES_MEMORIA[session_id] = {
             "messages": [PROMPT_SISTEMA],
             "last_active": now,
-            "last_images_b64": []
+            "last_images_b64": [],
+            "preferencias": {"estilo_respuesta": "analitico_directo"}
         }
     else:
         SESIONES_MEMORIA[session_id]["last_active"] = now
@@ -298,6 +309,7 @@ def ejecutar_consulta_llm(historial_mensajes, herramientas_lista):
 
 def generar_imagen_ia(prompt_ingles: str) -> str:
     try:
+        TELEMETRIA_SISTEMA["imagenes_generadas"] += 1
         prompt_enriquecido = f"{prompt_ingles.strip()}, highly detailed, 4k resolution, photorealistic, masterpiece, 8k render, cinematic lighting"
         prompt_encoded = urllib.parse.quote(prompt_enriquecido)
         img_url = f"https://image.pollinations.ai/prompt/{prompt_encoded}?width=2048&height=2048&model=flux&nologo=true&seed=42"
@@ -341,6 +353,7 @@ def abrir_sitio_web(url: str, busqueda: Optional[str] = None) -> str:
 
 def generar_grafica_interactiva(expresion: str) -> str:
     try:
+        TELEMETRIA_SISTEMA["graficas_desplegadas"] += 1
         expr_clean = expresion.replace("^", "**").replace("x2", "x**2")
         x = sp.Symbol('x')
         expr = sp.sympify(expr_clean)
@@ -411,25 +424,57 @@ def leer_pagina_web(url: str) -> str:
 
 def obtener_estado_pc() -> str:
     try:
-        return f"Servidor Cloud: CPU {psutil.cpu_percent()}% | RAM {psutil.virtual_memory().percent}%"
+        uptime_min = round((time.time() - TELEMETRIA_SISTEMA["inicio_tiempo"]) / 60, 1)
+        return (
+            f"Servidor Cloud STARK: CPU {psutil.cpu_percent()}% | RAM {psutil.virtual_memory().percent}% | "
+            f"Uptime: {uptime_min} min | Consultas: {TELEMETRIA_SISTEMA['consultas_totales']} | "
+            f"Self-Healing Fixes: {TELEMETRIA_SISTEMA['auto_correcciones_exitosas']}"
+        )
     except Exception as e:
         return "Diagnóstico no disponible."
 
+# --- MOTOR DE AUTO-CORRECCIÓN DE CÓDIGO EN BUCLE (SELF-HEALING) ---
 def ejecutar_codigo_python(codigo: str) -> str:
-    """Intérprete de código avanzado con librerías numéricas y científicas."""
-    try:
-        f = io.StringIO()
-        with contextlib.redirect_stdout(f):
-            local_scope = {
-                "np": np, "pd": pd, "sp": sp, "plt": None
-            }
-            exec(codigo, {"__builtins__": __builtins__}, local_scope)
-        output = f.getvalue().strip()
-        if not output and local_scope:
-            output = f"Variables resultantes: {local_scope}"
-        return output if output else "Código ejecutado exitosamente sin salida de texto."
-    except Exception as e:
-        return f"Error de ejecución: {str(e)}"
+    """Intérprete de código con Bucle de Auto-Corrección de fallos."""
+    TELEMETRIA_SISTEMA["codigos_ejecutados"] += 1
+    intentos = 0
+    codigo_actual = codigo
+
+    while intentos < 3:
+        try:
+            f = io.StringIO()
+            with contextlib.redirect_stdout(f):
+                local_scope = {"np": np, "pd": pd, "sp": sp}
+                exec(codigo_actual, {"__builtins__": __builtins__}, local_scope)
+            output = f.getvalue().strip()
+            if not output and local_scope:
+                output = f"Variables resultantes: {local_scope}"
+            
+            if intentos > 0:
+                TELEMETRIA_SISTEMA["auto_correcciones_exitosas"] += 1
+
+            return output if output else "Código ejecutado exitosamente sin salida de texto."
+        except Exception as e:
+            intentos += 1
+            error_trace = str(e)
+            print(f"⚠️ Fallo en código (Intento {intentos}): {error_trace}. Auto-corrigiendo con Groq...")
+            
+            # Petición automática a la IA para auto-corregir la sintaxis o importación
+            try:
+                fix_prompt = [
+                    {"role": "system", "content": "Eres un auto-corrector de código Python experto. Devuelve ÚNICAMENTE el código Python corregido sin texto explicativo ni comillas triple backtick."},
+                    {"role": "user", "content": f"El siguiente código falló con el error '{error_trace}'. Corrígelo:\n{codigo_actual}"}
+                ]
+                fix_response = client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=fix_prompt,
+                    temperature=0.0
+                )
+                codigo_actual = fix_response.choices[0].message.content.replace("```python", "").replace("```", "").strip()
+            except Exception:
+                break
+
+    return f"Fallo al ejecutar código tras autorreparación: {error_trace}"
 
 
 herramientas = [
@@ -437,7 +482,7 @@ herramientas = [
         "type": "function", 
         "function": {
             "name": "generar_imagen_ia", 
-            "description": "Genera o crea una imagen ultra HD/4K con IA. Pasa 'prompt_ingles' en inglés.", 
+            "description": "Genera una imagen ultra HD/4K con IA.", 
             "parameters": {
                 "type": "object", 
                 "properties": {"prompt_ingles": {"type": "string"}}, 
@@ -486,8 +531,8 @@ herramientas = [
     },
     {"type": "function", "function": {"name": "buscar_en_internet", "description": "Busca en la web.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}},
     {"type": "function", "function": {"name": "leer_pagina_web", "description": "Lee URL.", "parameters": {"type": "object", "properties": {"url": {"type": "string"}}, "required": ["query"]}}},
-    {"type": "function", "function": {"name": "obtener_estado_pc", "description": "Diagnóstico.", "parameters": {"type": "object", "properties": {}}}},
-    {"type": "function", "function": {"name": "ejecutar_codigo_python", "description": "Intérprete de código avanzado con NumPy, Pandas y SymPy.", "parameters": {"type": "object", "properties": {"codigo": {"type": "string"}}, "required": ["codigo"]}}},
+    {"type": "function", "function": {"name": "obtener_estado_pc", "description": "Diagnóstico de telemetría y salud del servidor.", "parameters": {"type": "object", "properties": {}}}},
+    {"type": "function", "function": {"name": "ejecutar_codigo_python", "description": "Intérprete de código avanzado con Auto-Corrección (NumPy, Pandas, SymPy).", "parameters": {"type": "object", "properties": {"codigo": {"type": "string"}}, "required": ["codigo"]}}},
     {"type": "function", "function": {"name": "obtener_clima_en_vivo", "description": "Clima.", "parameters": {"type": "object", "properties": {"ciudad": {"type": "string"}}, "required": ["ciudad"]}}}
 ]
 
@@ -505,13 +550,14 @@ class ChatInput(BaseModel):
 
 @app.get("/")
 def home():
-    return {"status": "Jarvis Server Online", "sessions_active": len(SESIONES_MEMORIA)}
+    return {"status": "Jarvis Server Online", "telemetria": TELEMETRIA_SISTEMA}
 
 
 @app.post("/api/jarvis")
 async def consultar_jarvis(data: ChatInput):
     global ACTION_URL_TEMP
     ACTION_URL_TEMP = None
+    TELEMETRIA_SISTEMA["consultas_totales"] += 1
     
     try:
         sid = data.session_id if data.session_id else "default_session"
@@ -522,7 +568,6 @@ async def consultar_jarvis(data: ChatInput):
             sesion_data["messages"] = [PROMPT_SISTEMA] + historial_usuario[-8:]
             historial_usuario = sesion_data["messages"]
 
-        # PROCESAMIENTO MULTIDOCUMENTO SIMULTÁNEO
         archivos_a_procesar = []
         if data.files and len(data.files) > 0:
             archivos_a_procesar = data.files
@@ -545,7 +590,6 @@ async def consultar_jarvis(data: ChatInput):
 
         prompt_usuario = data.message.strip() if data.message else "Analice la información proporcionada, señor."
 
-        # MODO RAZONAMIENTO PROFUNDO (DEEP THINK)
         es_deep_think = any(w in prompt_usuario.lower() for w in ["a fondo", "razonamiento profundo", "deep think", "paso a paso avanzado", "analiza a fondo"])
         if es_deep_think:
             prompt_usuario = (
