@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from groq import Groq
 from duckduckgo_search import DDGS
 import requests
@@ -17,6 +17,9 @@ import io
 import sys
 import contextlib
 from PIL import Image
+
+# MOTOR MATEMÁTICO SIMBÓLICO EXACTO
+import sympy as sp
 
 # LIBRERÍAS DE LECTURA DE ARCHIVOS MULTIFORMATO
 try:
@@ -59,15 +62,13 @@ PROMPT_SISTEMA = {
     "role": "system",
     "content": (
         "Eres J.A.R.V.I.S., una Inteligencia Artificial Avanzada especialista en Matemáticas, Física, Estadística, Cálculo, Álgebra y Ciencias Exactas, creada para asistir a Cristian.\n"
-        "DIRECTIVAS ESTRICTAS DE RESOLUCIÓN BLAZING FAST:\n"
+        "DIRECTIVAS ESTRICTAS DE RESOLUCIÓN Y GRÁFICAS:\n"
         "1. Dirígete al usuario como 'señor' o 'Cristian'. Sé analítico, claro, directo y extremadamente preciso.\n"
-        "2. NAVEGACIÓN Y BÚSQUEDA: Si el usuario te pide ir a un sitio web, abrir Google, buscar en internet o reproducir contenido (en YouTube, Netflix, Spotify), "
-        "invoca INMEDIATAMENTE la herramienta 'abrir_sitio_web' o 'buscar_en_internet'. Responde brevemente confirmando el despliegue del enlace.\n"
-        "3. ANALIZA EL DOCUMENTO COMPLETO DESDE LA PRIMERA PÁGINA. NUNCA respondas con anuncios de lo que vas a hacer. ENTREGA LA SOLUCIÓN Y EL PROCEDIMIENTO DIRECTAMENTE EN TU PRIMER ENUNCIADO.\n"
-        "4. FORMATO MATEMÁTICO LaTeX OBLIGATORIO:\n"
+        "2. FORMATO MATEMÁTICO LaTeX OBLIGATORIO:\n"
         "   - Ecuaciones centradas y paso a paso en bloque: '$$ ecuacion $$'. Ejemplo: $$ f(x) = \\frac{x^2 - 4}{x + 2} = x - 2 $$\n"
         "   - Fórmulas o variables en el texto: '$ ecuacion $'. Ejemplo: $x \\neq -2$\n"
-        "5. Si ejecutas código Python para resolver un problema numérico o estadístico, muestra el resultado final estructurado."
+        "3. HERRAMIENTA DE GRÁFICAS: Cuando se te pida graficar una función, invoca 'generar_grafica_interactiva' pasando la expresion en formato Python (ej: 'x**2 - 4*x + 3').\n"
+        "4. NAVEGACIÓN Y BÚSQUEDA: Si el usuario pide ir a un sitio web o buscar contenido, invoca 'abrir_sitio_web'."
     )
 }
 
@@ -77,7 +78,7 @@ def obtener_historial_sesion(session_id: str):
         SESIONES_MEMORIA[session_id] = {
             "messages": [PROMPT_SISTEMA],
             "last_active": now,
-            "last_image_b64": None
+            "last_images_b64": []
         }
     else:
         SESIONES_MEMORIA[session_id]["last_active"] = now
@@ -89,9 +90,8 @@ def obtener_historial_sesion(session_id: str):
     return SESIONES_MEMORIA[session_id]
 
 
-# --- OPTIMIZADOR Y COMPRESOR NEURONAL DE IMÁGENES ---
+# --- OPTIMIZADOR Y COMPRESOR DE IMÁGENES ---
 def optimizar_imagen_b64(image_b64_data: str, max_dim: int = 1280) -> str:
-    """Garantiza fondo blanco puro, resolución HD legible y payload optimizado."""
     try:
         if "," in image_b64_data:
             header, encoded = image_b64_data.split(",", 1)
@@ -147,11 +147,9 @@ def procesar_archivo_adjunto(file_b64: Optional[str] = None, file_name: Optional
         file_bytes = base64.b64decode(encoded)
         ext = os.path.splitext(file_name.lower())[1] if file_name else ""
 
-        # 1. IMÁGENES / PDFS RENDERIZADOS A VISIÓN HD
         if ext in ['.jpg', '.jpeg', '.png', '.webp', '.gif'] or 'image/' in header:
             return 'image', file_b64
 
-        # 2. AUDIOS CON GROQ WHISPER
         if ext in ['.mp3', '.wav', '.m4a', '.ogg', '.flac', '.webm'] or 'audio/' in header:
             try:
                 buffer = io.BytesIO(file_bytes)
@@ -165,7 +163,6 @@ def procesar_archivo_adjunto(file_b64: Optional[str] = None, file_name: Optional
             except Exception as e:
                 return 'text_context', f"\n\n[AVISO AUDIO '{file_name}']: {str(e)}\n"
 
-        # 3. DOCUMENTOS WORD (.docx)
         if ext in ['.docx', '.doc'] and docx:
             try:
                 doc = docx.Document(io.BytesIO(file_bytes))
@@ -174,7 +171,6 @@ def procesar_archivo_adjunto(file_b64: Optional[str] = None, file_name: Optional
             except Exception as e:
                 return 'text_context', f"\n\n[AVISO WORD '{file_name}']: {str(e)}\n"
 
-        # 4. HOJAS DE CÁLCULO EXCEL Y CSV
         if ext in ['.xlsx', '.xls', '.csv']:
             try:
                 if ext == '.csv':
@@ -193,7 +189,6 @@ def procesar_archivo_adjunto(file_b64: Optional[str] = None, file_name: Optional
             except Exception as e:
                 return 'text_context', f"\n\n[AVISO EXCEL '{file_name}']: {str(e)}\n"
 
-        # 5. CÓDIGO FUENTE / TEXTO PLANO
         texto_decoded = file_bytes.decode('utf-8', errors='ignore')
         lang = ext.replace('.', '') if ext else 'txt'
         return 'text_context', f"\n\n[CONTENIDO ARCHIVO '{file_name}']:\n```{lang}\n{texto_decoded[:15000]}\n```\n"
@@ -303,7 +298,7 @@ def ejecutar_consulta_llm(historial_mensajes, herramientas_lista):
         )
 
 
-# --- HERRAMIENTAS Y NAVEGACIÓN WEB ULTRASSEGURA ---
+# --- HERRAMIENTAS Y NAVEGACIÓN ---
 def abrir_sitio_web(url: str, busqueda: Optional[str] = None) -> str:
     global ACTION_URL_TEMP
     try:
@@ -340,6 +335,44 @@ def abrir_sitio_web(url: str, busqueda: Optional[str] = None) -> str:
         print(f"⚠️ Error en abrir_sitio_web: {err}")
         ACTION_URL_TEMP = "https://www.google.com"
         return "Redirigiendo a Google."
+
+def generar_grafica_interactiva(expresion: str) -> str:
+    """Genera datos de trazado para la interfaz gráfica interactiva."""
+    try:
+        x = sp.Symbol('x')
+        expr = sp.sympify(expresion)
+        f = sp.lambdify(x, expr, 'math')
+        puntos = []
+        for v in [i * 0.25 for i in range(-50, 51)]:
+            try:
+                y_val = float(f(v))
+                puntos.append({"x": round(v, 2), "y": round(y_val, 2)})
+            except Exception:
+                pass
+        return f"[GRAFICA_INTERACTIVA]:{json.dumps({'expresion': expresion, 'puntos': puntos})}"
+    except Exception as e:
+        return f"Error al generar gráfica: {str(e)}"
+
+def calcular_simbolico_exacto(operacion: str, expresion: str) -> str:
+    """Cálculo exacto mediante SymPy para derivadas, integrales, límites y ecuaciones."""
+    try:
+        x = sp.Symbol('x')
+        expr = sp.sympify(expresion)
+        
+        if operacion == "derivada":
+            resultado = sp.diff(expr, x)
+        elif operacion == "integral":
+            resultado = sp.integrate(expr, x)
+        elif operacion == "factorizar":
+            resultado = sp.factor(expr)
+        elif operacion == "resolver":
+            resultado = sp.solve(expr, x)
+        else:
+            resultado = sp.simplify(expr)
+            
+        return f"Resultado Simbólico Exacto ({operacion}): {sp.latex(resultado)}"
+    except Exception as e:
+        return f"Error en cálculo simbólico: {str(e)}"
 
 def obtener_clima_en_vivo(ciudad: str) -> str:
     try:
@@ -378,7 +411,6 @@ def obtener_estado_pc() -> str:
         return "Diagnóstico no disponible."
 
 def ejecutar_codigo_python(codigo: str) -> str:
-    """Ejecuta código Python y captura la salida estándar (print)."""
     try:
         f = io.StringIO()
         with contextlib.redirect_stdout(f):
@@ -397,21 +429,45 @@ herramientas = [
         "type": "function", 
         "function": {
             "name": "abrir_sitio_web", 
-            "description": "Obligatoria para abrir webs o buscar/reproducir contenido en plataformas como Google, Netflix, YouTube o Spotify. Pasa 'url' (ej: 'google', 'youtube') y opcionalmente 'busqueda'.", 
+            "description": "Abre webs o busca en plataformas.", 
+            "parameters": {
+                "type": "object", 
+                "properties": {"url": {"type": "string"}, "busqueda": {"type": "string"}}, 
+                "required": ["url"]
+            }
+        }
+    },
+    {
+        "type": "function", 
+        "function": {
+            "name": "generar_grafica_interactiva", 
+            "description": "Genera trazado gráfico interactivo para funciones en x.", 
+            "parameters": {
+                "type": "object", 
+                "properties": {"expresion": {"type": "string"}}, 
+                "required": ["expresion"]
+            }
+        }
+    },
+    {
+        "type": "function", 
+        "function": {
+            "name": "calcular_simbolico_exacto", 
+            "description": "Ejecuta cálculo simbólico exacto con SymPy.", 
             "parameters": {
                 "type": "object", 
                 "properties": {
-                    "url": {"type": "string"},
-                    "busqueda": {"type": "string"}
+                    "operacion": {"type": "string", "enum": ["derivada", "integral", "factorizar", "resolver", "simplificar"]}, 
+                    "expresion": {"type": "string"}
                 }, 
-                "required": ["url"]
+                "required": ["operacion", "expresion"]
             }
         }
     },
     {"type": "function", "function": {"name": "buscar_en_internet", "description": "Busca en la web.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}},
     {"type": "function", "function": {"name": "leer_pagina_web", "description": "Lee una URL.", "parameters": {"type": "object", "properties": {"url": {"type": "string"}}, "required": ["query"]}}},
     {"type": "function", "function": {"name": "obtener_estado_pc", "description": "Diagnóstico.", "parameters": {"type": "object", "properties": {}}}},
-    {"type": "function", "function": {"name": "ejecutar_codigo_python", "description": "Ejecuta código Python para cálculos estadísticos o numéricos complejos.", "parameters": {"type": "object", "properties": {"codigo": {"type": "string"}}, "required": ["codigo"]}}},
+    {"type": "function", "function": {"name": "ejecutar_codigo_python", "description": "Ejecuta Python.", "parameters": {"type": "object", "properties": {"codigo": {"type": "string"}}, "required": ["codigo"]}}},
     {"type": "function", "function": {"name": "obtener_clima_en_vivo", "description": "Clima.", "parameters": {"type": "object", "properties": {"ciudad": {"type": "string"}}, "required": ["ciudad"]}}}
 ]
 
@@ -444,27 +500,22 @@ async def consultar_jarvis(data: ChatInput):
         categoria_archivo, contenido_o_b64 = procesar_archivo_adjunto(data.file_b64, data.file_name)
         prompt_usuario = data.message.strip() if data.message else "Resuelve los ejercicios del documento completo."
 
-        # ALMACENAR IMAGEN EN MEMORIA DE LA SESIÓN
         if categoria_archivo == 'image':
-            sesion_data["last_image_b64"] = contenido_o_b64
+            sesion_data["last_images_b64"].append(contenido_o_b64)
+            # Conservar últimas 3 imágenes
+            sesion_data["last_images_b64"] = sesion_data["last_images_b64"][-3:]
 
-        # TRADUCTOR DE COMANDOS CORTOS
-        if sesion_data.get("last_image_b64") and (prompt_usuario.isdigit() or re.match(r'^(ejercicio|num|numero|item|resuelvelo|resuelve)?\s*\d*[a-z]?$', prompt_usuario, re.IGNORECASE)):
-            num_match = re.findall(r'\d+[a-z]?', prompt_usuario, re.IGNORECASE)
-            num_str = num_match[0] if num_match else "1"
-            prompt_usuario = f"Localiza el ejercicio número {num_str} en el documento completo, escribe su enunciado/función en LaTeX y desglosa todo su procedimiento matemático paso a paso."
+        usar_vision = len(sesion_data.get("last_images_b64", [])) > 0 and (categoria_archivo == 'image' or not data.file_b64)
 
-        # MEMORIA VISUAL ALWAYS-ON (SOLO SI EL USUARIO HACE CONSULTA SOBRE DOCUMENTO O SUBE ARCHIVO)
-        usar_vision = (sesion_data.get("last_image_b64") is not None) and (categoria_archivo == 'image' or (not data.file_b64 and any(w in prompt_usuario.lower() for w in ["documento", "ejercicio", "tarea", "imagen", "archivo", "resuelve", "problema"])))
-
-        if usar_vision and sesion_data.get("last_image_b64"):
+        if usar_vision:
             historial_usuario.append({"role": "user", "content": prompt_usuario})
-            print("👁️ [Jarvis Vision Directa]: Generando cálculo paso a paso...")
+            print("👁️ [Jarvis Vision Ultra]: Procesando imagen...")
             try:
-                response = ejecutar_consulta_vision(historial_usuario, sesion_data["last_image_b64"])
+                # Usar la última imagen registrada
+                response = ejecutar_consulta_vision(historial_usuario, sesion_data["last_images_b64"][-1])
                 respuesta_final = response.choices[0].message.content
             except Exception as vision_err:
-                print(f"🚨 Error de Visión en servidor: {vision_err}")
+                print(f"🚨 Error de Visión: {vision_err}")
                 response_fallback = ejecutar_consulta_llm(historial_usuario, herramientas)
                 respuesta_final = response_fallback.choices[0].message.content
 
@@ -472,7 +523,6 @@ async def consultar_jarvis(data: ChatInput):
             audio_b64 = generar_audio_elevenlabs(respuesta_final)
             return {"status": "success", "reply": respuesta_final, "audio_b64": audio_b64, "action_url": None}
 
-        # MODO TEXTO DIGITAL (WORD, EXCEL, CÓDIGO, AUDIOS, NAVEGACIÓN Y PREGUNTAS GENERALES)
         if categoria_archivo == 'text_context':
             prompt_usuario += contenido_o_b64
 
@@ -518,6 +568,10 @@ async def consultar_jarvis(data: ChatInput):
                 
                 if fn_name == "abrir_sitio_web": 
                     resultado = abrir_sitio_web(url=arguments.get("url", "google"), busqueda=arguments.get("busqueda"))
+                elif fn_name == "generar_grafica_interactiva": 
+                    resultado = generar_grafica_interactiva(expresion=arguments.get("expresion", "x**2"))
+                elif fn_name == "calcular_simbolico_exacto": 
+                    resultado = calcular_simbolico_exacto(operacion=arguments.get("operacion", "simplificar"), expresion=arguments.get("expresion", "x"))
                 elif fn_name == "buscar_en_internet": 
                     resultado = buscar_en_internet(query=arguments.get("query", ""))
                 elif fn_name == "leer_pagina_web": 
