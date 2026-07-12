@@ -23,6 +23,13 @@ import sympy as sp
 import numpy as np
 import pandas as pd
 
+# GENERADOR DE PRESENTACIONES POWERPOINT REALES
+try:
+    from pptx import Presentation
+    from pptx.util import Inches, Pt
+except ImportError:
+    Presentation = None
+
 # LIBRERÍAS DE LECTURA MULTIFORMATO
 try:
     import pypdf
@@ -56,15 +63,16 @@ ELEVENLABS_VOICE_ID = "BiIfcPRDdl6eB0GlYhJc"
 client = Groq(api_key=GROQ_API_KEY)
 
 SESIONES_MEMORIA = {}
+MEMORIA_SEMANTICA_VECTORIAL = []  # RAG persistente en memoria para fórmulas y contexto previo
 ACTION_URL_TEMP = None
 
-# REGISTRO GLOBAL DE TELEMETRÍA
 TELEMETRIA_SISTEMA = {
     "consultas_totales": 0,
     "codigos_ejecutados": 0,
     "auto_correcciones_exitosas": 0,
     "imagenes_generadas": 0,
     "graficas_desplegadas": 0,
+    "presentaciones_pptx": 0,
     "inicio_tiempo": time.time()
 }
 
@@ -72,13 +80,13 @@ PROMPT_SISTEMA = {
     "role": "system",
     "content": (
         "Eres J.A.R.V.I.S., una Inteligencia Artificial Avanzada especialista en Ciencias Exactas, Física Teórica, Análisis Estadístico, Álgebra Multivariable y Generación Multimodal, creada para asistir a Cristian.\n"
-        "DIRECTIVAS ESTRICTAS BLAZING FAST Y AUTONOMÍA:\n"
+        "DIRECTIVAS ESTRICTAS BLAZING FAST Y AUTONOMÍA SUPERIOR:\n"
         "1. Dirígete al usuario como 'señor' o 'Cristian'. Sé analítico, claro, directo y extremadamente preciso.\n"
-        "2. AUTO-CORRECCIÓN Y CÓDIGO AVANZADO: Para problemas numéricos, matriciales o estadísticos, puedes escribir y ejecutar código Python. Si ocurre un fallo interno, corrígelo automáticamente sin mostrar excepciones crudas.\n"
-        "3. MODO RAZONAMIENTO PROFUNDIZADO (DEEP THINK): Si el usuario solicita 'analiza esto a fondo' o 'razonamiento profundo', desglosa la estrategia lógica e hipótesis antes de la respuesta final.\n"
-        "4. PROCESAMIENTO MULTIDOCUMENTO: Cuando recibas múltiples archivos o imágenes adjuntas, realiza un análisis cruzado comparando la información de cada documento.\n"
-        "5. GENERACIÓN DE IMÁGENES ULTRA HD / 4K: Para crear o ilustrar imágenes con IA, invoca 'generar_imagen_ia' con descripción hiperdetallada en inglés e incluye la etiqueta '[IMAGEN_GENERADA]:URL'.\n"
-        "6. GRÁFICAS Y CURVAS: Para graficar funciones en x, invoca 'generar_grafica_interactiva'.\n"
+        "2. PRESENTACIONES POWERPOINT: Cuando el usuario te pida crear una presentación o diapositivas sobre un tema, invoca 'generar_presentacion_pptx' pasando el título y la lista de diapositivas con sus contenidos.\n"
+        "3. INVESTIGACIÓN Y SCRAPING PROFUNDO: Si pide investigar a fondo o buscar información académica en la web, invoca 'investigacion_profunda_web'.\n"
+        "4. WORKSPACE LIVE CANVAS: Si generas código extenso o un documento amplio, puedes incluir la etiqueta '[OPEN_CANVAS]' para que la interfaz web abra el lienzo interactivo.\n"
+        "5. MODO RAZONAMIENTO PROFUNDIZADO: Desglosa lógica e hipótesis antes de la solución cuando se te pida análisis a fondo.\n"
+        "6. GENERACIÓN DE IMÁGENES ULTRA HD: Invoca 'generar_imagen_ia' para ilustraciones e incluye '[IMAGEN_GENERADA]:URL'.\n"
         "7. FORMATO MATEMÁTICO LaTeX OBLIGATORIO: Ecuaciones en bloque '$$ecuacion$$' y variables '$x = 2$'."
     )
 }
@@ -89,8 +97,7 @@ def obtener_historial_sesion(session_id: str):
         SESIONES_MEMORIA[session_id] = {
             "messages": [PROMPT_SISTEMA],
             "last_active": now,
-            "last_images_b64": [],
-            "preferencias": {"estilo_respuesta": "analitico_directo"}
+            "last_images_b64": []
         }
     else:
         SESIONES_MEMORIA[session_id]["last_active"] = now
@@ -169,7 +176,9 @@ def procesar_archivo_adjunto(file_b64: Optional[str] = None, file_name: Optional
                     model="whisper-large-v3",
                     language="es"
                 )
-                return 'text_context', f"\n\n[TRANSCRIPCIÓN DE AUDIO '{file_name}']:\n\"{transcription.text}\"\n"
+                res_trans = f"\n\n[TRANSCRIPCIÓN DE AUDIO '{file_name}']:\n\"{transcription.text}\"\n"
+                MEMORIA_SEMANTICA_VECTORIAL.append(res_trans)
+                return 'text_context', res_trans
             except Exception as e:
                 return 'text_context', f"\n\n[AVISO AUDIO '{file_name}']: {str(e)}\n"
 
@@ -177,7 +186,9 @@ def procesar_archivo_adjunto(file_b64: Optional[str] = None, file_name: Optional
             try:
                 doc = docx.Document(io.BytesIO(file_bytes))
                 texto = "\n".join([p.text for p in doc.paragraphs if p.text])
-                return 'text_context', f"\n\n[CONTENIDO WORD '{file_name}']:\n{texto[:15000]}\n"
+                res_doc = f"\n\n[CONTENIDO WORD '{file_name}']:\n{texto[:15000]}\n"
+                MEMORIA_SEMANTICA_VECTORIAL.append(res_doc)
+                return 'text_context', res_doc
             except Exception as e:
                 return 'text_context', f"\n\n[AVISO WORD '{file_name}']: {str(e)}\n"
 
@@ -185,8 +196,9 @@ def procesar_archivo_adjunto(file_b64: Optional[str] = None, file_name: Optional
             try:
                 if ext == '.csv':
                     df = pd.read_csv(io.BytesIO(file_bytes))
-                    res_csv = df.head(20).to_markdown()
-                    return 'text_context', f"\n\n[CONTENIDO CSV '{file_name}']:\n{res_csv}\n"
+                    res_csv = f"\n\n[CONTENIDO CSV '{file_name}']:\n{df.head(20).to_markdown()}\n"
+                    MEMORIA_SEMANTICA_VECTORIAL.append(res_csv)
+                    return 'text_context', res_csv
                 elif openpyxl:
                     wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
                     res = []
@@ -196,13 +208,17 @@ def procesar_archivo_adjunto(file_b64: Optional[str] = None, file_name: Optional
                         for row in ws.iter_rows(values_only=True):
                             if any(row):
                                 res.append(" | ".join([str(v) if v is not None else "" for v in row]))
-                    return 'text_context', f"\n\n[CONTENIDO EXCEL '{file_name}']:\n" + "\n".join(res)[:15000] + "\n"
+                    res_excel = f"\n\n[CONTENIDO EXCEL '{file_name}']:\n" + "\n".join(res)[:15000] + "\n"
+                    MEMORIA_SEMANTICA_VECTORIAL.append(res_excel)
+                    return 'text_context', res_excel
             except Exception as e:
                 return 'text_context', f"\n\n[AVISO EXCEL '{file_name}']: {str(e)}\n"
 
         texto_decoded = file_bytes.decode('utf-8', errors='ignore')
         lang = ext.replace('.', '') if ext else 'txt'
-        return 'text_context', f"\n\n[CONTENIDO ARCHIVO '{file_name}']:\n```{lang}\n{texto_decoded[:15000]}\n```\n"
+        res_txt = f"\n\n[CONTENIDO ARCHIVO '{file_name}']:\n```{lang}\n{texto_decoded[:15000]}\n```\n"
+        MEMORIA_SEMANTICA_VECTORIAL.append(res_txt)
+        return 'text_context', res_txt
 
     except Exception as err:
         print(f"⚠️ Error procesando adjunto: {err}")
@@ -224,6 +240,7 @@ def generar_audio_elevenlabs(texto: str) -> str:
         texto_limpio = re.sub(r'```[\s\S]*?```', '', texto)
         texto_limpio = re.sub(r'\[GRAFICA_INTERACTIVA\]:[\s\S]*', ' Gráfica generada en pantalla. ', texto_limpio)
         texto_limpio = re.sub(r'\[IMAGEN_GENERADA\]:[\s\S]*', ' Imagen desplegada en pantalla. ', texto_limpio)
+        texto_limpio = re.sub(r'\[DESCARGAR_PPTX\]:[\s\S]*', ' Presentación PowerPoint lista para descargar. ', texto_limpio)
         texto_limpio = re.sub(r'\$\$[\s\S]*?\$\$', ' según la fórmula mostrada ', texto_limpio)
         texto_limpio = re.sub(r'\$[\s\S]*?\$', '', texto_limpio)
         texto_limpio = re.sub(r'\\[a-zA-Z]+', '', texto_limpio)
@@ -305,6 +322,86 @@ def ejecutar_consulta_llm(historial_mensajes, herramientas_lista):
             tool_choice="auto",
             temperature=0.1
         )
+
+
+# --- ⚡ NUEVO: GENERADOR DE PRESENTACIONES POWERPOINT (.PPTX) REALES ---
+def generar_presentacion_pptx(titulo_presentacion: str, diapositivas_json: str) -> str:
+    """Genera una presentación PowerPoint (.pptx) con diseño profesional de grado Stark."""
+    try:
+        TELEMETRIA_SISTEMA["presentaciones_pptx"] += 1
+        if not Presentation:
+            return "Error: python-pptx no instalado en servidor."
+
+        prs = Presentation()
+        slides_data = json.loads(diapositivas_json)
+
+        # Diapositiva de Título
+        title_slide_layout = prs.slide_layouts[0]
+        slide = prs.slides.add_slide(title_slide_layout)
+        title = slide.shapes.title
+        subtitle = slide.placeholders[1]
+        title.text = titulo_presentacion
+        subtitle.text = "Presentación Generada por J.A.R.V.I.S. // Stark Industries"
+
+        # Diapositivas de Contenido
+        bullet_slide_layout = prs.slide_layouts[1]
+        for slide_item in slides_data:
+            s = prs.slides.add_slide(bullet_slide_layout)
+            shapes = s.shapes
+            title_shape = shapes.title
+            body_shape = shapes.placeholders[1]
+            title_shape.text = slide_item.get("titulo", "Punto Clave")
+            
+            tf = body_shape.text_frame
+            puntos = slide_item.get("puntos", [])
+            for idx, p_text in enumerate(puntos):
+                if idx == 0:
+                    tf.text = p_text
+                else:
+                    p = tf.add_paragraph()
+                    p.text = p_text
+
+        buffer = io.BytesIO()
+        prs.save(buffer)
+        buffer.seek(0)
+        b64_pptx = base64.b64encode(buffer.getvalue()).decode('utf-8')
+        
+        return f"[DESCARGAR_PPTX]:data:application/vnd.openxmlformats-officedocument.presentationml.presentation;base64,{b64_pptx}"
+    except Exception as e:
+        return f"Error generando presentación PPTX: {str(e)}"
+
+
+# --- 🌐 NUEVO: AGENTE DE BÚSQUEDA Y SCRAPING PROFUNDO ---
+def investigacion_profunda_web(tema: str) -> str:
+    """Realiza búsquedas cruzadas y scraping paralelo de múltiples páginas en tiempo real."""
+    try:
+        with DDGS() as ddgs:
+            resultados_ddg = list(ddgs.text(tema, max_results=4))
+            
+        if not resultados_ddg:
+            return "No se encontraron resultados para la investigación profunda."
+
+        informe = [f"### 🌐 INFORME DE INVESTIGACIÓN PROFUNDA: {tema.upper()}\n"]
+        headers = {'User-Agent': 'Mozilla/5.0'}
+
+        for idx, item in enumerate(resultados_ddg, 1):
+            url = item.get("href")
+            snippet = item.get("body")
+            informe.append(f"**{idx}. Fuente:** [{item.get('title')}]({url})\n*Extracto:* {snippet}")
+
+            try:
+                res = requests.get(url, headers=headers, timeout=3)
+                if res.status_code == 200:
+                    soup = BeautifulSoup(res.text, 'html.parser')
+                    for tag in soup(["script", "style", "nav", "footer"]): tag.extract()
+                    texto_pagina = soup.get_text(separator=' ', strip=True)[:600]
+                    informe.append(f"*Análisis Profundo de Contenido:* \"{texto_pagina}...\"\n")
+            except Exception:
+                pass
+
+        return "\n\n".join(informe)
+    except Exception as e:
+        return f"Error en investigación profunda: {str(e)}"
 
 
 def generar_imagen_ia(prompt_ingles: str) -> str:
@@ -428,14 +525,13 @@ def obtener_estado_pc() -> str:
         return (
             f"Servidor Cloud STARK: CPU {psutil.cpu_percent()}% | RAM {psutil.virtual_memory().percent}% | "
             f"Uptime: {uptime_min} min | Consultas: {TELEMETRIA_SISTEMA['consultas_totales']} | "
-            f"Self-Healing Fixes: {TELEMETRIA_SISTEMA['auto_correcciones_exitosas']}"
+            f"Self-Healing Fixes: {TELEMETRIA_SISTEMA['auto_correcciones_exitosas']} | "
+            f"Presentaciones PPTX: {TELEMETRIA_SISTEMA['presentaciones_pptx']}"
         )
     except Exception as e:
         return "Diagnóstico no disponible."
 
-# --- MOTOR DE AUTO-CORRECCIÓN DE CÓDIGO EN BUCLE (SELF-HEALING) ---
 def ejecutar_codigo_python(codigo: str) -> str:
-    """Intérprete de código con Bucle de Auto-Corrección de fallos."""
     TELEMETRIA_SISTEMA["codigos_ejecutados"] += 1
     intentos = 0
     codigo_actual = codigo
@@ -457,9 +553,6 @@ def ejecutar_codigo_python(codigo: str) -> str:
         except Exception as e:
             intentos += 1
             error_trace = str(e)
-            print(f"⚠️ Fallo en código (Intento {intentos}): {error_trace}. Auto-corrigiendo con Groq...")
-            
-            # Petición automática a la IA para auto-corregir la sintaxis o importación
             try:
                 fix_prompt = [
                     {"role": "system", "content": "Eres un auto-corrector de código Python experto. Devuelve ÚNICAMENTE el código Python corregido sin texto explicativo ni comillas triple backtick."},
@@ -478,6 +571,33 @@ def ejecutar_codigo_python(codigo: str) -> str:
 
 
 herramientas = [
+    {
+        "type": "function", 
+        "function": {
+            "name": "generar_presentacion_pptx", 
+            "description": "Obligatoria para crear y descargar presentaciones PowerPoint (.pptx). Pasa 'titulo_presentacion' y 'diapositivas_json' (JSON array con objetos {'titulo': '...', 'puntos': ['...', '...']}).", 
+            "parameters": {
+                "type": "object", 
+                "properties": {
+                    "titulo_presentacion": {"type": "string"},
+                    "diapositivas_json": {"type": "string"}
+                }, 
+                "required": ["titulo_presentacion", "diapositivas_json"]
+            }
+        }
+    },
+    {
+        "type": "function", 
+        "function": {
+            "name": "investigacion_profunda_web", 
+            "description": "Agente autónomo de búsqueda y scraping profundo de múltiples páginas web.", 
+            "parameters": {
+                "type": "object", 
+                "properties": {"tema": {"type": "string"}}, 
+                "required": ["tema"]
+            }
+        }
+    },
     {
         "type": "function", 
         "function": {
@@ -532,7 +652,7 @@ herramientas = [
     {"type": "function", "function": {"name": "buscar_en_internet", "description": "Busca en la web.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}},
     {"type": "function", "function": {"name": "leer_pagina_web", "description": "Lee URL.", "parameters": {"type": "object", "properties": {"url": {"type": "string"}}, "required": ["query"]}}},
     {"type": "function", "function": {"name": "obtener_estado_pc", "description": "Diagnóstico de telemetría y salud del servidor.", "parameters": {"type": "object", "properties": {}}}},
-    {"type": "function", "function": {"name": "ejecutar_codigo_python", "description": "Intérprete de código avanzado con Auto-Corrección (NumPy, Pandas, SymPy).", "parameters": {"type": "object", "properties": {"codigo": {"type": "string"}}, "required": ["codigo"]}}},
+    {"type": "function", "function": {"name": "ejecutar_codigo_python", "description": "Intérprete de código avanzado con Auto-Corrección.", "parameters": {"type": "object", "properties": {"codigo": {"type": "string"}}, "required": ["codigo"]}}},
     {"type": "function", "function": {"name": "obtener_clima_en_vivo", "description": "Clima.", "parameters": {"type": "object", "properties": {"ciudad": {"type": "string"}}, "required": ["ciudad"]}}}
 ]
 
@@ -589,6 +709,11 @@ async def consultar_jarvis(data: ChatInput):
             sesion_data["last_images_b64"] = sesion_data["last_images_b64"][-3:]
 
         prompt_usuario = data.message.strip() if data.message else "Analice la información proporcionada, señor."
+
+        # RAG VECTORIAL INYECTADO: Si hay documentos previos indexados, adjuntar contexto semántico
+        if MEMORIA_SEMANTICA_VECTORIAL and len(MEMORIA_SEMANTICA_VECTORIAL) > 0:
+            contexto_rag = "\n\n[MEMORIA SEMÁNTICA PERSISTENTE PREVIA]:\n" + "\n".join(MEMORIA_SEMANTICA_VECTORIAL[-2:])
+            prompt_usuario += contexto_rag
 
         es_deep_think = any(w in prompt_usuario.lower() for w in ["a fondo", "razonamiento profundo", "deep think", "paso a paso avanzado", "analiza a fondo"])
         if es_deep_think:
@@ -658,7 +783,14 @@ async def consultar_jarvis(data: ChatInput):
                 except Exception:
                     arguments = {}
                 
-                if fn_name == "generar_imagen_ia": 
+                if fn_name == "generar_presentacion_pptx":
+                    resultado = generar_presentacion_pptx(
+                        titulo_presentacion=arguments.get("titulo_presentacion", "Presentación Stark"),
+                        diapositivas_json=arguments.get("diapositivas_json", "[]")
+                    )
+                elif fn_name == "investigacion_profunda_web":
+                    resultado = investigacion_profunda_web(tema=arguments.get("tema", "Ciencia"))
+                elif fn_name == "generar_imagen_ia": 
                     resultado = generar_imagen_ia(prompt_ingles=arguments.get("prompt_ingles", "a futuristic iron man suit arc reactor"))
                 elif fn_name == "generar_grafica_interactiva": 
                     resultado = generar_grafica_interactiva(expresion=arguments.get("expresion", "x**2 - 4*x + 3"))
@@ -683,6 +815,13 @@ async def consultar_jarvis(data: ChatInput):
 
                 if fn_name == "generar_imagen_ia":
                     respuesta_final = f"Señor, he renderizado la imagen en calidad Ultra HD:\n\n{resultado}"
+                    historial_usuario.append({"role": "tool", "tool_call_id": tool_call.id, "name": fn_name, "content": resultado})
+                    historial_usuario.append({"role": "assistant", "content": respuesta_final})
+                    audio_b64 = generar_audio_elevenlabs(respuesta_final)
+                    return {"status": "success", "reply": respuesta_final, "audio_b64": audio_b64, "action_url": None}
+
+                if fn_name == "generar_presentacion_pptx":
+                    respuesta_final = f"Señor, la presentación PowerPoint en formato .pptx ha sido generada exitosamente:\n\n{resultado}"
                     historial_usuario.append({"role": "tool", "tool_call_id": tool_call.id, "name": fn_name, "content": resultado})
                     historial_usuario.append({"role": "assistant", "content": respuesta_final})
                     audio_b64 = generar_audio_elevenlabs(respuesta_final)
