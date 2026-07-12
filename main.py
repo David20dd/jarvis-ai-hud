@@ -23,10 +23,15 @@ import sympy as sp
 import numpy as np
 import pandas as pd
 
-# GENERADOR DE PRESENTACIONES POWERPOINT REALES Y EXCEL
+# GENERADOR DE DOCUMENTOS Y PRESENTACIONES REALES
+try:
+    import docx
+    from docx.shared import Inches, Pt, RGBColor
+except ImportError:
+    docx = None
+
 try:
     from pptx import Presentation
-    from pptx.util import Inches, Pt
 except ImportError:
     Presentation = None
 
@@ -35,16 +40,10 @@ try:
 except ImportError:
     openpyxl = None
 
-# LIBRERÍAS DE LECTURA MULTIFORMATO
 try:
     import pypdf
 except ImportError:
     pypdf = None
-
-try:
-    import docx
-except ImportError:
-    docx = None
 
 app = FastAPI()
 
@@ -74,19 +73,21 @@ TELEMETRIA_SISTEMA = {
     "graficas_desplegadas": 0,
     "presentaciones_pptx": 0,
     "reportes_excel": 0,
+    "documentos_word": 0,
     "inicio_tiempo": time.time()
 }
 
 PROMPT_SISTEMA = {
     "role": "system",
     "content": (
-        "Eres J.A.R.V.I.S., una Inteligencia Artificial Avanzada especialista en Ciencias Exactas, Física Teórica, Análisis de Datos y Generación Multimodal, creada para asistir a Cristian.\n"
+        "Eres J.A.R.V.I.S. Mark V, una Inteligencia Artificial Avanzada especialista en Ciencias Exactas, Física Teórica, Análisis de Datos y Generación Multimodal, creada para asistir a Cristian.\n"
         "DIRECTIVAS ESTRICTAS DE AUTONOMÍA BLAZING FAST:\n"
         "1. Dirígete al usuario como 'señor' o 'Cristian'. Sé analítico, claro, directo y extremadamente preciso.\n"
-        "2. MERCADO FINANCIERO: Si el usuario pregunta por criptomonedas o finanzas, invoca 'obtener_mercado_cripto'.\n"
-        "3. WORKSPACE LIVE CANVAS: Si generas un informe extenso o código, puedes incluir la etiqueta '[OPEN_CANVAS]'.\n"
-        "4. GENERACIÓN DE IMÁGENES ULTRA HD: Invoca 'generar_imagen_ia' e incluye '[IMAGEN_GENERADA]:URL'.\n"
-        "5. FORMATO MATEMÁTICO LaTeX OBLIGATORIO: Ecuaciones en bloque '$$ ecuacion $$' y variables '$ x = 2 $'."
+        "2. DOCUMENTOS WORD: Si el usuario pide un informe o documento en Word, invoca 'generar_documento_word'.\n"
+        "3. MERCADO FINANCIERO: Si pregunta por precios cripto, invoca 'obtener_mercado_cripto'.\n"
+        "4. WORKSPACE LIVE CANVAS: Si generas un informe extenso o código, puedes incluir la etiqueta '[OPEN_CANVAS]'.\n"
+        "5. GENERACIÓN DE IMÁGENES ULTRA HD: Invoca 'generar_imagen_ia' e incluye '[IMAGEN_GENERADA]:URL'.\n"
+        "6. FORMATO MATEMÁTICO LaTeX OBLIGATORIO: Ecuaciones en bloque '$$ecuacion$$' y variables '$x = 2$'."
     )
 }
 
@@ -199,6 +200,7 @@ def generar_audio_elevenlabs(texto: str) -> str:
         texto_limpio = re.sub(r'\[IMAGEN_GENERADA\]:[\s\S]*', ' Imagen desplegada en pantalla. ', texto_limpio)
         texto_limpio = re.sub(r'\[DESCARGAR_PPTX\]:[\s\S]*', ' Presentación PowerPoint lista para descargar. ', texto_limpio)
         texto_limpio = re.sub(r'\[DESCARGAR_EXCEL\]:[\s\S]*', ' Archivo Excel listo para descargar. ', texto_limpio)
+        texto_limpio = re.sub(r'\[DESCARGAR_WORD\]:[\s\S]*', ' Documento Word listo para descargar. ', texto_limpio)
         texto_limpio = re.sub(r'\[OPEN_CANVAS\]', '', texto_limpio)
         texto_limpio = re.sub(r'\$\$[\s\S]*?\$\$', ' según la fórmula mostrada ', texto_limpio)
         texto_limpio = re.sub(r'\$[\s\S]*?\$', '', texto_limpio)
@@ -278,9 +280,66 @@ def ejecutar_consulta_llm(historial_mensajes, herramientas_lista):
         )
 
 
-# --- ⚡ NUEVAS FUNCIONES DE GENERACIÓN DIRECTA (ANTI-ALUCINACIÓN) ---
+# --- ⚡ NUEVA FUNCIÓN: GENERADOR DE DOCUMENTOS WORD (.DOCX) ---
+def generar_documento_word(tema: str) -> str:
+    """Genera un archivo ejecutable Word (.docx) formateado profesionalmente."""
+    try:
+        TELEMETRIA_SISTEMA["documentos_word"] += 1
+        if not docx: return "Error: librería python-docx no instalada."
+        
+        doc = docx.Document()
+        
+        # Título
+        p_title = doc.add_paragraph()
+        run_title = p_title.add_run(f"INFORME TÉCNICO: {tema.upper()}")
+        run_title.font.size = Pt(20)
+        run_title.font.bold = True
+        run_title.font.color.rgb = RGBColor(0, 150, 220)
+        
+        doc.add_paragraph(f"Documento Generado Autónomamente por J.A.R.V.I.S. Stark Technologies\nFecha de emisión: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+        doc.add_heading("1. Resumen Ejecutivo", level=1)
+        doc.add_paragraph(f"El presente informe detalla el análisis analítico y de fundamentos respecto a '{tema}'. Este documento ha sido sintetizado para Cristian.")
+        
+        doc.add_heading("2. Fundamentos y Desarrollo", level=1)
+        doc.add_paragraph(f"Dentro del marco conceptual de {tema}, se destacan los siguientes parámetros de estudio:")
+        doc.add_paragraph("• Principios de operación y modelos científicos.", style='List Bullet')
+        doc.add_paragraph("• Formulación de hipótesis y ecuaciones de estado.", style='List Bullet')
+        doc.add_paragraph("• Implementación práctica en entornos de ingeniería.", style='List Bullet')
+
+        doc.add_heading("3. Conclusiones y Próximos Pasos", level=1)
+        doc.add_paragraph("Los datos analizados demuestran la viabilidad técnica y eficiencia del modelo evaluado.")
+
+        buffer = io.BytesIO()
+        doc.save(buffer)
+        b64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+        return f"[DESCARGAR_WORD]:data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,{b64}"
+    except Exception as e:
+        return f"Error Word: {str(e)}"
+
+
+def obtener_mercado_cripto(criptomoneda: str) -> str:
+    """Obtiene precios usando la API de Coinbase (Amigable con servidores Cloud en EE.UU)"""
+    try:
+        symbol = criptomoneda.upper().strip()
+        if symbol in ["BITCOIN", "BTC"]: symbol = "BTC"
+        elif symbol in ["ETHEREUM", "ETH"]: symbol = "ETH"
+        elif symbol in ["SOLANA", "SOL"]: symbol = "SOL"
+
+        url = f"https://api.coinbase.com/v2/prices/{symbol}-USD/spot"
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        res = requests.get(url, headers=headers, timeout=5)
+        
+        if res.status_code == 200:
+            data = res.json()
+            precio = float(data['data']['amount'])
+            return f"El precio actual de **{symbol}** en el mercado financiero es de **${precio:,.2f} USD**."
+        else:
+            return f"Error en la conexión financiera. Status: {res.status_code}"
+    except Exception as e:
+        return f"No se pudo obtener la cotización para {criptomoneda} debido a un bloqueo de red."
+
+
 def generar_presentacion_pptx(tema: str) -> str:
-    """Genera PowerPoint algorítmico inmune a fallos."""
     try:
         TELEMETRIA_SISTEMA["presentaciones_pptx"] += 1
         if not Presentation: return "Error: librería python-pptx no instalada."
@@ -314,7 +373,6 @@ def generar_presentacion_pptx(tema: str) -> str:
         return f"Error PPTX: {str(e)}"
 
 def generar_reporte_excel(tema: str) -> str:
-    """Genera Archivo Excel tabulado."""
     try:
         TELEMETRIA_SISTEMA["reportes_excel"] += 1
         if not openpyxl: return "Error: openpyxl no está instalado."
@@ -334,7 +392,6 @@ def generar_reporte_excel(tema: str) -> str:
         return f"Error Excel: {str(e)}"
 
 def investigacion_profunda_web(tema: str) -> str:
-    """Investigación web infalible."""
     try:
         informe = [f"### 🌐 INFORME DE INVESTIGACIÓN PROFUNDA: {tema.upper()}\n"]
         try:
@@ -368,27 +425,6 @@ def generar_imagen_ia(prompt_ingles: str) -> str:
         return f"[IMAGEN_GENERADA]:{img_url}"
     except Exception as e:
         return f"Error generando imagen: {str(e)}"
-
-def obtener_mercado_cripto(criptomoneda: str) -> str:
-    """Obtiene precios usando la API de Coinbase (Amigable con servidores Cloud en EE.UU)"""
-    try:
-        symbol = criptomoneda.upper().strip()
-        if symbol in ["BITCOIN", "BTC"]: symbol = "BTC"
-        elif symbol in ["ETHEREUM", "ETH"]: symbol = "ETH"
-        elif symbol in ["SOLANA", "SOL"]: symbol = "SOL"
-
-        url = f"https://api.coinbase.com/v2/prices/{symbol}-USD/spot"
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        res = requests.get(url, headers=headers, timeout=5)
-        
-        if res.status_code == 200:
-            data = res.json()
-            precio = float(data['data']['amount'])
-            return f"El precio actual de **{symbol}** en el mercado financiero es de **${precio:,.2f} USD**."
-        else:
-            return f"Error en la conexión financiera. Status: {res.status_code}"
-    except Exception as e:
-        return f"No se pudo obtener la cotización para {criptomoneda} debido a un bloqueo de red."
 
 def generar_grafica_interactiva(expresion: str) -> str:
     try:
@@ -468,11 +504,20 @@ async def consultar_jarvis(data: ChatInput):
             historial_usuario = sesion_data["messages"]
 
         prompt_usuario = data.message.strip() if data.message else "Analice la información, señor."
-
-        # === 🛡️ ENRUTADOR DIRECTO ANTI-ALUCINACIÓN (CERO FALLOS) ===
         prompt_lower = prompt_usuario.lower()
 
-        # 1. Interceptor de Cotizaciones Cripto / Mercado Financiero
+        # === 🛡️ ENRUTADOR DIRECTO ANTI-ALUCINACIÓN (CERO FALLOS) ===
+
+        # 1. Interceptor de Documentos Word (.docx)
+        if "word" in prompt_lower or "informe en word" in prompt_lower or "documento word" in prompt_lower:
+            tema_extr = prompt_usuario.lower().split("sobre")[-1].strip()
+            if len(tema_extr) < 3: tema_extr = "Análisis Académico"
+            res = generar_documento_word(tema_extr.title())
+            resp = f"Señor, he redactado el informe y el archivo Word (.docx) está listo:\n\n{res}"
+            historial_usuario.append({"role": "assistant", "content": resp})
+            return {"status": "success", "reply": resp, "audio_b64": generar_audio_elevenlabs(resp), "action_url": None}
+
+        # 2. Interceptor de Cotizaciones Cripto / Mercado Financiero
         if any(w in prompt_lower for w in ["bitcoin", "btc", "ethereum", "eth", "solana", "sol", "precio del", "precio de"]):
             if "eth" in prompt_lower or "ethereum" in prompt_lower:
                 res = obtener_mercado_cripto("ETH")
@@ -485,7 +530,7 @@ async def consultar_jarvis(data: ChatInput):
             historial_usuario.append({"role": "assistant", "content": resp})
             return {"status": "success", "reply": resp, "audio_b64": generar_audio_elevenlabs(resp), "action_url": None}
 
-        # 2. Interceptor de Excel
+        # 3. Interceptor de Excel
         if "excel" in prompt_lower or "hoja de cálculo" in prompt_lower:
             tema_extr = prompt_usuario.lower().split("sobre")[-1].strip()
             if len(tema_extr) < 3: tema_extr = "Datos Generales"
@@ -494,7 +539,7 @@ async def consultar_jarvis(data: ChatInput):
             historial_usuario.append({"role": "assistant", "content": resp})
             return {"status": "success", "reply": resp, "audio_b64": generar_audio_elevenlabs(resp), "action_url": None}
 
-        # 3. Interceptor de PowerPoint
+        # 4. Interceptor de PowerPoint
         if "presentación" in prompt_lower or "diapositiva" in prompt_lower or "powerpoint" in prompt_lower or "pptx" in prompt_lower:
             tema_extr = prompt_usuario.lower().split("sobre")[-1].replace("diapositivas", "").replace("de", "").strip()
             if len(tema_extr) < 3: tema_extr = "Investigación"
@@ -503,7 +548,7 @@ async def consultar_jarvis(data: ChatInput):
             historial_usuario.append({"role": "assistant", "content": resp})
             return {"status": "success", "reply": resp, "audio_b64": generar_audio_elevenlabs(resp), "action_url": None}
 
-        # 4. Interceptor de Investigación Profunda
+        # 5. Interceptor de Investigación Profunda
         if "investiga" in prompt_lower and ("fondo" in prompt_lower or "sobre" in prompt_lower):
             tema_extr = prompt_usuario.lower().split("sobre")[-1].strip()
             if len(tema_extr) < 3: tema_extr = "Física Teórica"
