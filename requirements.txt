@@ -11,3 +11,7 @@ python-docx
 openpyxl
 pillow
 sympy
+numpy
+pandas
+scipy
+tabulate
