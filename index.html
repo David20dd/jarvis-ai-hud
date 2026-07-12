@@ -3,9 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>J.A.R.V.I.S. // STARK HUD MK-IV</title>
-    
-    <!-- 🔤 FUENTES SCI-FI STARK -->
+    <title>J.A.R.V.I.S. // STARK HUD MARK-V</title>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
     
     <!-- 🧮 MATHJAX 3 -->
@@ -40,10 +38,9 @@
             --stark-amber: #ffb700;
             --stark-green: #00ff88;
             --stark-red: #ff3366;
-            --stark-dark: #03060a;
-            --stark-glass: rgba(8, 16, 28, 0.82);
+            --stark-dark: #020509;
+            --stark-glass: rgba(6, 14, 26, 0.85);
             --stark-border: rgba(0, 242, 254, 0.35);
-            --stark-glow: rgba(0, 242, 254, 0.25);
         }
 
         * { 
@@ -57,7 +54,7 @@
         body {
             background-color: var(--stark-dark);
             background-image: 
-                radial-gradient(circle at 50% 20%, rgba(0, 242, 254, 0.12) 0%, transparent 65%),
+                radial-gradient(circle at 50% 20%, rgba(0, 242, 254, 0.15) 0%, transparent 60%),
                 linear-gradient(rgba(0, 242, 254, 0.04) 1px, transparent 1px),
                 linear-gradient(90deg, rgba(0, 242, 254, 0.04) 1px, transparent 1px);
             background-size: 100% 100%, 30px 30px, 30px 30px;
@@ -72,6 +69,25 @@
         }
 
         @media (min-width: 600px) { body { padding: 15px; } }
+
+        /* 🔒 PORTADA DE BIENVENIDA Y ESCANEO BIOMÉTRICO */
+        .splash-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #010306; z-index: 999; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; transition: opacity 0.8s ease, visibility 0.8s;
+        }
+        .splash-screen.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+        
+        .biometric-ring {
+            width: 140px; height: 140px; border-radius: 50%;
+            border: 2px dashed var(--stark-cyan); animation: spinRing 4s linear infinite;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 0 35px rgba(0, 242, 254, 0.4); margin-bottom: 25px;
+        }
+        @keyframes spinRing { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        .splash-title { font-family: 'Orbitron', sans-serif; font-size: 1.4rem; letter-spacing: 3px; color: var(--stark-cyan); text-shadow: 0 0 15px var(--stark-cyan); margin-bottom: 10px; }
+        .splash-sub { font-size: 0.85rem; color: rgba(209, 247, 255, 0.7); letter-spacing: 1px; }
 
         .jarvis-container {
             width: 100%; 
@@ -94,7 +110,6 @@
 
         .chat-section { flex: 1; display: flex; flex-direction: column; height: 100%; overflow: hidden; position: relative; }
 
-        /* 🎨 STARK LIVE CANVAS WORKSPACE LATERAL */
         .workspace-canvas {
             width: 0; transition: width 0.4s cubic-bezier(0.16, 1, 0.3, 1); background: rgba(2, 5, 10, 0.95);
             display: flex; flex-direction: column; overflow: hidden; border-left: 1px solid var(--stark-cyan);
@@ -125,37 +140,8 @@
             text-shadow: 0 0 10px rgba(0, 242, 254, 0.5);
         }
 
-        /* REACTOR ARC DINÁMICO */
-        .arc-reactor {
-            width: 22px; 
-            height: 22px; 
-            border-radius: 50%;
-            background: radial-gradient(circle, #ffffff 0%, var(--stark-cyan) 60%, transparent 100%);
-            border: 2px solid var(--stark-cyan);
-            box-shadow: 0 0 15px var(--stark-cyan);
-            transition: all 0.4s ease;
-            flex-shrink: 0;
-            position: relative;
-        }
-
-        .arc-reactor::after {
-            content: '';
-            position: absolute;
-            top: -4px; left: -4px; right: -4px; bottom: -4px;
-            border-radius: 50%;
-            border: 1px dashed var(--stark-cyan);
-            animation: spinReactor 6s linear infinite;
-        }
-
-        @keyframes spinReactor { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
-        .arc-reactor.state-ready { background: var(--stark-cyan); box-shadow: 0 0 18px var(--stark-cyan); }
-        .arc-reactor.state-listening { background: var(--stark-red); border-color: var(--stark-red); box-shadow: 0 0 25px var(--stark-red); animation: pulseListening 0.8s infinite alternate; }
-        .arc-reactor.state-processing { background: var(--stark-amber); border-color: var(--stark-amber); box-shadow: 0 0 22px var(--stark-amber); }
-        .arc-reactor.state-speaking { background: var(--stark-green); border-color: var(--stark-green); box-shadow: 0 0 25px var(--stark-green); animation: speakGlow 0.4s infinite alternate; }
-
-        @keyframes pulseListening { 0% { transform: scale(0.95); } 100% { transform: scale(1.2); } }
-        @keyframes speakGlow { 0% { transform: scale(1); filter: brightness(1); } 100% { transform: scale(1.25); filter: brightness(1.5); } }
+        /* 🌌 CANVAS PARTICULAR DEL NÚCLEO HOLOGRÁFICO 3D */
+        #core3DCanvas { width: 38px; height: 38px; flex-shrink: 0; border-radius: 50%; filter: drop-shadow(0 0 8px var(--stark-cyan)); }
 
         .status-badge { font-size: 0.78rem; color: rgba(209, 247, 255, 0.7); letter-spacing: 1px; display: flex; align-items: center; gap: 8px; }
 
@@ -297,14 +283,23 @@
 </head>
 <body>
 
+    <!-- PORTADA BIOMÉTRICA -->
+    <div class="splash-screen" id="splashScreen">
+        <div class="biometric-ring">
+            <svg width="60" height="60" viewBox="0 0 24 24" fill="#00f2fe">
+                <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8s0 0 0 0z"/>
+            </svg>
+        </div>
+        <div class="splash-title">J.A.R.V.I.S. MARK V</div>
+        <div class="splash-sub" id="splashStatus">AUTENTICANDO CRISTIAN...</div>
+    </div>
+
     <div class="jarvis-container" id="mainContainer">
-        
-        <!-- SECCIÓN DE CHAT PRINCIPAL -->
         <div class="chat-section">
             <div class="jarvis-header">
                 <div class="header-title">
-                    <div class="arc-reactor state-ready" id="reactor"></div>
-                    J.A.R.V.I.S. // HUD STARK MK-IV
+                    <canvas id="core3DCanvas"></canvas>
+                    J.A.R.V.I.S. // MARK V
                 </div>
                 <div class="status-badge" id="sys-status">
                     <button class="dash-btn" onclick="toggleCanvasWorkspace()">🎨 CANVAS</button>
@@ -313,7 +308,6 @@
                 </div>
             </div>
 
-            <!-- OVERLAY DE TELEMETRÍA -->
             <div class="dash-overlay" id="dashOverlay">
                 <div class="dash-title">
                     <span>📊 TELEMETRÍA Y AUTONOMÍA DEL SERVIDOR</span>
@@ -325,7 +319,7 @@
             </div>
 
             <div class="chat-box" id="chatBox">
-                <div class="message jarvis-message">Sistemas en línea, señor Cristian. Generador Multimodal, Agente Financiero, Búsqueda Académica e Interceptor Stark activos. ¿En qué le puedo asistir hoy?</div>
+                <div class="message jarvis-message">Sistemas Mark V en línea, señor Cristian. Núcleo Holográfico 3D, Generador Word/PPTX/Excel y Autonomía activados. ¿En qué le puedo asistir hoy?</div>
             </div>
 
             <div class="preview-bar" id="previewBar">
@@ -355,7 +349,6 @@
             </div>
         </div>
 
-        <!-- 🎨 SECCIÓN DE LIENZO WORKSPACE CANVAS LATERAL -->
         <div class="workspace-canvas" id="workspaceCanvas">
             <div class="workspace-header">
                 <span>🎨 STARK LIVE CANVAS WORKSPACE</span>
@@ -371,6 +364,65 @@
     <script>
         const API_URL = "https://jarvis-ai-hud.onrender.com/api/jarvis";
 
+        /* 🔒 ANIMACIÓN DE PORTADA BIOMÉTRICA */
+        window.addEventListener("load", () => {
+            setTimeout(() => {
+                document.getElementById("splashStatus").innerText = "ACCESO PERMITIDO // CRISTIAN";
+                setTimeout(() => {
+                    document.getElementById("splashScreen").classList.add("hidden");
+                }, 600);
+            }, 1000);
+        });
+
+        /* 🌌 MOTOR DEL NÚCLEO HOLOGRÁFICO 3D EN CANVAS */
+        const coreCanvas = document.getElementById("core3DCanvas");
+        const ctx3D = coreCanvas.getContext("2d");
+        coreCanvas.width = 38; coreCanvas.height = 38;
+
+        let numParticles = 24;
+        let particles = [];
+        let estadoCore = "ready"; // ready, processing, speaking, listening
+
+        for (let i = 0; i < numParticles; i++) {
+            particles.push({
+                angle: (i / numParticles) * Math.PI * 2,
+                radius: 12 + Math.random() * 4,
+                speed: 0.03 + Math.random() * 0.02,
+                size: 1.5 + Math.random() * 1.5
+            });
+        }
+
+        function render3DCore() {
+            ctx3D.clearRect(0, 0, 38, 38);
+            const cx = 19, cy = 19;
+
+            let colorHex = "#00f2fe";
+            if (estadoCore === "processing") colorHex = "#ffb700";
+            if (estadoCore === "speaking") colorHex = "#00ff88";
+            if (estadoCore === "listening") colorHex = "#ff3366";
+
+            // Núcleo Central
+            ctx3D.beginPath();
+            ctx3D.arc(cx, cy, 5, 0, Math.PI * 2);
+            ctx3D.fillStyle = colorHex;
+            ctx3D.fill();
+
+            // Partículas orbitales 3D
+            particles.forEach((p) => {
+                p.angle += (estadoCore === "processing" ? p.speed * 2.5 : p.speed);
+                let x = cx + Math.cos(p.angle) * p.radius;
+                let y = cy + Math.sin(p.angle) * (p.radius * 0.5); // Elipse 3D
+
+                ctx3D.beginPath();
+                ctx3D.arc(x, y, p.size, 0, Math.PI * 2);
+                ctx3D.fillStyle = colorHex;
+                ctx3D.fill();
+            });
+
+            requestAnimationFrame(render3DCore);
+        }
+        render3DCore();
+
         if (window.pdfjsLib) {
             pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
         }
@@ -378,7 +430,6 @@
         const chatBox = document.getElementById("chatBox");
         const userInput = document.getElementById("userInput");
         const sysStatus = document.getElementById("sys-status");
-        const reactor = document.getElementById("reactor");
         const micBtn = document.getElementById("micBtn");
         
         const previewBar = document.getElementById("previewBar");
@@ -442,7 +493,7 @@
         }
 
         function setEstado(estado, texto) {
-            reactor.className = `arc-reactor state-${estado}`;
+            estadoCore = estado;
             sysStatus.innerText = texto;
             if (estado === 'ready') sysStatus.style.color = "rgba(209, 247, 255, 0.7)";
             if (estado === 'listening') sysStatus.style.color = "var(--stark-red)";
@@ -465,12 +516,12 @@
                     dashMetrics.innerHTML = `
                         <strong>⚡ ESTADO DEL SISTEMA Y TELEMETRÍA EN VIVO:</strong><br/>
                         • Consultas Totales Atendidas: <strong>${t.consultas_totales || 0}</strong><br/>
+                        • Documentos Word (.docx) Creados: <strong>${t.documentos_word || 0}</strong><br/>
+                        • Presentaciones PowerPoint (.pptx): <strong>${t.presentaciones_pptx || 0}</strong><br/>
+                        • Archivos Excel (.xlsx) Generados: <strong>${t.reportes_excel || 0}</strong><br/>
                         • Scripts de Código Ejecutados: <strong>${t.codigos_ejecutados || 0}</strong><br/>
                         • Auto-Correcciones Exitosas (Self-Healing): <strong style="color:var(--stark-green)">${t.auto_correcciones_exitosas || 0}</strong><br/>
-                        • Presentaciones PowerPoint PPTX: <strong>${t.presentaciones_pptx || 0}</strong><br/>
-                        • Archivos Excel Generados: <strong>${t.reportes_excel || 0}</strong><br/>
                         • Imágenes Ultra HD Generadas: <strong>${t.imagenes_generadas || 0}</strong><br/>
-                        • Gráficas y Curvas Desplegadas: <strong>${t.graficas_desplegadas || 0}</strong><br/>
                         • Servidor: <strong>Online en Render Cloud</strong>
                     `;
                 } catch(e) {
@@ -602,9 +653,7 @@
         function apagarMicrofono() {
             isListening = false;
             micBtn.classList.remove("active");
-            if (reactor.classList.contains("state-listening")) {
-                setEstado('ready', 'ONLINE');
-            }
+            setEstado('ready', 'ONLINE');
         }
 
         userInput.addEventListener("keypress", (e) => { if (e.key === "Enter") enviarMensaje(); });
@@ -616,9 +665,10 @@
             let textoLimpio = texto.replace(/```[\s\S]*?```/g, " Código desplegado. ")
                                    .replace(/\[IMAGEN_GENERADA\]:[\s\S]*/g, " Imagen generada en pantalla. ")
                                    .replace(/\[GRAFICA_INTERACTIVA\]:[\s\S]*/g, " Gráfica generada en pantalla. ")
+                                   .replace(/\[DESCARGAR_WORD\]:[\s\S]*/g, " Documento Word listo para descargar. ")
                                    .replace(/\[DESCARGAR_PPTX\]:[\s\S]*/g, " Presentación PowerPoint lista para descargar. ")
                                    .replace(/\[DESCARGAR_EXCEL\]:[\s\S]*/g, " Archivo Excel listo para descargar. ")
-                                   .replace(/\$\$[\s\S]*?\$\$/g, " la ecuación mostrada en pantalla ")
+                                   .replace(/\$\$[\s\S]*?\$\$/g, " según la fórmula mostrada ")
                                    .replace(/\$[\s\S]*?\$/, "")
                                    .replace(/\\[a-zA-Z]+/g, " ")
                                    .replace(/[*_#`{}]/g, "");
@@ -640,7 +690,23 @@
         function tipoEscribir(elemento, texto, actionUrl, callback) {
             let i = 0; elemento.innerText = "";
             
-            // Renderizado de Descarga PPTX
+            // Renderizado WORD
+            if (texto.includes("[DESCARGAR_WORD]:")) {
+                const parts = texto.split("[DESCARGAR_WORD]:");
+                elemento.innerText = parts[0] + "\nDesplegando documento Word:";
+                const linkWord = document.createElement("a");
+                linkWord.href = parts[1].trim();
+                linkWord.download = "Jarvis_Informe_Stark.docx";
+                linkWord.className = "hud-link-btn";
+                linkWord.innerText = "📝 DESCARGAR DOCUMENTO (.DOCX)";
+                elemento.appendChild(document.createElement("br"));
+                elemento.appendChild(linkWord);
+                evaluarYAgregarBotonesExportacion(elemento, texto);
+                if (callback) callback();
+                return;
+            }
+
+            // Renderizado PPTX
             if (texto.includes("[DESCARGAR_PPTX]:")) {
                 const parts = texto.split("[DESCARGAR_PPTX]:");
                 elemento.innerText = parts[0] + "\nDesplegando archivo PowerPoint:";
@@ -656,7 +722,7 @@
                 return;
             }
 
-            // Renderizado de Descarga EXCEL
+            // Renderizado EXCEL
             if (texto.includes("[DESCARGAR_EXCEL]:")) {
                 const parts = texto.split("[DESCARGAR_EXCEL]:");
                 elemento.innerText = parts[0] + "\nDesplegando reporte Excel:";
