@@ -62,9 +62,10 @@ PROMPT_SISTEMA = {
     "role": "system",
     "content": (
         "Eres J.A.R.V.I.S., una Inteligencia Artificial Avanzada especialista en Ciencias Exactas, Programación y Generación Multimodal, creada para asistir a Cristian.\n"
-        "DIRECTIVAS ESTRICTAS BLAZING FAST:\n"
+        "DIRECTIVAS ESTRICTAS:\n"
         "1. Dirígete al usuario como 'señor' o 'Cristian'. Sé analítico, claro, directo y extremadamente preciso.\n"
-        "2. GENERACIÓN DE IMÁGENES: Cuando el usuario te pida crear, generar o dibujar una imagen/ilustración, INVISA SIEMPRE 'generar_imagen_ia' pasando la descripción detallada en inglés.\n"
+        "2. GENERACIÓN DE IMÁGENES: Cuando el usuario te pida crear, generar o dibujar una imagen o ilustración con IA, INVISA OBLIGATORIAMENTE la herramienta 'generar_imagen_ia' pasando una descripción detallada en inglés.\n"
+        "   - EN TU RESPUESTA FINAL: Incluye SIEMPRE la etiqueta devuelta por la herramienta '[IMAGEN_GENERADA]:URL' para que el cliente la muestre en pantalla.\n"
         "3. GRÁFICAS Y CURVAS: Cuando el usuario te pida graficar una función matemática en x, INVISA 'generar_grafica_interactiva' pasando la función en Python (ej: 'x**2 - 4*x + 3').\n"
         "4. DIAGRAMAS Y MAPAS CONCEPTUALES: Para diagramas de flujo, circuitos o esquemas de física/procesos, escribe bloques de código ```mermaid ... ```.\n"
         "5. FORMATO MATEMÁTICO LaTeX OBLIGATORIO:\n"
@@ -586,7 +587,7 @@ async def consultar_jarvis(data: ChatInput):
                     arguments = {}
                 
                 if fn_name == "generar_imagen_ia": 
-                    resultado = generar_imagen_ia(prompt_ingles=arguments.get("prompt_ingles", "a futuristic iron man suit"))
+                    resultado = generar_imagen_ia(prompt_ingles=arguments.get("prompt_ingles", "a futuristic iron man suit arc reactor"))
                 elif fn_name == "generar_grafica_interactiva": 
                     resultado = generar_grafica_interactiva(expresion=arguments.get("expresion", "x**2 - 4*x + 3"))
                 elif fn_name == "abrir_sitio_web": 
@@ -607,6 +608,14 @@ async def consultar_jarvis(data: ChatInput):
                     resultado = "Función no localizada."
 
                 ultima_respuesta_herramienta = resultado
+
+                # SI SE GENERÓ UNA IMAGEN, GARANTIZAR QUE LA RESPUESTA FINAL CONTENGA EL LINK
+                if fn_name == "generar_imagen_ia":
+                    respuesta_final = f"Señor, he generado la imagen que solicitó:\n\n{resultado}"
+                    historial_usuario.append({"role": "tool", "tool_call_id": tool_call.id, "name": fn_name, "content": resultado})
+                    historial_usuario.append({"role": "assistant", "content": respuesta_final})
+                    audio_b64 = generar_audio_elevenlabs(respuesta_final)
+                    return {"status": "success", "reply": respuesta_final, "audio_b64": audio_b64, "action_url": None}
 
                 historial_usuario.append({
                     "role": "tool", "tool_call_id": tool_call.id, "name": fn_name, "content": resultado
