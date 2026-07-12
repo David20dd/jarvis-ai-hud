@@ -10,3 +10,4 @@ pypdf
 python-docx
 openpyxl
 pillow
+sympy
