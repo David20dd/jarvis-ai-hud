@@ -24,7 +24,7 @@
     <!-- 📈 CHART.JS -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-    <!-- 📄 EXPORTADOR COMPATIBLE HTML2PDF (PDFs Reales e Intactos) -->
+    <!-- 📄 HTML2PDF.JS -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
     <style>
@@ -219,7 +219,7 @@
         </div>
 
         <div class="chat-box" id="chatBox">
-            <div class="message jarvis-message">Sistemas en línea, señor Cristian. Exportador de Documentos Oficiales en PDF y Word activado. ¿En qué le puedo asistir hoy?</div>
+            <div class="message jarvis-message">Sistemas en línea, señor Cristian. Exportador de Documentos con Gráficas Integradas activo. ¿En qué le puedo asistir hoy?</div>
         </div>
 
         <div class="preview-bar" id="previewBar">
@@ -325,7 +325,7 @@
             if (estado === 'error') sysStatus.style.color = "var(--stark-red)";
         }
 
-        /* 📄 ESCÁNER INTELIGENTE DESDE PÁGINA 1 A N */
+        /* 📄 ESCÁNER INTELIGENTE DE PDF */
         async function procesarArchivoSeleccionado(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -600,7 +600,7 @@
             });
         }
 
-        /* 💾 BOTONES DE EXPORTACIÓN DIRECTA CON GENERACIÓN REAL */
+        /* 💾 BOTONES DE EXPORTACIÓN DIRECTA CON GENERACIÓN DE CANVAS A IMAGEN */
         function agregarBotonesExportacion(msgElement) {
             const btnGroup = document.createElement("div");
             btnGroup.className = "export-btn-group";
@@ -620,16 +620,31 @@
             msgElement.appendChild(btnGroup);
         }
 
-        /* 📄 EXPORTACIÓN REAL A PDF (HTML2PDF.JS) */
-        function exportarElementoAPDF(msgElement) {
-            setEstado('processing', 'GENERANDO PDF...');
-            
-            // Clonar elemento y ocultar los botones en el archivo generado
+        /* PREPARAR ELEMENTO REEMPLAZANDO CANVAS POR IMÁGENES PNG */
+        function prepararElementoConGrafica(msgElement) {
             const clone = msgElement.cloneNode(true);
             const buttons = clone.querySelector('.export-btn-group');
             if (buttons) buttons.remove();
 
-            // Estilos limpios para PDF
+            // Si hay un gráfico (Canvas) en el mensaje original, convertirlo a imagen estática en el clon
+            const canvasOriginal = msgElement.querySelector('canvas');
+            if (canvasOriginal) {
+                const chartImgData = canvasOriginal.toDataURL("image/png");
+                const chartCard = clone.querySelector('.chart-card');
+                if (chartCard) {
+                    chartCard.innerHTML = `<img src="${chartImgData}" style="width:100%; max-width:500px; display:block; border:1px solid #00f2fe; margin-top:10px;" />`;
+                }
+            }
+
+            return clone;
+        }
+
+        /* 📄 EXPORTACIÓN REAL A PDF (INCLUYENDO LA GRÁFICA) */
+        function exportarElementoAPDF(msgElement) {
+            setEstado('processing', 'GENERANDO PDF CON GRÁFICA...');
+            
+            const clone = prepararElementoConGrafica(msgElement);
+
             clone.style.background = "#ffffff";
             clone.style.color = "#000000";
             clone.style.padding = "20px";
@@ -652,13 +667,11 @@
             });
         }
 
-        /* 📝 EXPORTACIÓN REAL A WORD COMPATIBLE (.DOCX) */
+        /* 📝 EXPORTACIÓN REAL A WORD COMPATIBLE (.DOCX INCLUYENDO GRÁFICA) */
         function exportarElementoAWord(msgElement) {
-            setEstado('processing', 'GENERANDO WORD...');
+            setEstado('processing', 'GENERANDO WORD CON GRÁFICA...');
 
-            const clone = msgElement.cloneNode(true);
-            const buttons = clone.querySelector('.export-btn-group');
-            if (buttons) buttons.remove();
+            const clone = prepararElementoConGrafica(msgElement);
 
             const htmlContent = `
                 <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='[http://www.w3.org/TR/REC-html40](http://www.w3.org/TR/REC-html40)'>
@@ -666,6 +679,7 @@
                 <style>
                     body { font-family: Arial, sans-serif; font-size: 11pt; line-height: 1.5; color: #111111; }
                     pre { background: #f4f4f4; padding: 10px; border-left: 4px solid #00f2fe; font-family: monospace; }
+                    img { max-width: 100%; height: auto; }
                 </style>
                 </head>
                 <body>
