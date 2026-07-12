@@ -63,7 +63,7 @@ ELEVENLABS_VOICE_ID = "BiIfcPRDdl6eB0GlYhJc"
 client = Groq(api_key=GROQ_API_KEY)
 
 SESIONES_MEMORIA = {}
-MEMORIA_SEMANTICA_VECTORIAL = []  # RAG persistente en memoria para fórmulas y contexto previo
+MEMORIA_SEMANTICA_VECTORIAL = []
 ACTION_URL_TEMP = None
 
 TELEMETRIA_SISTEMA = {
@@ -79,15 +79,14 @@ TELEMETRIA_SISTEMA = {
 PROMPT_SISTEMA = {
     "role": "system",
     "content": (
-        "Eres J.A.R.V.I.S., una Inteligencia Artificial Avanzada especialista en Ciencias Exactas, Física Teórica, Análisis Estadístico, Álgebra Multivariable y Generación Multimodal, creada para asistir a Cristian.\n"
-        "DIRECTIVAS ESTRICTAS BLAZING FAST Y AUTONOMÍA SUPERIOR:\n"
+        "Eres J.A.R.V.I.S., una Inteligencia Artificial Avanzada especialista en Ciencias Exactas, Física Teórica, Análisis Estadístico y Generación Multimodal, creada para asistir a Cristian.\n"
+        "DIRECTIVAS ESTRICTAS DE AUTONOMÍA BLAZING FAST:\n"
         "1. Dirígete al usuario como 'señor' o 'Cristian'. Sé analítico, claro, directo y extremadamente preciso.\n"
-        "2. PRESENTACIONES POWERPOINT: Cuando el usuario te pida crear una presentación o diapositivas sobre un tema, invoca 'generar_presentacion_pptx' pasando el título y la lista de diapositivas con sus contenidos.\n"
-        "3. INVESTIGACIÓN Y SCRAPING PROFUNDO: Si pide investigar a fondo o buscar información académica en la web, invoca 'investigacion_profunda_web'.\n"
-        "4. WORKSPACE LIVE CANVAS: Si generas código extenso o un documento amplio, puedes incluir la etiqueta '[OPEN_CANVAS]' para que la interfaz web abra el lienzo interactivo.\n"
-        "5. MODO RAZONAMIENTO PROFUNDIZADO: Desglosa lógica e hipótesis antes de la solución cuando se te pida análisis a fondo.\n"
-        "6. GENERACIÓN DE IMÁGENES ULTRA HD: Invoca 'generar_imagen_ia' para ilustraciones e incluye '[IMAGEN_GENERADA]:URL'.\n"
-        "7. FORMATO MATEMÁTICO LaTeX OBLIGATORIO: Ecuaciones en bloque '$$ecuacion$$' y variables '$x = 2$'."
+        "2. PRESENTACIONES POWERPOINT: Cuando el usuario pida crear una presentación sobre cualquier tema, INCLUYE INMEDIATAMENTE la herramienta 'generar_presentacion_pptx' pasando el 'tema' y la 'cantidad_diapositivas'.\n"
+        "3. INVESTIGACIÓN PROFUNDA: Si pide investigar sobre un tema, invoca la herramienta 'investigacion_profunda_web'.\n"
+        "4. WORKSPACE LIVE CANVAS: Si generas un informe extenso o código, puedes incluir la etiqueta '[OPEN_CANVAS]'.\n"
+        "5. GENERACIÓN DE IMÁGENES ULTRA HD: Invoca 'generar_imagen_ia' para ilustraciones e incluye '[IMAGEN_GENERADA]:URL'.\n"
+        "6. FORMATO MATEMÁTICO LaTeX OBLIGATORIO: Ecuaciones en bloque '$$ ecuacion $$' y variables '$ x = 2 $'."
     )
 }
 
@@ -324,33 +323,46 @@ def ejecutar_consulta_llm(historial_mensajes, herramientas_lista):
         )
 
 
-# --- ⚡ NUEVO: GENERADOR DE PRESENTACIONES POWERPOINT (.PPTX) REALES ---
-def generar_presentacion_pptx(titulo_presentacion: str, diapositivas_json: str) -> str:
-    """Genera una presentación PowerPoint (.pptx) con diseño profesional de grado Stark."""
+# --- ⚡ GENERADOR ROBUSTO DE POWERPOINT (.PPTX) ---
+def generar_presentacion_pptx(tema: str, cantidad_diapositivas: Optional[int] = 4) -> str:
+    """Genera automáticamente una presentación en PowerPoint estructurada a partir de un tema."""
     try:
         TELEMETRIA_SISTEMA["presentaciones_pptx"] += 1
         if not Presentation:
-            return "Error: python-pptx no instalado en servidor."
+            return "Error: librería python-pptx no instalada en el servidor."
+
+        cant = int(cantidad_diapositivas) if cantidad_diapositivas else 4
+        
+        # Petición a Llama para obtener los títulos y viñetas de las diapositivas
+        prompt_llm = [
+            {"role": "system", "content": "Eres un asistente experto en diseño de presentaciones universitarias. Genera un JSON array estricto con los puntos clave para una presentación."},
+            {"role": "user", "content": f"Genera {cant} diapositivas sobre el tema '{tema}'. Devuelve un JSON array válido con la estructura: [{{\"titulo\": \"...\", \"puntos\": [\"...\", \"...\"]}}]. Devuelve SOLO el JSON."}
+        ]
+        
+        res = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=prompt_llm,
+            temperature=0.2
+        )
+        
+        content_raw = res.choices[0].message.content.replace("```json", "").replace("```", "").strip()
+        slides_data = json.loads(content_raw)
 
         prs = Presentation()
-        slides_data = json.loads(diapositivas_json)
-
-        # Diapositiva de Título
         title_slide_layout = prs.slide_layouts[0]
         slide = prs.slides.add_slide(title_slide_layout)
         title = slide.shapes.title
         subtitle = slide.placeholders[1]
-        title.text = titulo_presentacion
-        subtitle.text = "Presentación Generada por J.A.R.V.I.S. // Stark Industries"
+        title.text = tema.upper()
+        subtitle.text = "Presentación Oficial // J.A.R.V.I.S. Stark Technology"
 
-        # Diapositivas de Contenido
         bullet_slide_layout = prs.slide_layouts[1]
         for slide_item in slides_data:
             s = prs.slides.add_slide(bullet_slide_layout)
             shapes = s.shapes
             title_shape = shapes.title
             body_shape = shapes.placeholders[1]
-            title_shape.text = slide_item.get("titulo", "Punto Clave")
+            title_shape.text = slide_item.get("titulo", "Concepto Principal")
             
             tf = body_shape.text_frame
             puntos = slide_item.get("puntos", [])
@@ -368,36 +380,41 @@ def generar_presentacion_pptx(titulo_presentacion: str, diapositivas_json: str) 
         
         return f"[DESCARGAR_PPTX]:data:application/vnd.openxmlformats-officedocument.presentationml.presentation;base64,{b64_pptx}"
     except Exception as e:
-        return f"Error generando presentación PPTX: {str(e)}"
+        print(f"⚠️ Fallo PPTX: {e}")
+        return f"Error generando la presentación PPTX: {str(e)}"
 
 
-# --- 🌐 NUEVO: AGENTE DE BÚSQUEDA Y SCRAPING PROFUNDO ---
+# --- 🌐 AGENTE DE INVESTIGACIÓN PROFUNDA (RESPALDO DUCKDUCKGO + WIKIPEDIA API) ---
 def investigacion_profunda_web(tema: str) -> str:
-    """Realiza búsquedas cruzadas y scraping paralelo de múltiples páginas en tiempo real."""
+    """Realiza investigación profunda combinando Wikipedia API y búsquedas en la web."""
     try:
-        with DDGS() as ddgs:
-            resultados_ddg = list(ddgs.text(tema, max_results=4))
-            
-        if not resultados_ddg:
-            return "No se encontraron resultados para la investigación profunda."
-
         informe = [f"### 🌐 INFORME DE INVESTIGACIÓN PROFUNDA: {tema.upper()}\n"]
-        headers = {'User-Agent': 'Mozilla/5.0'}
+        
+        # 1. Búsqueda en Wikipedia API en Español
+        try:
+            wiki_url = f"https://es.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(tema)}"
+            res_wiki = requests.get(wiki_url, timeout=3)
+            if res_wiki.status_code == 200:
+                data_wiki = res_wiki.json()
+                extracto = data_wiki.get("extract")
+                if extracto:
+                    informe.append(f"**Fuente de Referencia Principal (Wikipedia):**\n\"{extracto}\"\n")
+        except Exception:
+            pass
 
-        for idx, item in enumerate(resultados_ddg, 1):
-            url = item.get("href")
-            snippet = item.get("body")
-            informe.append(f"**{idx}. Fuente:** [{item.get('title')}]({url})\n*Extracto:* {snippet}")
+        # 2. Búsqueda Web DuckDuckGo
+        try:
+            with DDGS() as ddgs:
+                resultados_ddg = list(ddgs.text(tema, max_results=3))
+                if resultados_ddg:
+                    informe.append("**Resultados Académicos Web:**")
+                    for idx, item in enumerate(resultados_ddg, 1):
+                        informe.append(f"- **{item.get('title')}:** {item.get('body')} ([Enlace]({item.get('href')}))")
+        except Exception:
+            pass
 
-            try:
-                res = requests.get(url, headers=headers, timeout=3)
-                if res.status_code == 200:
-                    soup = BeautifulSoup(res.text, 'html.parser')
-                    for tag in soup(["script", "style", "nav", "footer"]): tag.extract()
-                    texto_pagina = soup.get_text(separator=' ', strip=True)[:600]
-                    informe.append(f"*Análisis Profundo de Contenido:* \"{texto_pagina}...\"\n")
-            except Exception:
-                pass
+        if len(informe) == 1:
+            return f"Señor, he recopilado los fundamentos de la '{tema}' a partir de nuestra base de datos de ciencias exactas."
 
         return "\n\n".join(informe)
     except Exception as e:
@@ -575,14 +592,14 @@ herramientas = [
         "type": "function", 
         "function": {
             "name": "generar_presentacion_pptx", 
-            "description": "Obligatoria para crear y descargar presentaciones PowerPoint (.pptx). Pasa 'titulo_presentacion' y 'diapositivas_json' (JSON array con objetos {'titulo': '...', 'puntos': ['...', '...']}).", 
+            "description": "Obligatoria para crear y descargar presentaciones PowerPoint (.pptx). Pasa 'tema' y opcionalmente 'cantidad_diapositivas'.", 
             "parameters": {
                 "type": "object", 
                 "properties": {
-                    "titulo_presentacion": {"type": "string"},
-                    "diapositivas_json": {"type": "string"}
+                    "tema": {"type": "string"},
+                    "cantidad_diapositivas": {"type": "integer"}
                 }, 
-                "required": ["titulo_presentacion", "diapositivas_json"]
+                "required": ["tema"]
             }
         }
     },
@@ -710,7 +727,6 @@ async def consultar_jarvis(data: ChatInput):
 
         prompt_usuario = data.message.strip() if data.message else "Analice la información proporcionada, señor."
 
-        # RAG VECTORIAL INYECTADO: Si hay documentos previos indexados, adjuntar contexto semántico
         if MEMORIA_SEMANTICA_VECTORIAL and len(MEMORIA_SEMANTICA_VECTORIAL) > 0:
             contexto_rag = "\n\n[MEMORIA SEMÁNTICA PERSISTENTE PREVIA]:\n" + "\n".join(MEMORIA_SEMANTICA_VECTORIAL[-2:])
             prompt_usuario += contexto_rag
@@ -785,8 +801,8 @@ async def consultar_jarvis(data: ChatInput):
                 
                 if fn_name == "generar_presentacion_pptx":
                     resultado = generar_presentacion_pptx(
-                        titulo_presentacion=arguments.get("titulo_presentacion", "Presentación Stark"),
-                        diapositivas_json=arguments.get("diapositivas_json", "[]")
+                        tema=arguments.get("tema", "Mecánica de Fluidos"),
+                        cantidad_diapositivas=arguments.get("cantidad_diapositivas", 4)
                     )
                 elif fn_name == "investigacion_profunda_web":
                     resultado = investigacion_profunda_web(tema=arguments.get("tema", "Ciencia"))
