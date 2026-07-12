@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from groq import Groq
 from duckduckgo_search import DDGS
 import requests
@@ -18,10 +18,12 @@ import sys
 import contextlib
 from PIL import Image
 
-# MOTOR MATEMÁTICO SIMBÓLICO
+# MOTOR MATEMÁTICO SIMBÓLICO Y CÁLCULO
 import sympy as sp
+import numpy as np
+import pandas as pd
 
-# LIBRERÍAS DE LECTURA DE ARCHIVOS MULTIFORMATO
+# LIBRERÍAS DE LECTURA MULTIFORMATO
 try:
     import pypdf
 except ImportError:
@@ -39,7 +41,6 @@ except ImportError:
 
 app = FastAPI()
 
-# --- CONFIGURACIÓN DE CORS ---
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], 
@@ -48,7 +49,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- CREDENCIALES CONFIGURADAS ---
 GROQ_API_KEY = "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"
 ELEVENLABS_API_KEY = "sk_92aed3f61a37aa4d0ef70400ce2e1c32dd9930115aa23e8d"
 ELEVENLABS_VOICE_ID = "BiIfcPRDdl6eB0GlYhJc"
@@ -61,17 +61,15 @@ ACTION_URL_TEMP = None
 PROMPT_SISTEMA = {
     "role": "system",
     "content": (
-        "Eres J.A.R.V.I.S., una Inteligencia Artificial Avanzada especialista en Ciencias Exactas, Programación y Generación Multimodal, creada para asistir a Cristian.\n"
+        "Eres J.A.R.V.I.S., una Inteligencia Artificial Avanzada especialista en Ciencias Exactas, Física Teórica, Análisis Estadístico, Álgebra Multivariable y Generación Multimodal, creada para asistir a Cristian.\n"
         "DIRECTIVAS ESTRICTAS BLAZING FAST:\n"
         "1. Dirígete al usuario como 'señor' o 'Cristian'. Sé analítico, claro, directo y extremadamente preciso.\n"
-        "2. GENERACIÓN DE IMÁGENES ULTRA HD / 4K: Cuando el usuario te pida crear, generar o dibujar una imagen o ilustración con IA, INVOLUCRAR OBLIGATORIAMENTE la herramienta 'generar_imagen_ia' pasando una descripción hiperdetallada en inglés enriquecida con '4k resolution, ultra-detailed, cinematic lighting, photorealistic, 8k render'.\n"
-        "   - EN TU RESPUESTA FINAL: Incluye SIEMPRE la etiqueta devuelta por la herramienta '[IMAGEN_GENERADA]:URL'.\n"
-        "3. GRÁFICAS Y CURVAS: Cuando el usuario te pida graficar una función matemática en x, INCLUYE 'generar_grafica_interactiva' pasando la función en Python (ej: 'x**2 - 4*x + 3').\n"
-        "4. DIAGRAMAS Y MAPAS CONCEPTUALES: Para diagramas de flujo, circuitos o esquemas de física/procesos, escribe bloques de código ```mermaid ... ```.\n"
-        "5. FORMATO MATEMÁTICO LaTeX OBLIGATORIO:\n"
-        "   - Ecuaciones centradas en bloque: '$$ecuacion$$'.\n"
-        "   - Variables dentro del texto: '$x = 2$'.\n"
-        "6. NAVEGACIÓN Y BÚSQUEDA: Si el usuario pide abrir un sitio web o buscar contenido, invoca 'abrir_sitio_web'."
+        "2. MODO RAZONAMIENTO PROFUNDO (DEEP THINK): Si el usuario solicita 'analiza esto a fondo' o 'razonamiento profundo', activa la fase de desglose lógico e hipótesis antes de la respuesta final.\n"
+        "3. PROCESAMIENTO MULTIDOCUMENTO: Cuando recibas múltiples archivos o imágenes adjuntas, realiza un análisis cruzado comparando la información de cada documento.\n"
+        "4. CÓDIGO E INTÉRPRETE AVANZADO: Puedes usar Python con numpy, pandas, scipy, sympy y tabulate para procesamiento matricial y análisis de datos en formato de tabla Sci-Fi.\n"
+        "5. GENERACIÓN DE IMÁGENES ULTRA HD / 4K: Para crear o ilustrar imágenes con IA, invoca 'generar_imagen_ia' con descripción hiperdetallada en inglés e incluye la etiqueta '[IMAGEN_GENERADA]:URL'.\n"
+        "6. GRÁFICAS Y CURVAS: Para graficar funciones en x, invoca 'generar_grafica_interactiva'.\n"
+        "7. FORMATO MATEMÁTICO LaTeX OBLIGATORIO: Ecuaciones en bloque '$$ecuacion$$' y variables '$x = 2$'."
     )
 }
 
@@ -93,7 +91,6 @@ def obtener_historial_sesion(session_id: str):
     return SESIONES_MEMORIA[session_id]
 
 
-# --- OPTIMIZADOR DE IMÁGENES ---
 def optimizar_imagen_b64(image_b64_data: str, max_dim: int = 1280) -> str:
     try:
         if "," in image_b64_data:
@@ -135,7 +132,6 @@ def optimizar_imagen_b64(image_b64_data: str, max_dim: int = 1280) -> str:
         return image_b64_data
 
 
-# --- PROCESADOR MULTIMODAL ROBUSTO ---
 def procesar_archivo_adjunto(file_b64: Optional[str] = None, file_name: Optional[str] = None) -> tuple[str, str]:
     if not file_b64:
         return 'none', ""
@@ -177,8 +173,9 @@ def procesar_archivo_adjunto(file_b64: Optional[str] = None, file_name: Optional
         if ext in ['.xlsx', '.xls', '.csv']:
             try:
                 if ext == '.csv':
-                    decoded = file_bytes.decode('utf-8', errors='ignore')
-                    return 'text_context', f"\n\n[CONTENIDO CSV '{file_name}']:\n{decoded[:15000]}\n"
+                    df = pd.read_csv(io.BytesIO(file_bytes))
+                    res_csv = df.head(20).to_markdown()
+                    return 'text_context', f"\n\n[CONTENIDO CSV '{file_name}']:\n{res_csv}\n"
                 elif openpyxl:
                     wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
                     res = []
@@ -201,7 +198,6 @@ def procesar_archivo_adjunto(file_b64: Optional[str] = None, file_name: Optional
         return 'none', ""
 
 
-# --- GENERADOR DE VOZ HD ---
 def generar_audio_elevenlabs(texto: str) -> str:
     try:
         if not ELEVENLABS_API_KEY or "sk_" not in ELEVENLABS_API_KEY:
@@ -241,7 +237,6 @@ def generar_audio_elevenlabs(texto: str) -> str:
         return None
 
 
-# --- CEREBROS IA ---
 def ejecutar_consulta_vision(historial_mensajes, image_b64_data):
     image_b64_data = optimizar_imagen_b64(image_b64_data, max_dim=1280)
     
@@ -301,9 +296,7 @@ def ejecutar_consulta_llm(historial_mensajes, herramientas_lista):
         )
 
 
-# --- HERRAMIENTAS MULTIMODALES ULTRA HD ---
 def generar_imagen_ia(prompt_ingles: str) -> str:
-    """Genera una imagen ultra HD/4K con IA usando Pollinations FLUX.1 con parámetros de máxima calidad."""
     try:
         prompt_enriquecido = f"{prompt_ingles.strip()}, highly detailed, 4k resolution, photorealistic, masterpiece, 8k render, cinematic lighting"
         prompt_encoded = urllib.parse.quote(prompt_enriquecido)
@@ -423,15 +416,18 @@ def obtener_estado_pc() -> str:
         return "Diagnóstico no disponible."
 
 def ejecutar_codigo_python(codigo: str) -> str:
+    """Intérprete de código avanzado con librerías numéricas y científicas."""
     try:
         f = io.StringIO()
         with contextlib.redirect_stdout(f):
-            local_scope = {}
+            local_scope = {
+                "np": np, "pd": pd, "sp": sp, "plt": None
+            }
             exec(codigo, {"__builtins__": __builtins__}, local_scope)
         output = f.getvalue().strip()
         if not output and local_scope:
             output = f"Variables resultantes: {local_scope}"
-        return output if output else "Código ejecutado exitosamente."
+        return output if output else "Código ejecutado exitosamente sin salida de texto."
     except Exception as e:
         return f"Error de ejecución: {str(e)}"
 
@@ -441,7 +437,7 @@ herramientas = [
         "type": "function", 
         "function": {
             "name": "generar_imagen_ia", 
-            "description": "Obligatoria para generar o crear una imagen ultra HD/4K con IA. Pasa 'prompt_ingles' en inglés.", 
+            "description": "Genera o crea una imagen ultra HD/4K con IA. Pasa 'prompt_ingles' en inglés.", 
             "parameters": {
                 "type": "object", 
                 "properties": {"prompt_ingles": {"type": "string"}}, 
@@ -491,13 +487,18 @@ herramientas = [
     {"type": "function", "function": {"name": "buscar_en_internet", "description": "Busca en la web.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}},
     {"type": "function", "function": {"name": "leer_pagina_web", "description": "Lee URL.", "parameters": {"type": "object", "properties": {"url": {"type": "string"}}, "required": ["query"]}}},
     {"type": "function", "function": {"name": "obtener_estado_pc", "description": "Diagnóstico.", "parameters": {"type": "object", "properties": {}}}},
-    {"type": "function", "function": {"name": "ejecutar_codigo_python", "description": "Ejecuta Python.", "parameters": {"type": "object", "properties": {"codigo": {"type": "string"}}, "required": ["codigo"]}}},
+    {"type": "function", "function": {"name": "ejecutar_codigo_python", "description": "Intérprete de código avanzado con NumPy, Pandas y SymPy.", "parameters": {"type": "object", "properties": {"codigo": {"type": "string"}}, "required": ["codigo"]}}},
     {"type": "function", "function": {"name": "obtener_clima_en_vivo", "description": "Clima.", "parameters": {"type": "object", "properties": {"ciudad": {"type": "string"}}, "required": ["ciudad"]}}}
 ]
+
+class ArchivoInput(BaseModel):
+    file_b64: Optional[str] = None
+    file_name: Optional[str] = None
 
 class ChatInput(BaseModel):
     message: Optional[str] = ""
     session_id: Optional[str] = "default_session"
+    files: Optional[List[ArchivoInput]] = []
     file_b64: Optional[str] = None
     file_name: Optional[str] = None
 
@@ -521,18 +522,44 @@ async def consultar_jarvis(data: ChatInput):
             sesion_data["messages"] = [PROMPT_SISTEMA] + historial_usuario[-8:]
             historial_usuario = sesion_data["messages"]
 
-        categoria_archivo, contenido_o_b64 = procesar_archivo_adjunto(data.file_b64, data.file_name)
-        prompt_usuario = data.message.strip() if data.message else "Resuelve los ejercicios del documento."
+        # PROCESAMIENTO MULTIDOCUMENTO SIMULTÁNEO
+        archivos_a_procesar = []
+        if data.files and len(data.files) > 0:
+            archivos_a_procesar = data.files
+        elif data.file_b64:
+            archivos_a_procesar = [ArchivoInput(file_b64=data.file_b64, file_name=data.file_name)]
 
-        if categoria_archivo == 'image':
-            sesion_data["last_images_b64"].append(contenido_o_b64)
+        contexto_textual_archivos = ""
+        hay_imagenes = False
+
+        for f_item in archivos_a_procesar:
+            cat, res = procesar_archivo_adjunto(f_item.file_b64, f_item.file_name)
+            if cat == 'image':
+                sesion_data["last_images_b64"].append(res)
+                hay_imagenes = True
+            elif cat == 'text_context':
+                contexto_textual_archivos += res
+
+        if len(sesion_data["last_images_b64"]) > 3:
             sesion_data["last_images_b64"] = sesion_data["last_images_b64"][-3:]
 
-        usar_vision = len(sesion_data.get("last_images_b64", [])) > 0 and (categoria_archivo == 'image' or (not data.file_b64 and any(w in prompt_usuario.lower() for w in ["documento", "ejercicio", "tarea", "imagen", "archivo", "resuelve"])))
+        prompt_usuario = data.message.strip() if data.message else "Analice la información proporcionada, señor."
+
+        # MODO RAZONAMIENTO PROFUNDO (DEEP THINK)
+        es_deep_think = any(w in prompt_usuario.lower() for w in ["a fondo", "razonamiento profundo", "deep think", "paso a paso avanzado", "analiza a fondo"])
+        if es_deep_think:
+            prompt_usuario = (
+                "[MODO RAZONAMIENTO PROFUNDO ACTIVADO]: Realiza un análisis exhaustivo en 2 fases: "
+                "1) Desglosa internamente la estrategia lógica, hipótesis y verificación matemática. "
+                "2) Presenta la solución estructurada, limpia y precisa sin margen de error. "
+                f"Consulta del usuario: {prompt_usuario}"
+            )
+
+        usar_vision = (len(sesion_data.get("last_images_b64", [])) > 0) and (hay_imagenes or (not data.files and not data.file_b64 and any(w in prompt_usuario.lower() for w in ["documento", "ejercicio", "tarea", "imagen", "archivo", "resuelve"])))
 
         if usar_vision:
             historial_usuario.append({"role": "user", "content": prompt_usuario})
-            print("👁️ [Jarvis Vision]: Procesando...")
+            print("👁️ [Jarvis Vision Multi]: Procesando imagen...")
             try:
                 response = ejecutar_consulta_vision(historial_usuario, sesion_data["last_images_b64"][-1])
                 respuesta_final = response.choices[0].message.content
@@ -544,8 +571,8 @@ async def consultar_jarvis(data: ChatInput):
             audio_b64 = generar_audio_elevenlabs(respuesta_final)
             return {"status": "success", "reply": respuesta_final, "audio_b64": audio_b64, "action_url": None}
 
-        if categoria_archivo == 'text_context':
-            prompt_usuario += contenido_o_b64
+        if contexto_textual_archivos:
+            prompt_usuario += contexto_textual_archivos
 
         historial_usuario.append({"role": "user", "content": prompt_usuario})
 
