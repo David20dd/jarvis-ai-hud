@@ -21,8 +21,11 @@
     <!-- 📄 PDF.JS -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 
-    <!-- 📈 CHART.JS PARA GRÁFICAS VECTORIALES EN VIVO -->
+    <!-- 📈 CHART.JS -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- 📄 EXPORTADOR COMPATIBLE HTML2PDF (PDFs Reales e Intactos) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
     <style>
         :root {
@@ -148,9 +151,9 @@
 
         .chart-card { background: #020408; border: 1px solid var(--stark-cyan); border-radius: 6px; padding: 12px; margin-top: 10px; width: 100%; max-width: 500px; }
 
-        .export-btn-group { display: flex; gap: 8px; margin-top: 10px; }
-        .export-btn { background: rgba(0, 242, 254, 0.15); border: 1px solid var(--stark-cyan); color: var(--stark-cyan); padding: 4px 10px; border-radius: 4px; font-size: 0.75rem; cursor: pointer; }
-        .export-btn:hover { background: var(--stark-cyan); color: #000; }
+        .export-btn-group { display: flex; gap: 8px; margin-top: 12px; }
+        .export-btn { background: rgba(0, 242, 254, 0.15); border: 1px solid var(--stark-cyan); color: var(--stark-cyan); padding: 6px 12px; border-radius: 4px; font-size: 0.78rem; cursor: pointer; transition: all 0.2s ease; }
+        .export-btn:hover { background: var(--stark-cyan); color: #000; font-weight: bold; }
 
         .code-block { background: #020408; border: 1px solid var(--stark-cyan); border-left: 4px solid var(--stark-cyan); border-radius: 4px; padding: 10px; margin: 8px 0; font-family: 'Consolas', monospace; color: #00ff88; overflow-x: auto; font-size: 0.82rem; }
 
@@ -216,7 +219,7 @@
         </div>
 
         <div class="chat-box" id="chatBox">
-            <div class="message jarvis-message">Sistemas en línea, señor Cristian. Motor SymPy, Gráficas Chart.js y Detección de Voz 'Hey Jarvis' activos. ¿En qué le puedo asistir hoy?</div>
+            <div class="message jarvis-message">Sistemas en línea, señor Cristian. Exportador de Documentos Oficiales en PDF y Word activado. ¿En qué le puedo asistir hoy?</div>
         </div>
 
         <div class="preview-bar" id="previewBar">
@@ -445,7 +448,7 @@
             previewBar.classList.remove("active");
         }
 
-        /* 🎙️ RECONOCIMIENTO DE VOZ CONTINUO CON 'HEY JARVIS' */
+        /* 🎙️ RECONOCIMIENTO DE VOZ CONTINUO */
         if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             recognition = new SpeechRecognition();
@@ -529,7 +532,6 @@
         function tipoEscribir(elemento, texto, actionUrl, callback) {
             let i = 0; elemento.innerText = "";
             
-            // Detección de comando de gráfica interactiva
             if (texto.includes("[GRAFICA_INTERACTIVA]:")) {
                 const parts = texto.split("[GRAFICA_INTERACTIVA]:");
                 elemento.innerText = parts[0];
@@ -537,7 +539,7 @@
                     const chartData = JSON.parse(parts[1]);
                     renderizarGraficaChart(elemento, chartData);
                 } catch(e) { console.warn("Error chart parse:", e); }
-                agregarBotonesExportacion(elemento, texto);
+                agregarBotonesExportacion(elemento);
                 if (callback) callback();
                 return;
             }
@@ -546,7 +548,7 @@
                 elemento.innerHTML = formatearTextoConCodigo(texto);
                 if (actionUrl) agregarBotonAccion(elemento, actionUrl);
                 renderizarMatematicas(elemento);
-                agregarBotonesExportacion(elemento, texto);
+                agregarBotonesExportacion(elemento);
                 if (callback) callback();
                 return;
             }
@@ -559,13 +561,12 @@
                     clearInterval(timer);
                     if (actionUrl) agregarBotonAccion(elemento, actionUrl);
                     renderizarMatematicas(elemento);
-                    agregarBotonesExportacion(elemento, texto);
+                    agregarBotonesExportacion(elemento);
                     if (callback) callback();
                 }
             }, 6);
         }
 
-        /* 📈 RENDERIZADOR DE GRÁFICAS CHART.JS EN VIVO */
         function renderizarGraficaChart(container, chartData) {
             const card = document.createElement("div");
             card.className = "chart-card";
@@ -599,32 +600,97 @@
             });
         }
 
-        /* 💾 EXPORTACIÓN A PDF Y WORD (.DOCX) */
-        function agregarBotonesExportacion(container, textoRespuesta) {
+        /* 💾 BOTONES DE EXPORTACIÓN DIRECTA CON GENERACIÓN REAL */
+        function agregarBotonesExportacion(msgElement) {
             const btnGroup = document.createElement("div");
             btnGroup.className = "export-btn-group";
 
             const pdfBtn = document.createElement("button");
             pdfBtn.className = "export-btn";
             pdfBtn.innerText = "📄 Exportar a PDF";
-            pdfBtn.onclick = () => exportarAFile(textoRespuesta, "pdf");
+            pdfBtn.onclick = () => exportarElementoAPDF(msgElement);
 
             const docxBtn = document.createElement("button");
             docxBtn.className = "export-btn";
             docxBtn.innerText = "📝 Exportar a Word";
-            docxBtn.onclick = () => exportarAFile(textoRespuesta, "docx");
+            docxBtn.onclick = () => exportarElementoAWord(msgElement);
 
             btnGroup.appendChild(pdfBtn);
             btnGroup.appendChild(docxBtn);
-            container.appendChild(btnGroup);
+            msgElement.appendChild(btnGroup);
         }
 
-        function exportarAFile(contenido, formato) {
-            const blob = new Blob([contenido], { type: formato === "pdf" ? "application/pdf" : "text/plain" });
-            const link = document.createElement("a");
-            link.href = URL.createObjectURL(blob);
-            link.download = `Jarvis_Solucion_Stark.${formato === "pdf" ? "pdf" : "docx"}`;
-            link.click();
+        /* 📄 EXPORTACIÓN REAL A PDF (HTML2PDF.JS) */
+        function exportarElementoAPDF(msgElement) {
+            setEstado('processing', 'GENERANDO PDF...');
+            
+            // Clonar elemento y ocultar los botones en el archivo generado
+            const clone = msgElement.cloneNode(true);
+            const buttons = clone.querySelector('.export-btn-group');
+            if (buttons) buttons.remove();
+
+            // Estilos limpios para PDF
+            clone.style.background = "#ffffff";
+            clone.style.color = "#000000";
+            clone.style.padding = "20px";
+            clone.style.fontSize = "12pt";
+
+            const opt = {
+                margin:       10,
+                filename:     'Jarvis_Solucion_Stark.pdf',
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, backgroundColor: '#ffffff' },
+                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+
+            html2pdf().set(opt).from(clone).save().then(() => {
+                setEstado('ready', 'ONLINE');
+                playSFX('success');
+            }).catch(err => {
+                console.error("Error al generar PDF:", err);
+                setEstado('ready', 'ONLINE');
+            });
+        }
+
+        /* 📝 EXPORTACIÓN REAL A WORD COMPATIBLE (.DOCX) */
+        function exportarElementoAWord(msgElement) {
+            setEstado('processing', 'GENERANDO WORD...');
+
+            const clone = msgElement.cloneNode(true);
+            const buttons = clone.querySelector('.export-btn-group');
+            if (buttons) buttons.remove();
+
+            const htmlContent = `
+                <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='[http://www.w3.org/TR/REC-html40](http://www.w3.org/TR/REC-html40)'>
+                <head><meta charset='utf-8'><title>Jarvis Solucion</title>
+                <style>
+                    body { font-family: Arial, sans-serif; font-size: 11pt; line-height: 1.5; color: #111111; }
+                    pre { background: #f4f4f4; padding: 10px; border-left: 4px solid #00f2fe; font-family: monospace; }
+                </style>
+                </head>
+                <body>
+                    <h2>J.A.R.V.I.S. // Solución de Ejercicio</h2>
+                    <hr/>
+                    ${clone.innerHTML}
+                </body>
+                </html>
+            `;
+
+            const blob = new Blob(['\ufeff' + htmlContent], {
+                type: 'application/msword'
+            });
+
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'Jarvis_Solucion_Stark.doc';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            setEstado('ready', 'ONLINE');
+            playSFX('success');
         }
 
         function renderizarMatematicas(elemento) {
