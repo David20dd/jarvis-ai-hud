@@ -1,61 +1,7 @@
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
-const express = require('express');
-const QRCode = require('qrcode');
 const axios = require('axios');
 
-const app = express();
-const PORT = process.env.PORT_WA || 3000;
-
-let latestQR = null;
-let isConnected = false;
-
-// Servidor Web para mostrar el QR en pantalla
-app.get('/qr', async (req, res) => {
-    if (isConnected) {
-        return res.send(`
-            <html style="background:#020509; color:#00ff88; font-family:sans-serif; display:flex; justify-content:center; align-items:center; height:100vh;">
-                <div style="text-align:center;">
-                    <h1>🚀 J.A.R.V.I.S. WHATSAPP CONECTADO</h1>
-                    <p>La sesión está activa y lista para recibir mensajes.</p>
-                </div>
-            </html>
-        `);
-    }
-
-    if (!latestQR) {
-        return res.send(`
-            <html style="background:#020509; color:#00f2fe; font-family:sans-serif; display:flex; justify-content:center; align-items:center; height:100vh;">
-                <div style="text-align:center;">
-                    <h1>⌛ GENERANDO CÓDIGO QR...</h1>
-                    <p>Por favor recarga la página en 5 segundos.</p>
-                </div>
-            </html>
-        `);
-    }
-
-    try {
-        const qrImage = await QRCode.toDataURL(latestQR);
-        res.send(`
-            <html style="background:#020509; color:#00f2fe; font-family:sans-serif; display:flex; justify-content:center; align-items:center; height:100vh;">
-                <div style="text-align:center; background:rgba(0,242,254,0.1); padding:30px; border-radius:15px; border:1px solid #00f2fe;">
-                    <h1 style="margin-bottom:10px;">📲 ESCANEA CON TU WHATSAPP</h1>
-                    <p style="color:#fff; margin-bottom:20px;">Abre WhatsApp > Dispositivos Vinculados > Vincular dispositivo</p>
-                    <img src="${qrImage}" style="width:280px; height:280px; border-radius:10px; border:4px solid #fff;" />
-                </div>
-            </html>
-        `);
-    } catch (err) {
-        res.status(500).send("Error generando imagen QR");
-    }
-});
-
-app.get('/', (req, res) => {
-    res.send("Servidor de WhatsApp Jarvis Activo. Ve a /qr para escanear.");
-});
-
-app.listen(PORT, () => {
-    console.log(`🌐 Servidor Web del QR corriendo en puerto ${PORT}`);
-});
+const BACKEND_URL = 'https://jarvis-ai-hud.onrender.com';
 
 async function connectToWhatsApp() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
@@ -67,25 +13,41 @@ async function connectToWhatsApp() {
 
     sock.ev.on('creds.update', saveCreds);
 
-    sock.ev.on('connection.update', (update) => {
+    sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
         
         if (qr) {
-            latestQR = qr;
-            console.log("📲 Nuevo Código QR disponible en la ruta /qr");
+            console.log("📲 Código QR recibido, actualizando en backend...");
+            try {
+                await axios.post(`${BACKEND_URL}/api/whatsapp/update_qr`, {
+                    qr_raw: qr,
+                    connected: false
+                });
+            } catch (err) {
+                console.error("Error enviando QR al backend:", err.message);
+            }
         }
 
         if (connection === 'close') {
-            isConnected = false;
             const shouldReconnect = (lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut);
             console.log('⚠️ Conexión cerrada. Reintentando...', shouldReconnect);
+            try {
+                await axios.post(`${BACKEND_URL}/api/whatsapp/update_qr`, {
+                    connected: false
+                });
+            } catch (err) {}
+            
             if (shouldReconnect) {
                 setTimeout(connectToWhatsApp, 3000);
             }
         } else if (connection === 'open') {
-            isConnected = true;
-            latestQR = null;
             console.log('🚀 J.A.R.V.I.S. CONECTADO A WHATSAPP EXITOSAMENTE');
+            try {
+                await axios.post(`${BACKEND_URL}/api/whatsapp/update_qr`, {
+                    connected: true,
+                    qr_raw: null
+                });
+            } catch (err) {}
         }
     });
 
@@ -97,9 +59,9 @@ async function connectToWhatsApp() {
         const textMessage = msg.message.conversation || msg.message.extendedTextMessage?.text;
 
         if (textMessage) {
-            console.log(`📩 Mensaje de ${sender}: ${textMessage}`);
+            console.log(`📩 Mensaje recibido de ${sender}: ${textMessage}`);
             try {
-                const response = await axios.post('https://jarvis-ai-hud.onrender.com/api/jarvis', {
+                const response = await axios.post(`${BACKEND_URL}/api/jarvis`, {
                     message: textMessage,
                     session_id: sender
                 });
