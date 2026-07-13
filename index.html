@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>J.A.R.V.I.S. // STARK HUD MARK VI</title>
+    <title>J.A.R.V.I.S. // NEURAL EXPRESSIVE HUD</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
     
     <script>
@@ -19,13 +19,13 @@
 
     <style>
         :root {
-            --bg-dark: #090c15;
-            --sidebar-bg: #0e1320;
+            --bg-dark: #070a12;
+            --sidebar-bg: #0b0f1d;
             --sidebar-expanded-width: 270px;
             --sidebar-collapsed-width: 68px;
-            --input-bg: #161c2e;
-            --card-jarvis-bg: #121827;
-            --dropdown-bg: #131a29;
+            --input-bg: #141b2d;
+            --card-jarvis-bg: transparent;
+            --dropdown-bg: #121828;
             --stark-blue: #0088ff;
             --stark-cyan: #00d2ff;
             --stark-glow: rgba(0, 136, 255, 0.35);
@@ -44,29 +44,20 @@
             -webkit-tap-highlight-color: transparent;
         }
 
-        /* 🎨 SCROLLBARS MINIMALISTAS (ESTILO GEMINI) */
-        ::-webkit-scrollbar {
-            width: 5px;
-            height: 5px;
-        }
-
+        /* 🎨 SCROLLBARS MINIMALISTAS NEÓN */
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
         ::-webkit-scrollbar-track { background: transparent; }
-
         ::-webkit-scrollbar-thumb {
             background: rgba(0, 210, 255, 0.2);
             border-radius: 10px;
             transition: all 0.3s ease;
         }
-
         ::-webkit-scrollbar-thumb:hover {
             background: rgba(0, 210, 255, 0.5);
             box-shadow: 0 0 10px var(--stark-cyan);
         }
 
-        * {
-            scrollbar-width: thin;
-            scrollbar-color: rgba(0, 210, 255, 0.2) transparent;
-        }
+        * { scrollbar-width: thin; scrollbar-color: rgba(0, 210, 255, 0.2) transparent; }
 
         html, body {
             background-color: var(--bg-dark);
@@ -79,21 +70,27 @@
             position: relative;
         }
 
-        /* 🌀 FONDO CON RESPLANDOR NEÓN UNIFORME */
+        /* 🌊 FONDO NEURAL EXPRESSIVE (DEGRADADOS EN MOVIMIENTO Y PULSO) */
         .jarvis-presence-bg {
             position: absolute;
             inset: 0;
             width: 100%;
             height: 100%;
-            background: radial-gradient(circle at 50% 50%, rgba(0, 110, 255, 0.18) 0%, rgba(0, 210, 255, 0.05) 45%, rgba(9, 12, 21, 0) 80%);
+            background: radial-gradient(circle at 20% 30%, rgba(0, 136, 255, 0.15) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 70%, rgba(0, 210, 255, 0.12) 0%, transparent 50%),
+                        radial-gradient(circle at 50% 50%, rgba(7, 10, 18, 1) 0%, rgba(5, 7, 12, 1) 100%);
             pointer-events: none;
             z-index: 1;
-            animation: jarvisPulseBg 5s infinite alternate ease-in-out;
+            transition: all 0.8s ease;
         }
 
-        @keyframes jarvisPulseBg {
-            0% { opacity: 0.7; }
-            100% { opacity: 1.0; }
+        .jarvis-presence-bg.pulsing {
+            animation: neuralPulse 2s infinite alternate ease-in-out;
+        }
+
+        @keyframes neuralPulse {
+            0% { opacity: 0.7; transform: scale(0.99); }
+            100% { opacity: 1.0; transform: scale(1.01); filter: brightness(1.2); }
         }
 
         /* 📌 BARRA LATERAL ESTILO GEMINI EXACTO */
@@ -280,7 +277,6 @@
 
         .sidebar.expanded .sidebar-search-input { display: block; }
 
-        /* OCULTAMIENTO ESTRICTO EN MODO COLAPSADO */
         .sidebar:not(.expanded) .sidebar-section-title,
         .sidebar:not(.expanded) .empty-chats-notice,
         .sidebar:not(.expanded) .menu-item-text,
@@ -437,7 +433,6 @@
 
         .dropdown-item:hover { background: rgba(0, 136, 255, 0.15); color: var(--stark-cyan); }
         .dropdown-item svg { width: 18px; height: 18px; fill: currentColor; }
-        .dropdown-item.danger:hover { background: rgba(255, 50, 50, 0.15); color: #ff5555; }
 
         .main-content {
             flex: 1;
@@ -472,7 +467,6 @@
             text-shadow: 0 0 8px var(--stark-glow);
         }
 
-        /* 📌 OPCIÓN TRES PUNTOS SUPERIOR (SOLO VISIBLE DENTRO DE CHAT ACTIVO) */
         .top-options-btn {
             background: transparent;
             border: none;
@@ -518,7 +512,6 @@
         @keyframes geminiEntrance { to { opacity: 1; transform: translateY(0); } }
         .welcome-title.hidden { display: none; }
 
-        /* 💬 CONVERSACIÓN LIMPIA ESTILO GEMINI */
         .chat-container {
             width: 100%;
             max-width: 780px;
@@ -563,14 +556,14 @@
             box-shadow: none;
         }
 
-        /* 🔮 ANIMACIÓN PENSANDO TIPO GEMINI PRO */
+        /* 🔮 ANIMACIÓN PENSANDO TIPO GEMINI PRO NEURAL EXPRESSIVE */
         .typing-indicator {
             display: none;
             align-items: center;
             justify-content: center;
             gap: 8px;
             padding: 12px 20px;
-            background: rgba(13, 18, 29, 0.85);
+            background: rgba(18, 24, 39, 0.85);
             border: 1px solid rgba(0, 210, 255, 0.25);
             border-radius: 24px;
             width: fit-content;
@@ -623,24 +616,25 @@
         }
         .preview-bar.active { display: flex; }
 
+        /* PÍLDORA CENTRAL TIPO NEURAL EXPRESSIVE CON BOTÓN "+" */
         .input-container {
             width: 100%;
             max-width: 720px;
             background: var(--input-bg);
-            border-radius: 28px;
-            padding: 6px 12px;
+            border-radius: 30px;
+            padding: 6px 14px;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
-            border: 1px solid rgba(255, 255, 255, 0.07);
+            border: 1px solid rgba(255, 255, 255, 0.08);
             transition: all 0.3s ease;
             position: relative;
         }
 
         .input-container:focus-within {
-            border-color: rgba(0, 136, 255, 0.5);
-            box-shadow: 0 8px 38px rgba(0, 0, 0, 0.8), 0 0 18px var(--stark-glow);
+            border-color: rgba(0, 136, 255, 0.55);
+            box-shadow: 0 8px 38px rgba(0, 0, 0, 0.8), 0 0 20px var(--stark-glow);
         }
 
         .stark-input {
@@ -661,8 +655,8 @@
             border: none;
             color: var(--text-sub);
             cursor: pointer;
-            width: 36px;
-            height: 36px;
+            width: 38px;
+            height: 38px;
             border-radius: 50%;
             display: flex;
             align-items: center;
@@ -672,7 +666,7 @@
         }
 
         .action-btn:hover { background: rgba(255, 255, 255, 0.08); color: var(--stark-cyan); }
-        .action-btn svg { width: 19px; height: 19px; fill: currentColor; }
+        .action-btn svg { width: 20px; height: 20px; fill: currentColor; }
 
         .model-selector {
             display: flex;
@@ -708,7 +702,7 @@
 </head>
 <body>
 
-    <div class="jarvis-presence-bg"></div>
+    <div class="jarvis-presence-bg" id="presenceBg"></div>
     <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
 
     <!-- 📌 BARRA LATERAL ESTILO GEMINI EXACTO -->
@@ -759,17 +753,9 @@
             <svg viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>
             <span>Compartir conversación</span>
         </div>
-        <div class="dropdown-item" onclick="accionFijarChat()">
-            <svg viewBox="0 0 24 24"><path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/></svg>
-            <span>Fijar</span>
-        </div>
         <div class="dropdown-item" onclick="accionRenombrarChat()">
             <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
             <span>Cambiar nombre</span>
-        </div>
-        <div class="dropdown-item" onclick="accionAnadirCuaderno()">
-            <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14z"/></svg>
-            <span>Añadir al cuaderno</span>
         </div>
         <div class="dropdown-item danger" onclick="accionEliminarChat()">
             <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
@@ -782,18 +768,6 @@
         <div class="dropdown-item" onclick="accionCompartirChat()">
             <svg viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>
             <span>Compartir conversación</span>
-        </div>
-        <div class="dropdown-item" onclick="alert('Archivos adjuntos guardados en el núcleo.')">
-            <svg viewBox="0 0 24 24"><path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"/></svg>
-            <span>Archivos en este chat</span>
-        </div>
-        <div class="dropdown-item" onclick="accionFijarChat()">
-            <svg viewBox="0 0 24 24"><path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/></svg>
-            <span>Fijar</span>
-        </div>
-        <div class="dropdown-item" onclick="accionRenombrarChat()">
-            <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
-            <span>Cambiar nombre</span>
         </div>
         <div class="dropdown-item" onclick="window.print()">
             <svg viewBox="0 0 24 24"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-4 11H9v-5h6v5zm4-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-2-9H7v4h10V3z"/></svg>
@@ -818,7 +792,7 @@
 
         <div class="chat-container" id="chatBox"></div>
 
-        <!-- 🔮 ANIMACIÓN PENSANDO TIPO GEMINI PRO -->
+        <!-- 🔮 ANIMACIÓN PENSANDO TIPO GEMINI PRO NEURAL EXPRESSIVE -->
         <div class="typing-indicator" id="typingIndicator">
             <div class="typing-dot"></div>
             <div class="typing-dot"></div>
@@ -834,7 +808,7 @@
             </div>
 
             <div class="input-container">
-                <button class="action-btn" onclick="document.getElementById('fileInput').click()" title="Adjuntar imagen o archivo">
+                <button class="action-btn" onclick="document.getElementById('fileInput').click()" title="Adjuntar archivo u opción +">
                     <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
                 </button>
                 <input type="file" id="fileInput" accept="image/*" style="display:none;" onchange="procesarArchivoSeleccionado(event)">
@@ -864,6 +838,7 @@
         const recentChatContextMenu = document.getElementById("recentChatContextMenu");
         const topHeaderContextMenu = document.getElementById("topHeaderContextMenu");
         const topOptionsBtn = document.getElementById("topOptionsBtn");
+        const presenceBg = document.getElementById("presenceBg");
 
         let archivoBase64 = null;
         let nombreArchivo = null;
@@ -1077,11 +1052,6 @@
             alert("Enlace de la conversación copiado al portapapeles, señor.");
         }
 
-        function accionFijarChat() {
-            cerrarTodosContextMenus();
-            alert("Conversación fijada en la parte superior.");
-        }
-
         function accionRenombrarChat() {
             cerrarTodosContextMenus();
             let chatsObj = JSON.parse(localStorage.getItem("jarvis_chats_db") || "{}");
@@ -1094,11 +1064,6 @@
                     actualizarListaRecientes();
                 }
             }
-        }
-
-        function accionAnadirCuaderno() {
-            cerrarTodosContextMenus();
-            alert("Conversación añadida a sus Cuadernos de Estudio.");
         }
 
         function accionEliminarChat() {
@@ -1175,6 +1140,7 @@
             userInput.value = "";
             cancelarArchivos();
 
+            presenceBg.classList.add("pulsing");
             typingIndicator.classList.add("active");
 
             try {
@@ -1189,6 +1155,7 @@
                 });
 
                 const data = await response.json();
+                presenceBg.classList.remove("pulsing");
                 typingIndicator.classList.remove("active");
 
                 if (response.ok && data.reply) {
@@ -1196,14 +1163,15 @@
                     historialPrevio.push({ role: "assistant", content: data.reply });
                     guardarHistorialChatLocal(sid, tituloChat, historialPrevio);
                 } else {
-                    const fallback = "A su servicio, señor. ¿En qué le puedo asistir hoy?";
+                    const fallback = "Entendido, Cristian. ¿En qué aspecto deseas que profundicemos?";
                     agregarMensajeJarvisCaracter(fallback);
                     historialPrevio.push({ role: "assistant", content: fallback });
                     guardarHistorialChatLocal(sid, tituloChat, historialPrevio);
                 }
             } catch (error) {
+                presenceBg.classList.remove("pulsing");
                 typingIndicator.classList.remove("active");
-                const fallback = "Sistemas sincronizados, señor. ¿Qué desea analizar?";
+                const fallback = "Sistemas sincronizados. ¿Qué tema deseas analizar a continuación, Cristian?";
                 agregarMensajeJarvisCaracter(fallback);
                 historialPrevio.push({ role: "assistant", content: fallback });
                 guardarHistorialChatLocal(sid, tituloChat, historialPrevio);
