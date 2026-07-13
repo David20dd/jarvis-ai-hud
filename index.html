@@ -2,325 +2,106 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>J.A.R.V.I.S.</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
-    
-    <script>
-        window.MathJax = {
-            tex: {
-                inlineMath: [['$', '$'], ['\\(', '\\)']],
-                displayMath: [['$$', '$$'], ['\\[', '\\]']]
-            },
-            svg: { fontCache: 'global' }
-        };
-    </script>
-    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
-
     <style>
         :root {
-            --bg-dark: #0e1015;
-            --sidebar-bg: #090a0e;
-            --input-bg: #1e222d;
-            --stark-blue: #1a73e8;
-            --stark-cyan: #00d2ff;
-            --text-main: #e3e8f0;
-            --text-sub: #8e96a4;
-            --font-inter: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            --font-mono: 'Share Tech Mono', monospace;
+            --bg-deep: #05070a;
+            --stark-arc-blue: #0088ff;
+            --stark-glow: rgba(0, 136, 255, 0.4);
+            --text-col: #d1d9e6;
         }
-
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: var(--font-inter); }
-
-        body {
-            background-color: var(--bg-dark);
-            color: var(--text-main);
-            height: 100vh;
-            display: flex;
-            overflow: hidden;
-            position: relative;
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            background: var(--bg-deep); 
+            background: radial-gradient(circle at 50% 50%, #0a1220 0%, var(--bg-deep) 80%);
+            color: var(--text-col); font-family: 'Inter', sans-serif; height: 100vh; overflow: hidden;
         }
+        
+        /* Contenedor principal */
+        .app-container { display: flex; height: 100vh; }
+        
+        /* Barra lateral estilizada */
+        .sidebar { width: 60px; background: #07080a; display: flex; flex-direction: column; align-items: center; padding: 20px 0; border-right: 1px solid #1a1e26; }
+        
+        /* REACTOR ARC DISEÑADO SEGÚN TU IMAGEN */
+        .arc-container { width: 36px; height: 36px; margin-bottom: 20px; }
+        #arcReactor { width: 36px; height: 36px; filter: drop-shadow(0 0 8px var(--stark-arc-blue)); cursor: pointer; }
 
-        /* 🌀 FONDO GEMINI CON DESTELLO SUTIL ANIMADO (SIN EFECTO SUBE Y BAJA) */
-        .presence-bg {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 80vw;
-            height: 80vh;
-            background: radial-gradient(circle at 50% 50%, rgba(20, 75, 160, 0.22) 0%, rgba(0, 150, 255, 0.05) 45%, rgba(14, 16, 21, 0) 70%);
-            pointer-events: none;
-            z-index: 1;
-            animation: softGlow 6s infinite alternate ease-in-out;
+        /* Área de Chat */
+        .main-chat { flex: 1; display: flex; flex-direction: column; position: relative; }
+        .chat-view { flex: 1; overflow-y: auto; padding: 40px; padding-right: 20px; }
+        
+        /* Scrollbar estilizada */
+        .chat-view::-webkit-scrollbar { width: 6px; }
+        .chat-view::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+        
+        .chat-message { max-width: 700px; margin: 0 auto 20px auto; line-height: 1.6; padding: 10px; }
+        .user-msg { color: #fff; font-weight: 500; text-align: right; }
+        
+        /* Barra de entrada */
+        .input-zone { padding: 20px; display: flex; justify-content: center; }
+        .input-bar { 
+            width: 100%; max-width: 700px; background: #11141a; border-radius: 25px; 
+            padding: 12px 20px; display: flex; align-items: center; border: 1px solid #2a2e36;
         }
-
-        @keyframes softGlow {
-            0% { opacity: 0.6; }
-            100% { opacity: 1.0; }
-        }
-
-        /* 📌 BARRA LATERAL IZQUIERDA */
-        .sidebar {
-            width: 60px;
-            height: 100vh;
-            background-color: var(--sidebar-bg);
-            border-right: 1px solid rgba(255, 255, 255, 0.03);
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            align-items: center;
-            padding: 16px 0;
-            z-index: 10;
-        }
-
-        .sidebar-top, .sidebar-bottom {
-            display: flex; flex-direction: column; align-items: center; gap: 20px;
-        }
-
-        .side-btn {
-            background: transparent; border: none; color: var(--text-sub); cursor: pointer;
-            width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-            transition: all 0.2s ease;
-        }
-        .side-btn:hover { background: rgba(255, 255, 255, 0.08); color: #ffffff; }
-        .side-btn svg { width: 20px; height: 20px; fill: currentColor; }
-
-        /* ☢️ REACTOR ARC COMPACTO */
-        .arc-nav-container { width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; }
-        #arcReactorNav { width: 32px; height: 32px; border-radius: 50%; cursor: pointer; filter: drop-shadow(0 0 6px rgba(0, 180, 255, 0.5)); }
-
-        /* 🖥️ ÁREA PRINCIPAL CENTRAL */
-        .main-content {
-            flex: 1; height: 100vh; display: flex; flex-direction: column; align-items: center;
-            justify-content: center; position: relative; padding: 20px; z-index: 2;
-        }
-
-        .sys-status-text {
-            position: absolute; top: 20px; right: 25px; font-family: var(--font-mono);
-            font-size: 0.72rem; color: var(--stark-cyan); opacity: 0.7; z-index: 10;
-        }
-
-        .hero-container {
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            width: 100%; max-width: 740px; transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-
-        .main-content.chat-mode .hero-container { position: absolute; bottom: 25px; }
-
-        .welcome-title {
-            font-size: 2.1rem; font-weight: 400; color: #e3e8f0; margin-bottom: 28px;
-            letter-spacing: -0.4px; text-align: center; opacity: 0; transform: translateY(12px);
-            animation: geminiEntrance 0.6s ease forwards;
-        }
-        @keyframes geminiEntrance { to { opacity: 1; transform: translateY(0); } }
-        .welcome-title.hidden { display: none; }
-
-        /* 💬 ZONA DE CONVERSACIÓN Y BARRA DE DESPLAZAMIENTO ESTILO GEMINI */
-        .chat-container {
-            width: 100%; max-width: 740px; height: calc(100vh - 160px);
-            overflow-y: auto; display: none; flex-direction: column; gap: 24px;
-            padding-top: 20px; padding-bottom: 20px; scroll-behavior: smooth;
-        }
-        .chat-container.active { display: flex; }
-
-        /* SCROLLBAR TRANSPARENTE / GRIS ESTILO GEMINI */
-        .chat-container::-webkit-scrollbar { width: 6px; }
-        .chat-container::-webkit-scrollbar-track { background: transparent; }
-        .chat-container::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.12);
-            border-radius: 10px;
-        }
-        .chat-container::-webkit-scrollbar-thumb:hover {
-            background: rgba(255, 255, 255, 0.25);
-        }
-
-        .message {
-            max-width: 85%; font-size: 0.98rem; line-height: 1.6; word-break: break-word; padding: 12px 18px;
-        }
-
-        .user-message {
-            align-self: flex-end; background: #232734; border-radius: 20px; border-bottom-right-radius: 4px; color: #ffffff;
-        }
-
-        .jarvis-message {
-            align-self: flex-start; background: transparent; color: #e3e8f0; padding-left: 0;
-        }
-
-        /* 🔍 BARRA DE BÚSQUEDA REDONDEADA */
-        .input-container {
-            width: 100%; max-width: 740px; background: var(--input-bg); border-radius: 28px;
-            padding: 8px 16px; display: flex; align-items: center; gap: 10px;
-            border: 1px solid rgba(255, 255, 255, 0.08); transition: all 0.25s ease;
-        }
-
-        .input-container:focus-within {
-            border-color: rgba(255, 255, 255, 0.2);
-            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
-        }
-
-        .stark-input {
-            flex: 1; background: transparent; border: none; outline: none; color: #ffffff; font-size: 0.98rem; padding: 8px 4px;
-        }
-        .stark-input::placeholder { color: #6c727e; }
-
-        .action-btn {
-            background: transparent; border: none; color: var(--text-sub); cursor: pointer;
-            width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease;
-        }
-        .action-btn:hover { background: rgba(255, 255, 255, 0.08); color: #ffffff; }
-        .action-btn svg { width: 19px; height: 19px; fill: currentColor; }
-
-        .model-selector {
-            display: flex; align-items: center; gap: 4px; font-size: 0.82rem; color: var(--text-sub);
-            cursor: pointer; padding: 5px 10px; border-radius: 10px; user-select: none;
-        }
-
-        @media (max-width: 768px) {
-            .welcome-title { font-size: 1.5rem; }
-            .input-container { max-width: 92%; }
-            .chat-container { max-width: 95%; }
-        }
+        .input-bar input { flex: 1; background: none; border: none; color: #fff; outline: none; padding-left: 10px; }
     </style>
 </head>
 <body>
-
-    <div class="presence-bg"></div>
-
-    <aside class="sidebar">
-        <div class="sidebar-top">
-            <div class="arc-nav-container">
-                <canvas id="arcReactorNav" title="J.A.R.V.I.S. Core"></canvas>
+    <div class="app-container">
+        <aside class="sidebar">
+            <div class="arc-container"><canvas id="arcReactor"></canvas></div>
+            <div style="flex:1"></div>
+            <button class="side-btn">⚙️</button>
+        </aside>
+        <main class="main-chat">
+            <div class="chat-view" id="chatBox"></div>
+            <div class="input-zone">
+                <div class="input-bar">
+                    <button>+</button>
+                    <input type="text" id="userInput" placeholder="Pregunta a Jarvis...">
+                    <span>Mark V</span>
+                </div>
             </div>
-            <button class="side-btn" title="Nuevo Chat" onclick="location.reload()">
-                <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
-            </button>
-            <button class="side-btn" title="Buscar"><svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg></button>
-            <button class="side-btn" title="Historial"><svg viewBox="0 0 24 24"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg></button>
-        </div>
-        <div class="sidebar-bottom">
-            <button class="side-btn" title="Configuración"><svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg></button>
-        </div>
-    </aside>
-
-    <main class="main-content" id="mainContent">
-        <span class="sys-status-text" id="sysStatus">MARK V // ONLINE</span>
-        <div class="chat-container" id="chatBox"></div>
-
-        <div class="hero-container" id="heroContainer">
-            <h1 class="welcome-title" id="welcomeTitle">Hola, Cristian, ¿qué vamos a hacer?</h1>
-
-            <div class="input-container">
-                <button class="action-btn" title="Adjuntar"><svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg></button>
-                <input type="text" id="userInput" class="stark-input" placeholder="Pregunta a Jarvis..." autocomplete="off">
-                <div class="model-selector"><span>Mark V</span></div>
-                <button class="action-btn" id="micBtn"><svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg></button>
-            </div>
-        </div>
-    </main>
+        </main>
+    </div>
 
     <script>
-        const API_URL = "https://jarvis-ai-hud.onrender.com/api/jarvis";
-        const mainContent = document.getElementById("mainContent");
-        const chatBox = document.getElementById("chatBox");
-        const userInput = document.getElementById("userInput");
-        const welcomeTitle = document.getElementById("welcomeTitle");
-
-        const mensajesEntrada = [
-            "El micrófono es tuyo, Cristian",
-            "Hola, Cristian, ¿qué vamos a hacer?",
-            "Manos a la obra, Cristian",
-            "¿Qué toca ahora, Cristian?",
-            "¿Qué toca hoy, Cristian?",
-            "Hola, Cristian, ¿qué tienes en mente?"
-        ];
-        welcomeTitle.innerText = mensajesEntrada[Math.floor(Math.random() * mensajesEntrada.length)];
-
-        // ANIMACIÓN REACTOR ARC
-        const coreCanvas = document.getElementById("arcReactorNav");
-        const ctx = coreCanvas.getContext("2d");
-        coreCanvas.width = 64; coreCanvas.height = 64;
-        let angleOuter = 0;
-
-        function drawArcReactor() {
-            ctx.clearRect(0, 0, 64, 64);
-            const cx = 32, cy = 32;
-            angleOuter += 0.015;
-
-            ctx.save(); ctx.translate(cx, cy); ctx.rotate(angleOuter);
-            for (let i = 0; i < 10; i++) {
-                ctx.save(); ctx.rotate((i / 10) * Math.PI * 2);
-                ctx.fillStyle = "#a84e2a"; ctx.fillRect(-3, -26, 6, 6);
-                ctx.restore();
-            }
-            ctx.restore();
-
-            ctx.save(); ctx.translate(cx, cy);
-            const radGrad = ctx.createRadialGradient(0, 0, 1, 0, 0, 11);
-            radGrad.addColorStop(0, "#ffffff"); radGrad.addColorStop(0.4, "#0088ff"); radGrad.addColorStop(1, "transparent");
-            ctx.fillStyle = radGrad; ctx.beginPath(); ctx.arc(0, 0, 11, 0, Math.PI * 2); ctx.fill();
-            ctx.restore();
-
-            requestAnimationFrame(drawArcReactor);
+        const canvas = document.getElementById('arcReactor');
+        const ctx = canvas.getContext('2d');
+        let t = 0;
+        function draw() {
+            ctx.clearRect(0, 0, 100, 100);
+            t += 0.02;
+            ctx.beginPath();
+            ctx.arc(50, 50, 40, 0, Math.PI*2);
+            ctx.strokeStyle = "#0088ff"; ctx.lineWidth = 4; ctx.stroke();
+            // Animación de pulso
+            ctx.beginPath();
+            ctx.arc(50, 50, 20 + Math.sin(t)*5, 0, Math.PI*2);
+            ctx.fillStyle = "rgba(0, 136, 255, " + (0.5 + Math.sin(t)*0.2) + ")";
+            ctx.fill();
+            requestAnimationFrame(draw);
         }
-        drawArcReactor();
-
-        function obtenerSessionId() {
-            let sid = localStorage.getItem("jarvis_session_id");
-            if (!sid) {
-                sid = "stark_user_" + Math.random().toString(36).substring(2, 9);
-                localStorage.setItem("jarvis_session_id", sid);
-            }
-            return sid;
-        }
-
-        userInput.addEventListener("keypress", (e) => { if (e.key === "Enter") enviarMensaje(); });
-
-        async function enviarMensaje() {
-            const texto = userInput.value.trim();
-            if (!texto) return;
-
-            welcomeTitle.classList.add("hidden");
-            chatBox.classList.add("active");
-            mainContent.classList.add("chat-mode");
-
-            agregarMensajeUsuario(texto);
-            userInput.value = "";
-
-            try {
-                const response = await fetch(API_URL, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ message: texto, session_id: obtenerSessionId() })
+        draw();
+        
+        // Lógica de mensaje
+        document.getElementById('userInput').addEventListener('keypress', async (e) => {
+            if (e.key === 'Enter') {
+                const txt = e.target.value;
+                document.getElementById('chatBox').innerHTML += `<div class="chat-message user-msg">${txt}</div>`;
+                e.target.value = '';
+                
+                const res = await fetch('https://jarvis-ai-hud.onrender.com/api/jarvis', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({message: txt})
                 });
-
-                const data = await response.json();
-                if (response.ok && data.reply) {
-                    agregarMensajeJarvis(data.reply);
-                } else {
-                    agregarMensajeJarvis("A su servicio, señor. ¿En qué le puedo asistir ahora?");
-                }
-            } catch (error) {
-                agregarMensajeJarvis("Inconveniente de conexión temporal.");
+                const data = await res.json();
+                document.getElementById('chatBox').innerHTML += `<div class="chat-message">${data.reply}</div>`;
             }
-        }
-
-        function agregarMensajeUsuario(texto) {
-            const msgDiv = document.createElement("div");
-            msgDiv.className = "message user-message";
-            msgDiv.innerText = texto;
-            chatBox.appendChild(msgDiv);
-            chatBox.scrollTop = chatBox.scrollHeight;
-        }
-
-        function agregarMensajeJarvis(texto) {
-            const msgDiv = document.createElement("div");
-            msgDiv.className = "message jarvis-message";
-            msgDiv.innerText = texto;
-            chatBox.appendChild(msgDiv);
-            chatBox.scrollTop = chatBox.scrollHeight;
-            if (window.MathJax) window.MathJax.typesetPromise([msgDiv]);
-        }
+        });
     </script>
 </body>
 </html>
