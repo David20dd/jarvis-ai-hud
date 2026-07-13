@@ -44,6 +44,33 @@
             -webkit-tap-highlight-color: transparent;
         }
 
+        /* 🎨 1. PERSONALIZACIÓN MODERNA Y ELEGANTE DE LAS BARRAS DE DESPLAZAMIENTO (Scrollbars) */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(0, 210, 255, 0.18);
+            border-radius: 10px;
+            transition: background 0.3s ease;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 210, 255, 0.45);
+            box-shadow: 0 0 10px var(--stark-cyan);
+        }
+
+        /* Firefox scrollbar */
+        * {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(0, 210, 255, 0.2) transparent;
+        }
+
         html, body {
             background-color: var(--bg-dark);
             color: var(--text-main);
@@ -72,7 +99,7 @@
             100% { opacity: 1.0; }
         }
 
-        /* 📌 BARRA LATERAL SIMÉTRICA Y LIMPIA (CORRECCIÓN image_44150c.png) */
+        /* 📌 BARRA LATERAL SIMÉTRICA Y LIMPIA */
         .sidebar-overlay {
             position: fixed;
             inset: 0;
@@ -113,7 +140,6 @@
             padding: 14px;
         }
 
-        /* CABECERA */
         .sidebar-header {
             display: flex;
             align-items: center;
@@ -286,13 +312,15 @@
 
         .sidebar.expanded .sidebar-search-input { display: block; }
 
-        /* OCULTAR ELEMENTOS INNECESARIOS SI ESTÁ COLAPSADO */
+        /* 🎨 CORRECCIÓN DE DESBORDAMIENTO EN ESTADO COLAPSADO (image_446f05.jpg) */
         .sidebar:not(.expanded) .sidebar-section-title,
         .sidebar:not(.expanded) .empty-chats-notice,
         .sidebar:not(.expanded) .menu-item-text,
         .sidebar:not(.expanded) .chat-options-btn,
         .sidebar:not(.expanded) .user-info {
             display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
         }
 
         .sidebar-menu-list {
@@ -330,6 +358,7 @@
             font-size: 0.86rem;
             margin: 0 auto;
             position: relative;
+            overflow: hidden;
         }
 
         .sidebar.expanded .menu-item-chat {
@@ -378,7 +407,7 @@
 
         .chat-options-btn svg { width: 16px; height: 18px; fill: currentColor; }
 
-        /* MENÚS FLOTANTES */
+        /* MENÚS FLOTANTES CON GLASSMORPHISM */
         .dropdown-menu {
             position: fixed;
             background: var(--dropdown-bg);
@@ -524,7 +553,6 @@
             bottom: 20px;
         }
 
-        /* TÍTULOS DE BIENVENIDA LIMPIOS (SIN EMOJIS) */
         .welcome-title {
             font-size: clamp(1.3rem, 4.5vw, 2.1rem);
             font-weight: 500;
@@ -535,8 +563,6 @@
             transform: translateY(14px);
             animation: geminiEntrance 0.65s cubic-bezier(0.16, 1, 0.3, 1) forwards;
             padding: 0 10px;
-            letter-spacing: normal !important;
-            word-spacing: normal !important;
         }
 
         @keyframes geminiEntrance {
@@ -561,18 +587,14 @@
 
         .chat-container.active { display: flex; }
 
-        /* MENSAJES DE CHAT (ESPACIADO Y TIPOGRAFÍA PERFECTOS) */
         .message {
             max-width: 88%;
             font-size: 1rem;
             line-height: 1.7;
             word-break: break-word;
-            overflow-wrap: break-word;
             padding: 16px 22px;
             border-radius: 18px;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-            letter-spacing: normal !important;
-            word-spacing: normal !important;
             white-space: pre-wrap !important;
         }
 
@@ -592,34 +614,47 @@
             border-bottom-left-radius: 4px;
         }
 
+        /* 🔮 2. INDICADOR DE ESCRITURA GIRATORIO Y PULSANTE ESTILO GEMINI (image_446f7d.png) */
         .typing-indicator {
             display: none;
             align-items: center;
-            gap: 6px;
-            padding: 12px 18px;
-            background: #0d121d;
-            border: 1px solid rgba(0, 210, 255, 0.18);
-            border-radius: 16px;
+            justify-content: center;
+            gap: 8px;
+            padding: 12px 20px;
+            background: rgba(13, 18, 29, 0.85);
+            border: 1px solid rgba(0, 210, 255, 0.25);
+            border-radius: 24px;
             width: fit-content;
             align-self: flex-start;
+            box-shadow: 0 4px 18px rgba(0, 136, 255, 0.15);
+            backdrop-filter: blur(8px);
+            animation: geminiOrbitRotate 3s infinite linear;
         }
 
         .typing-indicator.active { display: flex; }
 
-        .typing-dot {
-            width: 7px;
-            height: 7px;
-            background: var(--stark-cyan);
-            border-radius: 50%;
-            animation: typingPulse 1.4s infinite ease-in-out;
+        @keyframes geminiOrbitRotate {
+            0% { border-color: rgba(0, 210, 255, 0.2); }
+            50% { border-color: rgba(0, 136, 255, 0.6); box-shadow: 0 0 14px var(--stark-glow); }
+            100% { border-color: rgba(0, 210, 255, 0.2); }
         }
 
-        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
-        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--stark-cyan), var(--stark-blue));
+            box-shadow: 0 0 8px var(--stark-cyan);
+            animation: geminiOrbitalWave 1.4s infinite ease-in-out;
+        }
 
-        @keyframes typingPulse {
-            0%, 100% { transform: scale(1); opacity: 0.4; }
-            50% { transform: scale(1.4); opacity: 1; }
+        .typing-dot:nth-child(1) { animation-delay: 0s; }
+        .typing-dot:nth-child(2) { animation-delay: 0.25s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.5s; }
+
+        @keyframes geminiOrbitalWave {
+            0%, 100% { transform: translateY(0) scale(0.8); opacity: 0.4; filter: blur(0.5px); }
+            50% { transform: translateY(-6px) scale(1.35); opacity: 1; filter: blur(0px); box-shadow: 0 0 12px var(--stark-cyan); }
         }
 
         .preview-bar {
@@ -668,8 +703,6 @@
             font-size: 0.95rem;
             padding: 10px 4px;
             min-width: 0;
-            letter-spacing: normal;
-            word-spacing: normal;
         }
 
         .stark-input::placeholder { color: #6c727e; }
@@ -736,7 +769,7 @@
     <div class="jarvis-presence-bg"></div>
     <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
 
-    <!-- 📌 BARRA LATERAL SIMÉTRICA Y SIN DESBORDAMIENTOS -->
+    <!-- 📌 BARRA LATERAL SIMÉTRICA Y LIMPIA -->
     <aside class="sidebar" id="sidebar">
         <div>
             <div class="sidebar-header">
@@ -842,6 +875,7 @@
 
         <div class="chat-container" id="chatBox"></div>
 
+        <!-- 🔮 ANIMACIÓN PENSANDO TIPO GEMINI -->
         <div class="typing-indicator" id="typingIndicator">
             <div class="typing-dot"></div>
             <div class="typing-dot"></div>
@@ -849,7 +883,6 @@
         </div>
 
         <div class="hero-container" id="heroContainer">
-            <!-- FRASES DE BIENVENIDA LIMPIAS (SIN EMOJIS) -->
             <h1 class="welcome-title" id="welcomeTitle">Diseñemos algo increíble hoy, Cristian</h1>
 
             <div class="preview-bar" id="previewBar">
@@ -892,7 +925,6 @@
         let nombreArchivo = null;
         let chatSeleccionadoActual = null;
 
-        // BIENVENIDAS SOBRIAS Y ELEGANTES (SIN EMOJIS)
         const mensajesEntrada = [
             "El micrófono es tuyo, Cristian",
             "Hola, Cristian, ¿qué vamos a hacer hoy?",
@@ -1218,14 +1250,14 @@
                     historialPrevio.push({ role: "assistant", content: data.reply });
                     guardarHistorialChatLocal(sid, tituloChat, historialPrevio);
                 } else {
-                    const fallback = "A su servicio, señor. ¿En qué le puedo asistir hoy? ✨";
+                    const fallback = "A su servicio, señor. ¿En qué le puedo asistir hoy?";
                     agregarMensajeJarvisCaracter(fallback);
                     historialPrevio.push({ role: "assistant", content: fallback });
                     guardarHistorialChatLocal(sid, tituloChat, historialPrevio);
                 }
             } catch (error) {
                 typingIndicator.classList.remove("active");
-                const fallback = "Sistemas sincronizados, señor. ¿Qué desea analizar? ⚡";
+                const fallback = "Sistemas sincronizados, señor. ¿Qué desea analizar?";
                 agregarMensajeJarvisCaracter(fallback);
                 historialPrevio.push({ role: "assistant", content: fallback });
                 guardarHistorialChatLocal(sid, tituloChat, historialPrevio);
@@ -1240,7 +1272,6 @@
             chatBox.scrollTop = chatBox.scrollHeight;
         }
 
-        /* ✍️ RENDERIZADO FLUIDO Y CON ESPACIADO NORMAL */
         function agregarMensajeJarvisCaracter(texto) {
             const msgDiv = document.createElement("div");
             msgDiv.className = "message jarvis-message";
