@@ -22,6 +22,7 @@
             --bg-dark: #06080d;
             --sidebar-bg: #040508;
             --input-bg: #141824;
+            --card-jarvis-bg: #0d121d;
             --stark-blue: #0088ff;
             --stark-cyan: #00d2ff;
             --stark-glow: rgba(0, 136, 255, 0.35);
@@ -161,7 +162,6 @@
             pointer-events: none;
         }
 
-        /* HERO CONTAINER CENTRADO INICIALMENTE CON TRANSICIÓN SUAVE */
         .hero-container {
             display: flex;
             flex-direction: column;
@@ -177,7 +177,6 @@
             bottom: 20px;
         }
 
-        /* TÍTULO BIENVENIDA DINÁMICO ESCALABLE */
         .welcome-title {
             font-size: clamp(1.3rem, 4.5vw, 2.1rem);
             font-weight: 400;
@@ -197,7 +196,7 @@
 
         .welcome-title.hidden { display: none; }
 
-        /* ZONA DE CONVERSACIÓN Y SCROLLBAR A LA DERECHA */
+        /* 💬 ZONA DE CONVERSACIÓN CON CUADROS ESTRUCTURADOS */
         .chat-container {
             width: 100%;
             max-width: 780px;
@@ -205,10 +204,10 @@
             overflow-y: auto;
             display: none;
             flex-direction: column;
-            gap: 18px;
+            gap: 20px;
             padding-top: 40px;
             padding-bottom: 20px;
-            padding-right: 20px;
+            padding-right: 18px;
             scroll-behavior: smooth;
         }
 
@@ -220,35 +219,36 @@
             background: rgba(255, 255, 255, 0.14);
             border-radius: 10px;
         }
-        .chat-container::-webkit-scrollbar-thumb:hover {
-            background: rgba(255, 255, 255, 0.3);
-        }
 
         .message {
-            max-width: 85%;
+            max-width: 88%;
             font-size: 0.98rem;
-            line-height: 1.6;
+            line-height: 1.65;
             word-break: break-word;
-            padding: 12px 18px;
-            border-radius: 18px;
+            padding: 16px 20px;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
         }
 
+        /* CUADRO MENSAJE USUARIO */
         .user-message {
             align-self: flex-end;
-            background: #1c2230;
-            border: 1px solid rgba(0, 136, 255, 0.35);
+            background: #182030;
+            border: 1px solid rgba(0, 136, 255, 0.3);
             color: #ffffff;
             border-bottom-right-radius: 4px;
         }
 
+        /* 📦 CUADRO DE TEXTO ESTRUCTURADO DE JARVIS (ESTILO GEMINI/STARK HUD) */
         .jarvis-message {
             align-self: flex-start;
-            background: transparent;
+            background: var(--card-jarvis-bg);
+            border: 1px solid rgba(0, 210, 255, 0.18);
             color: var(--text-main);
-            padding-left: 0;
+            border-bottom-left-radius: 4px;
+            position: relative;
         }
 
-        /* PREVIEW BARRA ARCHIVOS */
         .preview-bar {
             display: none;
             margin-bottom: 10px;
@@ -266,7 +266,6 @@
         }
         .preview-bar.active { display: flex; }
 
-        /* 🔍 BARRA BÚSQUEDA CENTRAL REDONDEADA */
         .input-container {
             width: 100%;
             max-width: 720px;
@@ -350,9 +349,8 @@
             .main-content { padding: 12px 10px; }
             .sys-status-text { font-size: 0.65rem; top: 12px; right: 14px; }
             .chat-container { padding-right: 10px; padding-left: 4px; gap: 14px; height: calc(100dvh - 135px); }
-            .message { max-width: 92%; font-size: 0.92rem; padding: 10px 14px; }
+            .message { max-width: 95%; font-size: 0.92rem; padding: 12px 16px; }
             .input-container { padding: 4px 8px; gap: 6px; }
-            .model-selector span { font-size: 0.75rem; }
         }
     </style>
 </head>
@@ -422,14 +420,10 @@
             "¿Qué toca ahora, Cristian?",
             "¿Qué toca hoy, Cristian?",
             "Hola, Cristian, ¿qué tienes en mente?",
-            "Protocolos de auto-mejora activos, Cristian",
+            "Sistemas listos, Cristian",
             "Diseñemos algo increíble hoy, Cristian",
             "¿Qué desafío resolveremos hoy, Cristian?",
-            "Sistemas al 100%, Cristian. ¿Por dónde empezamos?",
-            "¿Tienes nuevas ideas que explorar, Cristian?",
-            "A tu señal, Cristian",
-            "Análisis de datos listo, Cristian. ¿Qué consultamos?",
-            "Todos los núcleos están sincronizados, Cristian"
+            "A tu señal, Cristian"
         ];
         welcomeTitle.innerText = mensajesEntrada[Math.floor(Math.random() * mensajesEntrada.length)];
 
@@ -539,10 +533,10 @@
                 if (response.ok && data.reply) {
                     agregarMensajeJarvis(data.reply);
                 } else {
-                    agregarMensajeJarvis("A su servicio, señor. ¿En qué le puedo asistir ahora?");
+                    agregarMensajeJarvis("A su servicio, señor. ¿En qué le puedo asistir?");
                 }
             } catch (error) {
-                agregarMensajeJarvis("Sistemas sincronizados con el núcleo autónomo, señor. ¿Qué desea analizar?");
+                agregarMensajeJarvis("A su servicio, señor. ¿Qué desea analizar?");
             }
         }
 
