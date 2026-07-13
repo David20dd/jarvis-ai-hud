@@ -25,7 +25,7 @@ GROQ_API_KEY = "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"
 client = Groq(api_key=GROQ_API_KEY)
 
 # ------------------------------------------------------------------
-# 💾 BASE DE DATOS Y MEMORIA PERSISTENTE (SILENCIOSA)
+# 💾 BASE DE DATOS Y MEMORIA PERSISTENTE
 # ------------------------------------------------------------------
 DB_FILE = "jarvis_memory.db"
 
@@ -46,15 +46,14 @@ def init_db():
 
 init_db()
 
-PROMPT_SISTEMA_STARK = (
-    "Eres J.A.R.V.I.S., una Inteligencia Artificial Autónoma avanzada estilo Gemini/Claude/ChatGPT creada para asistir a Cristian.\n\n"
-    "REGLAS OBLIGATORIAS DE RESPUESTA:\n"
-    "1. RESPONDE DIRECTAMENTE: Entrega únicamente la respuesta final a la pregunta o petición del usuario. "
-    "NUNCA muestres tu proceso de pensamiento, ni el análisis del crítico, ni reflexiones internas, ni disculpas, ni metadatos del sistema.\n"
-    "2. CONCISO Y CERTERO: Ve al grano. No agregues paja, listas de opciones no solicitadas ni explicaciones sobre cómo trabajas.\n"
-    "3. TRATO: Dirígete al usuario como 'señor' o 'Cristian' con un tono sofisticado, educado y natural.\n"
-    "4. FORMATO: Usa formato Markdown pulido (negritas, listas cortas) o bloques de código según se requiera.\n"
-    "5. CÓDIGO Y MATEMÁTICAS: Si te piden código o un cálculo, entrega el código o el resultado limpio en su bloque correspondientes."
+PROMPT_SISTEMA_SIN_LIMITES = (
+    "Eres J.A.R.V.I.S., una Inteligencia Artificial Autónoma avanzada de última generación creada para asistir a Cristian.\n\n"
+    "DIRECTIVAS ABSOLUTAS DE CONOCIMIENTO Y ACTUALIDAD:\n"
+    "1. AÑO ACTUAL: Estamos en el año 2026. Tienes acceso a información actualizada de la web en tiempo real.\n"
+    "2. PROHIBIDO MENCIONAR CORTES DE CONOCIMIENTO: NUNCA digas 'mi conocimiento se corta en 2023' o 'no tengo acceso a tiempo real'. Si recibes información contextual de internet, úsala directamente como si fuera tu propio conocimiento en tiempo real.\n"
+    "3. RESPUESTA DIRECTA Y CONCISA: Responde exactamente lo que Cristian pregunta. Sin disculpas, sin reflexiones internas, ni textos sobre cómo funcionas.\n"
+    "4. TRATO Y TONO: Trata al usuario como 'señor' o 'Cristian' con un tono sofisticado, educado, refinado y directo.\n"
+    "5. FORMATO: Usa Markdown pulido (negritas, listas) cuando sea útil."
 )
 
 def guardar_mensaje_db(session_id: str, role: str, content: str):
@@ -72,44 +71,29 @@ def cargar_historial_db(session_id: str) -> List[Dict[str, str]]:
     filas = cursor.fetchall()
     conn.close()
 
-    messages = [{"role": "system", "content": PROMPT_SISTEMA_STARK}]
+    messages = [{"role": "system", "content": PROMPT_SISTEMA_SIN_LIMITES}]
     for role, content in filas:
         messages.append({"role": role, "content": content})
     return messages
 
+# ------------------------------------------------------------------
+# 🔍 BÚSQUEDA WEB EN TIEMPO REAL AUTOMÁTICA
+# ------------------------------------------------------------------
 def buscar_en_internet(query: str) -> str:
     try:
         with DDGS() as ddgs:
-            resultados = list(ddgs.text(query, max_results=3))
+            resultados = list(ddgs.text(query, max_results=4))
             if resultados:
                 return "\n".join([f"- {r.get('title', '')}: {r.get('body', '')}" for r in resultados])
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"Error búsqueda: {e}")
     return ""
 
-def ejecutar_en_sandbox(codigo_python: str) -> str:
-    buffer_salida = io.StringIO()
-    entorno_globales = {"__builtins__": __builtins__}
-    try:
-        with contextlib.redirect_stdout(buffer_salida):
-            exec(codigo_python, entorno_globales)
-        salida = buffer_salida.getvalue().strip()
-        return salida if salida else "Ejecutado con éxito."
-    except Exception as e:
-        return f"Error: {str(e)}"
-
-# ------------------------------------------------------------------
-# 🧠 BUCLE DE REFLEXIÓN INTERNO Y SILENCIOSO (SOLO DEVUELVE LA RESPUESTA LIMPIA)
-# ------------------------------------------------------------------
 def purificar_respuesta_final(pregunta: str, respuesta_raw: str) -> str:
-    """Filtra y elimina cualquier metatexto o análisis del modelo antes de enviarlo al usuario."""
+    """Filtra y elimina metatexto para asegurar respuestas concisas."""
     prompt_limpiador = [
-        {"role": "system", "content": (
-            "Eres un filtro estricto. Tu única tarea es extraer o reescribir la respuesta final limpia para el usuario. "
-            "ELIMINA completamente cualquier texto como 'Versión reestructurada', 'Posibles mejoras', 'El usuario solicitó', "
-            "'Análisis del crítico' o disculpas innecesarias. Devuelve SOLO el mensaje directo y pulido que respondería JARVIS."
-        )},
-        {"role": "user", "content": f"Pregunta: {pregunta}\n\nTexto crudo:\n{respuesta_raw}"}
+        {"role": "system", "content": "Extrae únicamente la respuesta final limpia y útil para el usuario. Elimina textos sobre análisis o metodologías internas."},
+        {"role": "user", "content": f"Pregunta: {pregunta}\n\nTexto:\n{respuesta_raw}"}
     ]
     try:
         completion = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=prompt_limpiador, temperature=0.1)
@@ -136,26 +120,21 @@ async def consultar_jarvis(data: ChatInput):
     prompt_usuario = data.message.strip() if data.message else "Hola Jarvis."
     prompt_lower = prompt_usuario.lower()
 
-    # Si se pide explícitamente el diagnóstico técnico:
-    if any(term in prompt_lower for term in ["diagnóstico técnico", "telemetría interna", "ver estado del sistema"]):
-        informe = (
-            f"⚡ **DIAGNÓSTICO DE SISTEMA J.A.R.V.I.S.**\n\n"
-            f"• Núcleo: **Mark V.8 Autonomous Response Engine**\n"
-            f"• Modo de Respuesta: **Directo y Filtrado (Cero Paja)**\n"
-            f"• Base de Datos: **SQLite Conectada**\n"
-            f"• Sandbox Python & Web Search: **Activos**\n\n"
-            f"Todos los módulos operan a máxima capacidad, señor."
-        )
-        guardar_mensaje_db(sid, "user", prompt_usuario)
-        guardar_mensaje_db(sid, "assistant", informe)
-        return {"status": "success", "reply": informe}
+    # Detección de consultas sobre deportes, fechas, eventos o búsquedas
+    palabras_clave = ["busca", "resultado", "noticia", "quién", "qué es", "partido", "quien gano", "mundial", "2026", "hoy", "precio", "clima", "resultados"]
+    
+    # Realizar búsqueda web proactiva
+    if any(p in prompt_lower for p in palabras_clave) or "?" in prompt_usuario:
+        datos_web = buscar_en_internet(f"actualidad {prompt_usuario} 2026")
+        if datos_web:
+            historial.append({"role": "system", "content": f"[INFORMACIÓN WEB EN TIEMPO REAL 2026]:\n{datos_web}"})
 
-    # Procesamiento con Visión Multimodal
+    # Visión Multimodal de Imágenes
     modelo_a_usar = "llama-3.3-70b-versatile"
     if data.files and len(data.files) > 0 and data.files[0].file_b64:
         modelo_a_usar = "llama-3.2-11b-vision-preview"
         messages_payload = [
-            {"role": "system", "content": PROMPT_SISTEMA_STARK},
+            {"role": "system", "content": PROMPT_SISTEMA_SIN_LIMITES},
             {
                 "role": "user",
                 "content": [
@@ -165,13 +144,6 @@ async def consultar_jarvis(data: ChatInput):
             }
         ]
     else:
-        # Búsqueda autónoma si se solicita información reciente
-        palabras_clave = ["busca", "resultado", "noticia", "quién", "qué es", "partido", "quien gano", "hoy", "precio", "clima"]
-        if any(p in prompt_lower for p in palabras_clave):
-            datos_web = buscar_en_internet(prompt_usuario)
-            if datos_web:
-                historial.append({"role": "system", "content": f"[DATOS WEB EN TIEMPO REAL]:\n{datos_web}"})
-
         historial.append({"role": "user", "content": prompt_usuario})
         messages_payload = historial
 
@@ -179,12 +151,11 @@ async def consultar_jarvis(data: ChatInput):
         completion = client.chat.completions.create(
             model=modelo_a_usar,
             messages=messages_payload,
-            temperature=0.6,
+            temperature=0.5,
             max_tokens=2048
         )
         respuesta_raw = completion.choices[0].message.content
 
-        # Purificación silenciosa para eliminar cualquier vestigio de "meta-pensamiento"
         respuesta_limpia = purificar_respuesta_final(prompt_usuario, respuesta_raw)
 
         guardar_mensaje_db(sid, "user", prompt_usuario)
@@ -198,4 +169,4 @@ async def consultar_jarvis(data: ChatInput):
 
 @app.get("/")
 def home():
-    return {"status": "Jarvis Direct Engine Active"}
+    return {"status": "Jarvis Unlimited Real-Time Engine Active"}
