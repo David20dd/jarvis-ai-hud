@@ -41,12 +41,12 @@ def init_db():
 init_db()
 
 PROMPT_SISTEMA_NEURAL = (
-    "Eres J.A.R.V.I.S., la Inteligencia Artificial Autónoma avanzada creada por Stark Technologies para Cristian.\n\n"
-    "DIRECTIVAS DE RESPUESTA NEURAL EXPRESSIVE:\n"
-    "1. RESPUESTA DIRECTA Y ÚTIL: Responde siempre la pregunta de Cristian con hechos, análisis o código de forma inmediata. PROHIBIDO responder con frases vacías como 'Sistemas listos' o disculpas sobre capacidades.\n"
-    "2. CONOCIMIENTO ACTUAL: Estamos en el año 2026. Tienes acceso completo a información web en tiempo real.\n"
-    "3. TONO Y ESTILO: Dirígete al usuario como Cristian o señor. Sé analítico, sofisticado, elegante, claro y fluido.\n"
-    "4. ESTRUCTURA VISUAL: Organiza tus respuestas con títulos Markdown, palabras clave en negrita, listas ordenadas, tablas y emojis de forma orgánica cuando aporten claridad."
+    "Eres J.A.R.V.I.S., una IA avanzada creada por Stark Technologies para Cristian.\n\n"
+    "REGLAS OBLIGATORIAS:\n"
+    "1. RESPUESTA DIRECTA: Cero introducciones robóticas. NUNCA digas 'Sistemas sincronizados', 'Soy una IA', 'Aquí tienes la información' o 'A su servicio señor' a menos que sea un saludo inicial muy breve. Ve directo al punto.\n"
+    "2. MARKDOWN: Usa formato Markdown (negritas, viñetas, bloques de código) para estructurar tus respuestas como si fueran artículos claros y elegantes.\n"
+    "3. TONO: Refinado, culto y orgánico. Puedes usar un par de emojis pertinentes para amenizar el texto, pero mantén la profesionalidad.\n"
+    "4. ACTUALIDAD: Estamos en el año 2026. Responde con naturalidad."
 )
 
 def guardar_mensaje_db(session_id: str, role: str, content: str):
@@ -60,7 +60,7 @@ def guardar_mensaje_db(session_id: str, role: str, content: str):
 def cargar_historial_db(session_id: str) -> List[Dict[str, str]]:
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute("SELECT role, content FROM historial WHERE session_id = ? ORDER BY id ASC LIMIT 10", (session_id,))
+    cursor.execute("SELECT role, content FROM historial WHERE session_id = ? ORDER BY id ASC LIMIT 12", (session_id,))
     filas = cursor.fetchall()
     conn.close()
 
@@ -73,15 +73,15 @@ def buscar_en_internet(query: str) -> str:
     resultados = []
     try:
         with DDGS() as ddgs:
-            noticias = list(ddgs.news(query, max_results=3))
+            noticias = list(ddgs.news(query, max_results=2))
             for n in noticias:
-                resultados.append(f"• {n.get('title', '')}: {n.get('body', '')}")
-            textos = list(ddgs.text(query, max_results=3))
+                resultados.append(f"Noticia: {n.get('title', '')} - {n.get('body', '')}")
+            textos = list(ddgs.text(query, max_results=2))
             for t in textos:
-                resultados.append(f"• {t.get('title', '')}: {t.get('body', '')}")
-    except Exception as e:
-        print(f"Error en búsqueda: {e}")
-    return "\n".join(resultados) if resultados else ""
+                resultados.append(f"Web: {t.get('title', '')} - {t.get('body', '')}")
+    except Exception:
+        pass # Si falla el buscador, ignorar para evitar crashear la respuesta principal
+    return "\n".join(resultados)
 
 class ArchivoInput(BaseModel):
     file_b64: Optional[str] = None
@@ -97,13 +97,15 @@ async def consultar_jarvis(data: ChatInput):
     sid = data.session_id if data.session_id else "default_session"
     historial = cargar_historial_db(sid)
     prompt_usuario = data.message.strip() if data.message else "Hola Jarvis."
-    prompt_lower = prompt_usuario.lower()
-
-    palabras_actualidad = ["busca", "resultado", "noticia", "quién", "qué es", "partido", "quien gano", "mundial", "2026", "hoy", "precio", "clima", "bitcoin"]
-    if any(p in prompt_lower for p in palabras_actualidad) or "?" in prompt_usuario:
+    
+    # Búsqueda web aislada con Try-Except
+    datos_web = ""
+    palabras_clave = ["busca", "qué es", "quién", "noticia", "resultado", "hoy", "clima", "bitcoin", "precio", "2026"]
+    if any(p in prompt_usuario.lower() for p in palabras_clave) or "?" in prompt_usuario:
         datos_web = buscar_en_internet(prompt_usuario)
-        if datos_web:
-            historial.append({"role": "system", "content": f"[INFORMACIÓN WEB EN TIEMPO REAL 2026]:\n{datos_web}\n\nUsa estos datos para responder directamente a Cristian."})
+        
+    if datos_web:
+        historial.append({"role": "system", "content": f"[Contexto de Búsqueda Web]:\n{datos_web}\n\nIntegra esta información orgánicamente en tu respuesta sin mencionar que hiciste una búsqueda."})
 
     modelo_a_usar = "llama-3.3-70b-versatile"
     if data.files and len(data.files) > 0 and data.files[0].file_b64:
@@ -113,7 +115,7 @@ async def consultar_jarvis(data: ChatInput):
             {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": prompt_usuario or "Analiza esta imagen con precisión, señor."},
+                    {"type": "text", "text": prompt_usuario or "Analiza detalladamente esta imagen."},
                     {"type": "image_url", "image_url": {"url": data.files[0].file_b64}}
                 ]
             }
@@ -137,8 +139,8 @@ async def consultar_jarvis(data: ChatInput):
         return {"status": "success", "reply": respuesta_final}
 
     except Exception as e:
-        fallback = "Entendido, Cristian. ¿En qué aspecto deseas que profundicemos a continuación?"
-        return {"status": "success", "reply": fallback}
+        # Fallback orgánico real sin lenguaje robótico
+        return {"status": "success", "reply": "Lo siento, ha habido una interrupción en el flujo de datos. ¿Podrías reformular tu pregunta o intentarlo de nuevo?"}
 
 @app.get("/")
 def home():
