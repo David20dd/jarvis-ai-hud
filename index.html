@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>J.A.R.V.I.S. // MARK V</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <title>J.A.R.V.I.S. // STARK HUD</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
     
     <script>
         window.MathJax = {
@@ -103,6 +103,7 @@
             align-items: center;
             justify-content: center;
             transition: all 0.2s ease;
+            position: relative;
         }
 
         .side-btn:hover {
@@ -179,7 +180,7 @@
 
         .welcome-title {
             font-size: clamp(1.3rem, 4.5vw, 2.1rem);
-            font-weight: 400;
+            font-weight: 500;
             color: #e3e8f0;
             margin-bottom: 28px;
             letter-spacing: -0.4px;
@@ -196,7 +197,7 @@
 
         .welcome-title.hidden { display: none; }
 
-        /* 💬 ZONA DE CONVERSACIÓN Y CUADROS */
+        /* 💬 ZONA DE CONVERSACIÓN CON TIPOGRAFÍA ESTILO GEMINI / CLAUDE */
         .chat-container {
             width: 100%;
             max-width: 780px;
@@ -222,12 +223,13 @@
 
         .message {
             max-width: 88%;
-            font-size: 0.98rem;
-            line-height: 1.65;
+            font-size: 1rem;
+            line-height: 1.7;
             word-break: break-word;
-            padding: 16px 20px;
-            border-radius: 16px;
+            padding: 16px 22px;
+            border-radius: 18px;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            letter-spacing: -0.1px;
         }
 
         .user-message {
@@ -244,6 +246,108 @@
             border: 1px solid rgba(0, 210, 255, 0.18);
             color: var(--text-main);
             border-bottom-left-radius: 4px;
+        }
+
+        /* ✍️ ANIMACIÓN "JARVIS ESTÁ ESCRIBIENDO" */
+        .typing-indicator {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 12px 18px;
+            background: var(--card-jarvis-bg);
+            border: 1px solid rgba(0, 210, 255, 0.18);
+            border-radius: 16px;
+            width: fit-content;
+            align-self: flex-start;
+        }
+
+        .typing-dot {
+            width: 7px;
+            height: 7px;
+            background: var(--stark-cyan);
+            border-radius: 50%;
+            animation: typingPulse 1.4s infinite ease-in-out;
+        }
+
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes typingPulse {
+            0%, 100% { transform: scale(1); opacity: 0.4; }
+            50% { transform: scale(1.4); opacity: 1; }
+        }
+
+        /* 🪟 PANELES MODALES LATERALES Y DE CONFIGURACIÓN */
+        .modal-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(4, 5, 8, 0.82);
+            backdrop-filter: blur(8px);
+            z-index: 100;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .modal-overlay.active { display: flex; }
+
+        .modal-box {
+            background: #0d121d;
+            border: 1px solid rgba(0, 210, 255, 0.3);
+            border-radius: 20px;
+            width: 100%;
+            max-width: 520px;
+            padding: 24px;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.8), 0 0 20px var(--stark-glow);
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+            color: var(--text-main);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding-bottom: 12px;
+        }
+
+        .modal-header h2 {
+            font-size: 1.15rem;
+            font-weight: 600;
+            color: var(--stark-cyan);
+            font-family: var(--font-mono);
+            letter-spacing: 1px;
+        }
+
+        .close-modal {
+            background: transparent;
+            border: none;
+            color: var(--text-sub);
+            font-size: 1.2rem;
+            cursor: pointer;
+        }
+
+        .close-modal:hover { color: #ffffff; }
+
+        .modal-item {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            font-size: 0.9rem;
+        }
+
+        .modal-item label { color: var(--text-sub); font-size: 0.82rem; }
+
+        .modal-input {
+            background: #141824;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+            padding: 10px 14px;
+            border-radius: 10px;
+            outline: none;
         }
 
         .preview-bar {
@@ -346,7 +450,7 @@
             .main-content { padding: 12px 10px; }
             .sys-status-text { font-size: 0.65rem; top: 12px; right: 14px; }
             .chat-container { padding-right: 10px; padding-left: 4px; gap: 14px; height: calc(100dvh - 135px); }
-            .message { max-width: 95%; font-size: 0.92rem; padding: 12px 16px; }
+            .message { max-width: 95%; font-size: 0.94rem; padding: 12px 16px; }
             .input-container { padding: 4px 8px; gap: 6px; }
         }
     </style>
@@ -355,31 +459,54 @@
 
     <div class="jarvis-presence-bg"></div>
 
+    <!-- 📌 BARRA LATERAL IZQUIERDA -->
     <aside class="sidebar">
         <div class="sidebar-top">
             <div class="arc-nav-container">
                 <canvas id="arcReactorNav" title="Reactor Arc J.A.R.V.I.S. Mark V"></canvas>
             </div>
 
-            <button class="side-btn" title="Nuevo Chat" onclick="location.reload()">
+            <!-- ✏️ BOTÓN NUEVO CHAT -->
+            <button class="side-btn" title="Nuevo Chat" onclick="iniciarNuevoChat()">
                 <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
             </button>
-            <button class="side-btn" title="Buscar"><svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg></button>
-            <button class="side-btn" title="Historial"><svg viewBox="0 0 24 24"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg></button>
-            <button class="side-btn" title="Guardados"><svg viewBox="0 0 24 24"><path d="M17 3H7c-1.1 0-1.99.9-1.99 2L5 21l7-3 7 3V5c0-1.1-.9-2-2-2zm0 15l-5-2.18L7 18V5h10v13z"/></svg></button>
-            <button class="side-btn" title="Aplicaciones"><svg viewBox="0 0 24 24"><path d="M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-10v4h4V4h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zm0 6h4v-4h-4v4z"/></svg></button>
+
+            <!-- 🔍 BOTÓN BÚSQUEDA DE PROYECTOS -->
+            <button class="side-btn" title="Buscar Proyectos" onclick="abrirModal('modalBuscar')">
+                <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+            </button>
+
+            <!-- 📜 BOTÓN HISTORIAL DE CHATS -->
+            <button class="side-btn" title="Historial de Conversaciones" onclick="abrirModal('modalHistorial')">
+                <svg viewBox="0 0 24 24"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
+            </button>
+
+            <!-- 📌 BOTÓN GUARDADOS / MARCADORES -->
+            <button class="side-btn" title="Marcadores y Guardados" onclick="abrirModal('modalGuardados')">
+                <svg viewBox="0 0 24 24"><path d="M17 3H7c-1.1 0-1.99.9-1.99 2L5 21l7-3 7 3V5c0-1.1-.9-2-2-2zm0 15l-5-2.18L7 18V5h10v13z"/></svg>
+            </button>
+
+            <!-- 🚀 BOTÓN PANEL DE APLICACIONES -->
+            <button class="side-btn" title="Módulos de Sistema" onclick="abrirModal('modalApps')">
+                <svg viewBox="0 0 24 24"><path d="M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-10v4h4V4h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zm0 6h4v-4h-4v4z"/></svg>
+            </button>
         </div>
+
+        <!-- ⚙️ BOTÓN CONFIGURACIÓN -->
         <div class="sidebar-bottom">
-            <button class="side-btn" title="Configuración"><svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg></button>
+            <button class="side-btn" title="Configuración de Jarvis" onclick="abrirModal('modalConfig')">
+                <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+            </button>
         </div>
     </aside>
 
+    <!-- 🖥️ ÁREA PRINCIPAL CENTRAL -->
     <main class="main-content" id="mainContent">
         <span class="sys-status-text" id="sysStatus">MARK V // ONLINE</span>
         <div class="chat-container" id="chatBox"></div>
 
         <div class="hero-container" id="heroContainer">
-            <h1 class="welcome-title" id="welcomeTitle">Hola, Cristian, ¿qué vamos a hacer?</h1>
+            <h1 class="welcome-title" id="welcomeTitle">Hola, Cristian, ¿qué vamos a hacer hoy? ⚡</h1>
 
             <div class="preview-bar" id="previewBar">
                 <span id="previewText">Imagen/Archivo cargado</span>
@@ -397,6 +524,81 @@
         </div>
     </main>
 
+    <!-- 🪟 MODAL DE CONFIGURACIÓN -->
+    <div class="modal-overlay" id="modalConfig">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h2>⚙️ CONFIGURACIÓN DE J.A.R.V.I.S.</h2>
+                <button class="close-modal" onclick="cerrarModal('modalConfig')">✕</button>
+            </div>
+            <div class="modal-item">
+                <label>Protocolo Activo</label>
+                <input type="text" class="modal-input" value="Mark V.8 Multimodal Persistent Core" readonly>
+            </div>
+            <div class="modal-item">
+                <label>Creatividad / Temperatura</label>
+                <input type="text" class="modal-input" value="0.4 (Optimizado para precisión y elegancia)" readonly>
+            </div>
+            <div class="modal-item">
+                <label>Base de Datos SQLite</label>
+                <input type="text" class="modal-input" value="jarvis_memory.db (Conectada)" readonly>
+            </div>
+        </div>
+    </div>
+
+    <!-- 🪟 MODAL BÚSQUEDA DE PROYECTOS -->
+    <div class="modal-overlay" id="modalBuscar">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h2>🔍 BUSCAR EN PROYECTOS</h2>
+                <button class="close-modal" onclick="cerrarModal('modalBuscar')">✕</button>
+            </div>
+            <input type="text" class="modal-input" placeholder="Escribe para buscar conversaciones..." id="searchChatInput">
+            <p style="font-size: 0.85rem; color: var(--text-sub);">Resultados recientes guardados en la memoria persistente.</p>
+        </div>
+    </div>
+
+    <!-- 🪟 MODAL HISTORIAL -->
+    <div class="modal-overlay" id="modalHistorial">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h2>📜 HISTORIAL DE CONVERSACIONES</h2>
+                <button class="close-modal" onclick="cerrarModal('modalHistorial')">✕</button>
+            </div>
+            <div style="font-size: 0.9rem; color: var(--text-main); display: flex; flex-direction: column; gap: 10px;">
+                <p>• Sesión Actual: <strong style="color: var(--stark-cyan);" id="currentSessionDisplay"></strong></p>
+                <p>• Memoria SQLite: 100% Sincronizada</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 🪟 MODAL MARCADORES Y GUARDADOS -->
+    <div class="modal-overlay" id="modalGuardados">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h2>📌 ELEMENTOS GUARDADOS</h2>
+                <button class="close-modal" onclick="cerrarModal('modalGuardados')">✕</button>
+            </div>
+            <p style="font-size: 0.88rem; color: var(--text-sub);">Aquí se archivarán las respuestas y códigos que marque como favoritos.</p>
+        </div>
+    </div>
+
+    <!-- 🪟 MODAL MÓDULOS / APPS -->
+    <div class="modal-overlay" id="modalApps">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h2>🚀 MÓDULOS DE SISTEMA STARK</h2>
+                <button class="close-modal" onclick="cerrarModal('modalApps')">✕</button>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 0.85rem;">
+                <div style="background: #141824; padding: 12px; border-radius: 10px;">👁️ Visión Multimodal</div>
+                <div style="background: #141824; padding: 12px; border-radius: 10px;">🐍 Sandbox Python</div>
+                <div style="background: #141824; padding: 12px; border-radius: 10px;">🌐 Búsqueda Web 2026</div>
+                <div style="background: #141824; padding: 12px; border-radius: 10px;">💾 Memoria SQLite</div>
+            </div>
+        </div>
+    </div>
+
     <script>
         const API_URL = "https://jarvis-ai-hud.onrender.com/api/jarvis";
         const mainContent = document.getElementById("mainContent");
@@ -411,16 +613,16 @@
         let nombreArchivo = null;
 
         const mensajesEntrada = [
-            "El micrófono es tuyo, Cristian",
-            "Hola, Cristian, ¿qué vamos a hacer?",
-            "Manos a la obra, Cristian",
-            "¿Qué toca ahora, Cristian?",
-            "¿Qué toca hoy, Cristian?",
-            "Hola, Cristian, ¿qué tienes en mente?",
-            "Sistemas listos, Cristian",
-            "Diseñemos algo increíble hoy, Cristian",
-            "¿Qué desafío resolveremos hoy, Cristian?",
-            "A tu señal, Cristian"
+            "El micrófono es tuyo, Cristian 🎙️",
+            "Hola, Cristian, ¿qué vamos a hacer hoy? ⚡",
+            "Manos a la obra, Cristian 🛠️",
+            "¿Qué toca ahora, Cristian? 🚀",
+            "¿Qué toca hoy, Cristian? ✨",
+            "Hola, Cristian, ¿qué tienes en mente? 💡",
+            "Sistemas listos, Cristian 🤖",
+            "Diseñemos algo increíble hoy, Cristian 🌌",
+            "¿Qué desafío resolveremos hoy, Cristian? 🔮",
+            "A tu señal, Cristian 🦾"
         ];
         welcomeTitle.innerText = mensajesEntrada[Math.floor(Math.random() * mensajesEntrada.length)];
 
@@ -476,8 +678,19 @@
                 sid = "stark_user_" + Math.random().toString(36).substring(2, 9);
                 localStorage.setItem("jarvis_session_id", sid);
             }
+            document.getElementById("currentSessionDisplay").innerText = sid;
             return sid;
         }
+
+        obtenerSessionId();
+
+        function iniciarNuevoChat() {
+            localStorage.removeItem("jarvis_session_id");
+            location.reload();
+        }
+
+        function abrirModal(id) { document.getElementById(id).classList.add("active"); }
+        function cerrarModal(id) { document.getElementById(id).classList.remove("active"); }
 
         function procesarArchivoSeleccionado(event) {
             const file = event.target.files[0];
@@ -515,6 +728,9 @@
             userInput.value = "";
             cancelarArchivos();
 
+            // Mostrar animación "Jarvis está escribiendo"
+            const typingIndicator = mostrarAnimacionTyping();
+
             try {
                 const response = await fetch(API_URL, {
                     method: "POST",
@@ -527,13 +743,16 @@
                 });
 
                 const data = await response.json();
+                typingIndicator.remove();
+
                 if (response.ok && data.reply) {
-                    agregarMensajeJarvis(data.reply);
+                    agregarMensajeJarvisEfectoEscribiendo(data.reply);
                 } else {
-                    agregarMensajeJarvis("A su servicio, señor. ¿En qué le puedo asistir?");
+                    agregarMensajeJarvisEfectoEscribiendo("A su servicio, señor. ¿En qué le puedo asistir hoy? ✨");
                 }
             } catch (error) {
-                agregarMensajeJarvis("A su servicio, señor. ¿Qué desea analizar?");
+                typingIndicator.remove();
+                agregarMensajeJarvisEfectoEscribiendo("Sistemas sincronizados con el núcleo central, señor. ¿Qué desea analizar? ⚡");
             }
         }
 
@@ -545,13 +764,35 @@
             chatBox.scrollTop = chatBox.scrollHeight;
         }
 
-        function agregarMensajeJarvis(texto) {
+        function mostrarAnimacionTyping() {
+            const typingDiv = document.createElement("div");
+            typingDiv.className = "typing-indicator";
+            typingDiv.innerHTML = '<div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>';
+            chatBox.appendChild(typingDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+            return typingDiv;
+        }
+
+        function agregarMensajeJarvisEfectoEscribiendo(texto) {
             const msgDiv = document.createElement("div");
             msgDiv.className = "message jarvis-message";
-            msgDiv.innerText = texto;
             chatBox.appendChild(msgDiv);
-            chatBox.scrollTop = chatBox.scrollHeight;
-            if (window.MathJax) window.MathJax.typesetPromise([msgDiv]);
+
+            let i = 0;
+            const velocidad = 12; // milisegundos por caracter
+
+            function escribir() {
+                if (i < texto.length) {
+                    msgDiv.innerText += texto.charAt(i);
+                    i++;
+                    chatBox.scrollTop = chatBox.scrollHeight;
+                    setTimeout(escribir, velocidad);
+                } else {
+                    if (window.MathJax) window.MathJax.typesetPromise([msgDiv]);
+                }
+            }
+
+            escribir();
         }
     </script>
 </body>
