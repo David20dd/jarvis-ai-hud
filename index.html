@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>J.A.R.V.I.S.</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <title>J.A.R.V.I.S. // STARK HUD MK-V</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Orbitron:wght@500;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
     
-    <!-- MathJax y Renderizadores -->
+    <!-- Renderizadores MathJax, PDF.js y Chart.js -->
     <script>
         window.MathJax = {
             tex: {
@@ -26,54 +26,59 @@
 
     <style>
         :root {
-            --bg-dark: #0d0f12;
-            --sidebar-bg: #0d0f12;
-            --input-bg: #1e2025;
-            --text-main: #e3e5e8;
-            --text-sub: #9ea3ac;
-            --accent-blue: #a8c7fa;
-            --border-color: rgba(255, 255, 255, 0.08);
+            --bg-dark: #080b10;
+            --sidebar-bg: #05070a;
+            --input-bg: rgba(18, 25, 38, 0.90);
+            --stark-cyan: #00f2fe;
+            --stark-cyan-glow: rgba(0, 242, 254, 0.35);
+            --stark-amber: #ffb700;
+            --stark-green: #00ff88;
+            --stark-red: #ff3366;
+            --text-main: #e3f6ff;
+            --text-sub: #7b91a8;
+            --border-color: rgba(0, 242, 254, 0.2);
+            --font-inter: 'Inter', sans-serif;
+            --font-stark: 'Orbitron', sans-serif;
+            --font-mono: 'Share Tech Mono', monospace;
         }
 
         * {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-family: var(--font-inter);
             -webkit-tap-highlight-color: transparent;
         }
 
         body {
             background-color: var(--bg-dark);
-            /* Destello radial azul profundo en el centro idéntico a image_e427b6.png */
-            background-image: radial-gradient(circle at 50% 55%, rgba(20, 35, 65, 0.4) 0%, rgba(13, 15, 18, 0) 65%);
+            /* Destello radial holográfico azul cian en el centro */
+            background-image: 
+                radial-gradient(circle at 50% 50%, rgba(0, 242, 254, 0.08) 0%, rgba(8, 11, 16, 0) 70%),
+                linear-gradient(rgba(0, 242, 254, 0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 242, 254, 0.02) 1px, transparent 1px);
+            background-size: 100% 100%, 40px 40px, 40px 40px;
             color: var(--text-main);
             height: 100vh;
             display: flex;
             overflow: hidden;
         }
 
-        /* 📌 BARRA LATERAL IZQUIERDA (FIDELIDAD EXACTA A image_e427b6.png) */
+        /* 📌 BARRA LATERAL IZQUIERDA HUD (ESTILO image_e427b6.png + STARK) */
         .sidebar {
-            width: 64px;
+            width: 68px;
             height: 100vh;
             background-color: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
             display: flex;
             flex-direction: column;
             justify-content: space-between;
             align-items: center;
-            padding: 16px 0;
+            padding: 20px 0;
             z-index: 10;
         }
 
-        .sidebar-top {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 22px;
-        }
-
-        .sidebar-bottom {
+        .sidebar-top, .sidebar-bottom {
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -83,32 +88,37 @@
         .side-btn {
             background: transparent;
             border: none;
-            color: #8e939e;
+            color: var(--text-sub);
             cursor: pointer;
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
+            width: 42px;
+            height: 42px;
+            border-radius: 10px;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: all 0.2s ease;
+            transition: all 0.25s ease;
         }
 
         .side-btn:hover {
-            background: rgba(255, 255, 255, 0.08);
-            color: #ffffff;
+            background: rgba(0, 242, 254, 0.12);
+            color: var(--stark-cyan);
+            box-shadow: 0 0 12px rgba(0, 242, 254, 0.2);
         }
 
         .side-btn svg {
-            width: 20px;
-            height: 20px;
+            width: 22px;
+            height: 22px;
             fill: currentColor;
         }
 
-        .star-logo {
-            width: 24px;
-            height: 24px;
-            margin-bottom: 8px;
+        .stark-brand-logo {
+            font-family: var(--font-stark);
+            font-weight: 900;
+            font-size: 0.9rem;
+            color: var(--stark-cyan);
+            letter-spacing: 2px;
+            text-shadow: 0 0 10px var(--stark-cyan-glow);
+            margin-bottom: 10px;
         }
 
         /* 🖥️ ÁREA PRINCIPAL CENTRAL */
@@ -123,15 +133,52 @@
             padding: 20px;
         }
 
-        /* TÍTULO BIENVENIDA (image_e427b6.png) */
+        /* ⚡ HEADER SUPERIOR CON REACTOR ARC 3D FLOTANTE */
+        .top-hud-bar {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            z-index: 10;
+        }
+
+        .sys-status-text {
+            font-family: var(--font-mono);
+            font-size: 0.78rem;
+            color: var(--stark-cyan);
+            letter-spacing: 1px;
+            text-shadow: 0 0 8px var(--stark-cyan-glow);
+        }
+
+        /* 🌌 NÚCLEO / REACTOR ARC 3D HOLOGRÁFICO EN CANVAS */
+        #arcReactor3D {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid var(--stark-cyan);
+            box-shadow: 0 0 20px var(--stark-cyan-glow);
+            cursor: pointer;
+        }
+
+        /* TÍTULO BIENVENIDA (ESTILO image_e427b6.png) */
         .welcome-title {
-            font-size: 2rem;
-            font-weight: 400;
-            color: #e3e5e8;
-            margin-bottom: 28px;
+            font-family: var(--font-inter);
+            font-size: 2.2rem;
+            font-weight: 300;
+            color: var(--text-main);
+            margin-bottom: 30px;
             letter-spacing: -0.5px;
             text-align: center;
-            transition: opacity 0.3s ease;
+            transition: opacity 0.4s ease;
+        }
+
+        .welcome-title span {
+            font-weight: 600;
+            color: #ffffff;
+            text-shadow: 0 0 20px rgba(0, 242, 254, 0.3);
         }
 
         .welcome-title.hidden {
@@ -141,44 +188,49 @@
         /* ZONA DE CONVERSACIÓN / MESSAGES */
         .chat-container {
             width: 100%;
-            max-width: 780px;
-            max-height: calc(100vh - 180px);
+            max-width: 820px;
+            max-height: calc(100vh - 190px);
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            gap: 24px;
+            gap: 22px;
             padding-bottom: 20px;
             scroll-behavior: smooth;
         }
 
         .chat-container::-webkit-scrollbar {
-            width: 6px;
+            width: 5px;
         }
         .chat-container::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.1);
+            background: var(--border-color);
             border-radius: 3px;
         }
 
         .message {
-            max-width: 85%;
+            max-width: 88%;
             font-size: 0.98rem;
             line-height: 1.6;
             word-break: break-word;
+            padding: 14px 20px;
+            border-radius: 14px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
         }
 
         .user-message {
             align-self: flex-end;
-            background: #282a30;
+            background: linear-gradient(135deg, rgba(0, 242, 254, 0.18), rgba(0, 150, 255, 0.12));
+            border: 1px solid var(--stark-cyan);
             color: #ffffff;
-            padding: 12px 20px;
-            border-radius: 20px;
-            border-bottom-right-radius: 4px;
+            border-bottom-right-radius: 2px;
         }
 
         .jarvis-message {
             align-self: flex-start;
-            color: #e3e5e8;
-            padding: 4px 8px;
+            background: rgba(12, 18, 30, 0.85);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            border-bottom-left-radius: 2px;
+            backdrop-filter: blur(10px);
         }
 
         /* 🔍 BARRA BÚSQUEDA CENTRAL (FLOTANTE - image_e427b6.png) */
@@ -186,21 +238,22 @@
             position: absolute;
             bottom: 30px;
             width: calc(100% - 40px);
-            max-width: 760px;
+            max-width: 780px;
             background: var(--input-bg);
-            border-radius: 30px;
-            padding: 8px 16px;
+            border-radius: 32px;
+            padding: 8px 18px;
             display: flex;
             align-items: center;
             gap: 12px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6), 0 0 15px rgba(0, 242, 254, 0.1);
+            border: 1px solid var(--border-color);
+            backdrop-filter: blur(20px);
             transition: all 0.3s ease;
         }
 
         .input-container:focus-within {
-            border-color: rgba(255, 255, 255, 0.15);
-            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
+            border-color: var(--stark-cyan);
+            box-shadow: 0 10px 50px rgba(0, 0, 0, 0.8), 0 0 25px var(--stark-cyan-glow);
         }
 
         .stark-input {
@@ -209,31 +262,31 @@
             border: none;
             outline: none;
             color: #ffffff;
-            font-size: 0.98rem;
-            padding: 10px 4px;
+            font-size: 1rem;
+            padding: 10px 6px;
         }
 
         .stark-input::placeholder {
-            color: #727782;
+            color: var(--text-sub);
         }
 
         .action-btn {
             background: transparent;
             border: none;
-            color: #9ea3ac;
+            color: var(--stark-cyan);
             cursor: pointer;
-            width: 36px;
-            height: 36px;
+            width: 38px;
+            height: 38px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: all 0.2s ease;
+            transition: all 0.25s ease;
         }
 
         .action-btn:hover {
-            background: rgba(255, 255, 255, 0.08);
-            color: #ffffff;
+            background: rgba(0, 242, 254, 0.15);
+            box-shadow: 0 0 12px var(--stark-cyan-glow);
         }
 
         .action-btn svg {
@@ -245,18 +298,24 @@
         .model-selector {
             display: flex;
             align-items: center;
-            gap: 4px;
-            font-size: 0.85rem;
-            color: #9ea3ac;
+            gap: 5px;
+            font-family: var(--font-stark);
+            font-size: 0.78rem;
+            color: var(--stark-cyan);
             cursor: pointer;
-            padding: 6px 10px;
+            padding: 6px 12px;
             border-radius: 12px;
+            background: rgba(0, 242, 254, 0.08);
+            border: 1px solid var(--border-color);
             user-select: none;
+            transition: all 0.25s ease;
         }
 
         .model-selector:hover {
-            background: rgba(255, 255, 255, 0.05);
-            color: #ffffff;
+            background: var(--stark-cyan);
+            color: #000;
+            font-weight: bold;
+            box-shadow: 0 0 15px var(--stark-cyan);
         }
 
         /* PREVIEW BARRA ARCHIVOS */
@@ -264,66 +323,64 @@
             display: none;
             position: absolute;
             bottom: 95px;
-            background: #1e2025;
-            padding: 8px 16px;
+            background: var(--input-bg);
+            padding: 8px 18px;
             border-radius: 12px;
-            border: 1px solid var(--border-color);
+            border: 1px solid var(--stark-cyan);
             align-items: center;
             gap: 12px;
             font-size: 0.85rem;
-            color: var(--accent-blue);
+            color: var(--stark-cyan);
+            box-shadow: 0 0 15px var(--stark-cyan-glow);
         }
         .preview-bar.active { display: flex; }
 
         .mic-active {
-            color: #ff4d4d !important;
-            animation: pulse 1.2s infinite alternate;
+            color: var(--stark-red) !important;
+            animation: pulseMic 1s infinite alternate;
         }
-        @keyframes pulse { 0% { transform: scale(1); } 100% { transform: scale(1.15); } }
+        @keyframes pulseMic { 0% { transform: scale(1); } 100% { transform: scale(1.18); } }
 
         .hud-link-btn {
             display: inline-block;
-            margin-top: 10px;
-            padding: 8px 16px;
-            background: rgba(168, 199, 250, 0.15);
-            border: 1px solid var(--accent-blue);
-            color: var(--accent-blue);
+            margin-top: 12px;
+            padding: 10px 18px;
+            background: linear-gradient(135deg, rgba(0, 242, 254, 0.25), rgba(0, 255, 136, 0.25));
+            border: 1px solid var(--stark-cyan);
+            color: #ffffff;
             text-decoration: none;
-            border-radius: 8px;
-            font-size: 0.85rem;
+            border-radius: 6px;
+            font-family: var(--font-stark);
+            font-size: 0.78rem;
+            letter-spacing: 1px;
+            box-shadow: 0 0 15px rgba(0, 242, 254, 0.25);
+            transition: all 0.3s ease;
         }
+        .hud-link-btn:hover { background: var(--stark-cyan); color: #000; box-shadow: 0 0 25px var(--stark-cyan); }
 
         .code-block {
-            background: #16181d;
-            border-radius: 8px;
+            background: #04070d;
+            border: 1px solid var(--stark-cyan);
+            border-left: 4px solid var(--stark-cyan);
+            border-radius: 6px;
             padding: 12px;
             margin: 10px 0;
-            font-family: monospace;
-            color: #a8c7fa;
+            font-family: var(--font-mono);
+            color: var(--stark-green);
             overflow-x: auto;
+            font-size: 0.88rem;
         }
     </style>
 </head>
 <body>
 
-    <!-- 📌 BARRA LATERAL IZQUIERDA (IDÉNTICA A LA IMAGEN) -->
+    <!-- 📌 BARRA LATERAL IZQUIERDA (ESTILO image_e427b6.png) -->
     <aside class="sidebar">
         <div class="sidebar-top">
-            <!-- Logo Gemini de 4 Puntas Centelleantes -->
-            <div class="side-btn">
-                <svg class="star-logo" viewBox="0 0 24 24">
-                    <path fill="url(#gemini-grad)" d="M12 0C12 6.627 6.627 12 0 12c6.627 0 12 5.373 12 12 0-6.627 5.373-12 12-12-6.627 0-12-5.373-12-12z"/>
-                    <defs>
-                        <linearGradient id="gemini-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" stop-color="#4285f4"/>
-                            <stop offset="50%" stop-color="#9b51e0"/>
-                            <stop offset="100%" stop-color="#e91e63"/>
-                        </linearGradient>
-                    </defs>
-                </svg>
-            </div>
+            <!-- Logo Stark Industries -->
+            <div class="stark-brand-logo">J.A.R.V.I.S.</div>
 
-            <!-- Nuevo Chat / Editar -->
+            <!-- Nuevo Chat -->
             <button class="side-btn" title="Nuevo Chat" onclick="location.reload()">
                 <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
             </button>
@@ -338,19 +395,14 @@
                 <svg viewBox="0 0 24 24"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
             </button>
 
-            <!-- Guardados / Archivo -->
-            <button class="side-btn" title="Guardados">
-                <svg viewBox="0 0 24 24"><path d="M17 3H7c-1.1 0-1.99.9-1.99 2L5 21l7-3 7 3V5c0-1.1-.9-2-2-2zm0 15l-5-2.18L7 18V5h10v13z"/></svg>
-            </button>
-
-            <!-- Aplicaciones / Mosaico -->
-            <button class="side-btn" title="Aplicaciones">
+            <!-- Mosaico / Aplicaciones -->
+            <button class="side-btn" title="Herramientas">
                 <svg viewBox="0 0 24 24"><path d="M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-10v4h4V4h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zm0 6h4v-4h-4v4z"/></svg>
             </button>
         </div>
 
         <div class="sidebar-bottom">
-            <!-- Engranaje / Configuración (Abajo a la izquierda en image_e427b6.png) -->
+            <!-- Engranaje / Configuración -->
             <button class="side-btn" title="Configuración">
                 <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
             </button>
@@ -360,8 +412,14 @@
     <!-- 🖥️ ÁREA CENTRADA PRINCIPAL -->
     <main class="main-content">
 
+        <!-- ⚡ HEADER SUPERIOR CON REACTOR ARC 3D FLOTANTE -->
+        <div class="top-hud-bar">
+            <span class="sys-status-text" id="sysStatus">MARK V // ONLINE</span>
+            <canvas id="arcReactor3D" title="Reactor Arc 3D - Estado de Jarvis"></canvas>
+        </div>
+
         <!-- TÍTULO CENTRAL (EXACTO A image_e427b6.png) -->
-        <h1 class="welcome-title" id="welcomeTitle">Pregunta lo que quieras, Cristian</h1>
+        <h1 class="welcome-title" id="welcomeTitle">Pregunta lo que quieras, <span>Cristian</span></h1>
 
         <!-- CONTENEDOR DE MENSAJES (APARECE AL HABLAR) -->
         <div class="chat-container" id="chatBox"></div>
@@ -382,7 +440,7 @@
             <input type="file" id="fileInput" accept="*/*" multiple style="display:none;" onchange="procesarArchivosSeleccionados(event)">
 
             <!-- Entrada de Texto Principal -->
-            <input type="text" id="userInput" class="stark-input" placeholder="Pregunta a Jarvis" autocomplete="off">
+            <input type="text" id="userInput" class="stark-input" placeholder="Pregunta a Jarvis..." autocomplete="off">
 
             <!-- Selector de Modelo / Nivel -->
             <div class="model-selector" title="Modelo de IA activo">
@@ -408,6 +466,61 @@
         const previewBar = document.getElementById("previewBar");
         const previewText = document.getElementById("previewText");
         const fileInput = document.getElementById("fileInput");
+        const sysStatus = document.getElementById("sysStatus");
+
+        /* 🌌 MOTOR DEL REACTOR ARC 3D EN CANVAS */
+        const coreCanvas = document.getElementById("arcReactor3D");
+        const ctx3D = coreCanvas.getContext("2d");
+        coreCanvas.width = 48; coreCanvas.height = 48;
+
+        let numParticles = 20;
+        let particles = [];
+        let estadoCore = "ready"; // ready, processing, speaking, listening
+
+        for (let i = 0; i < numParticles; i++) {
+            particles.push({
+                angle: (i / numParticles) * Math.PI * 2,
+                radius: 14 + Math.random() * 5,
+                speed: 0.03 + Math.random() * 0.02,
+                size: 1.5 + Math.random() * 1.5
+            });
+        }
+
+        function render3DCore() {
+            ctx3D.clearRect(0, 0, 48, 48);
+            const cx = 24, cy = 24;
+
+            let colorHex = "#00f2fe";
+            if (estadoCore === "processing") colorHex = "#ffb700";
+            if (estadoCore === "speaking") colorHex = "#00ff88";
+            if (estadoCore === "listening") colorHex = "#ff3366";
+
+            // Núcleo Central
+            ctx3D.beginPath();
+            ctx3D.arc(cx, cy, 6, 0, Math.PI * 2);
+            ctx3D.fillStyle = colorHex;
+            ctx3D.fill();
+
+            // Partículas orbitales 3D
+            particles.forEach((p) => {
+                p.angle += (estadoCore === "processing" ? p.speed * 2.5 : p.speed);
+                let x = cx + Math.cos(p.angle) * p.radius;
+                let y = cy + Math.sin(p.angle) * (p.radius * 0.45);
+
+                ctx3D.beginPath();
+                ctx3D.arc(x, y, p.size, 0, Math.PI * 2);
+                ctx3D.fillStyle = colorHex;
+                ctx3D.fill();
+            });
+
+            requestAnimationFrame(render3DCore);
+        }
+        render3DCore();
+
+        function setEstado(estado, texto) {
+            estadoCore = estado;
+            sysStatus.innerText = texto;
+        }
 
         let recognition = null;
         let isListening = false;
@@ -460,6 +573,7 @@
             recognition.onstart = () => {
                 isListening = true;
                 micBtn.classList.add("mic-active");
+                setEstado("listening", "ESCUCHANDO...");
             };
 
             recognition.onresult = (event) => {
@@ -485,6 +599,7 @@
         function apagarMicrofono() {
             isListening = false;
             micBtn.classList.remove("mic-active");
+            setEstado("ready", "MARK V // ONLINE");
         }
 
         userInput.addEventListener("keypress", (e) => { if (e.key === "Enter") enviarMensaje(); });
@@ -496,11 +611,12 @@
             if (!texto && archivosEnviar.length === 0) return;
 
             welcomeTitle.classList.add("hidden");
-
             agregarMensajeUsuario(texto);
 
             userInput.value = "";
             cancelarArchivos();
+
+            setEstado("processing", "PROCESANDO...");
 
             try {
                 const response = await fetch(API_URL, {
@@ -516,11 +632,20 @@
                 const data = await response.json();
 
                 if (response.ok && data.status === "success" && data.reply) {
+                    setEstado("speaking", "RESPONDIENDO");
                     agregarMensajeJarvis(data.reply);
+                    
+                    if (data.audio_b64) {
+                        const audio = new Audio(data.audio_b64);
+                        audio.play().catch(() => {});
+                    }
+                    setTimeout(() => setEstado("ready", "MARK V // ONLINE"), 2000);
                 } else {
+                    setEstado("ready", "MARK V // ONLINE");
                     agregarMensajeJarvis("Ocurrió un inconveniente al procesar la respuesta.");
                 }
             } catch (error) {
+                setEstado("ready", "MARK V // ONLINE");
                 agregarMensajeJarvis("Error de conexión con el servidor central.");
             }
         }
@@ -539,6 +664,7 @@
             msgDiv.innerText = texto;
             chatBox.appendChild(msgDiv);
             chatBox.scrollTop = chatBox.scrollHeight;
+            if (window.MathJax) window.MathJax.typesetPromise([msgDiv]);
         }
     </script>
 </body>
