@@ -19,13 +19,13 @@
 
     <style>
         :root {
-            --bg-dark: #07090e;
-            --sidebar-bg: #05060a;
-            --input-bg: #141824;
+            --bg-dark: #0e1015;
+            --sidebar-bg: #090a0e;
+            --input-bg: #1e222d;
+            --stark-blue: #1a73e8;
             --stark-cyan: #00d2ff;
-            --stark-glow: rgba(0, 136, 255, 0.4);
-            --text-main: #e1e7f0;
-            --text-sub: #7b8898;
+            --text-main: #e3e8f0;
+            --text-sub: #8e96a4;
             --font-inter: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             --font-mono: 'Share Tech Mono', monospace;
         }
@@ -41,23 +41,23 @@
             position: relative;
         }
 
-        /* 🌀 LUZ RADIAL AZUL DE FONDO (PRESENCIA DE JARVIS) */
-        .jarvis-presence-glow {
+        /* 🌀 FONDO GEMINI CON DESTELLO SUTIL ANIMADO (SIN EFECTO SUBE Y BAJA) */
+        .presence-bg {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 100vw;
-            height: 100vh;
-            background: radial-gradient(circle at 50% 50%, rgba(0, 110, 255, 0.22) 0%, rgba(0, 210, 255, 0.07) 35%, rgba(7, 9, 14, 0) 70%);
+            width: 80vw;
+            height: 80vh;
+            background: radial-gradient(circle at 50% 50%, rgba(20, 75, 160, 0.22) 0%, rgba(0, 150, 255, 0.05) 45%, rgba(14, 16, 21, 0) 70%);
             pointer-events: none;
             z-index: 1;
-            animation: jarvisBreath 5s infinite alternate ease-in-out;
+            animation: softGlow 6s infinite alternate ease-in-out;
         }
 
-        @keyframes jarvisBreath {
-            0% { transform: translate(-50%, -50%) scale(0.92); opacity: 0.7; }
-            100% { transform: translate(-50%, -50%) scale(1.15); opacity: 1; }
+        @keyframes softGlow {
+            0% { opacity: 0.6; }
+            100% { opacity: 1.0; }
         }
 
         /* 📌 BARRA LATERAL IZQUIERDA */
@@ -65,7 +65,7 @@
             width: 60px;
             height: 100vh;
             background-color: var(--sidebar-bg);
-            border-right: 1px solid rgba(255, 255, 255, 0.04);
+            border-right: 1px solid rgba(255, 255, 255, 0.03);
             display: flex;
             flex-direction: column;
             justify-content: space-between;
@@ -75,104 +75,92 @@
         }
 
         .sidebar-top, .sidebar-bottom {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 20px;
+            display: flex; flex-direction: column; align-items: center; gap: 20px;
         }
 
         .side-btn {
-            background: transparent;
-            border: none;
-            color: var(--text-sub);
-            cursor: pointer;
-            width: 38px;
-            height: 38px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            background: transparent; border: none; color: var(--text-sub); cursor: pointer;
+            width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
             transition: all 0.2s ease;
         }
-
-        .side-btn:hover { background: rgba(255, 255, 255, 0.08); color: var(--stark-cyan); }
+        .side-btn:hover { background: rgba(255, 255, 255, 0.08); color: #ffffff; }
         .side-btn svg { width: 20px; height: 20px; fill: currentColor; }
 
-        /* ☢️ REACTOR ARC EN LUGAR DE LA ESTRELLA */
-        .arc-nav-container {
-            width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; margin-bottom: 4px;
-        }
-        #arcReactorNav {
-            width: 34px; height: 34px; border-radius: 50%; cursor: pointer;
-            filter: drop-shadow(0 0 8px rgba(0, 136, 255, 0.6));
-            transition: transform 0.25s ease;
-        }
-        #arcReactorNav:hover { transform: scale(1.15); }
+        /* ☢️ REACTOR ARC COMPACTO */
+        .arc-nav-container { width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; }
+        #arcReactorNav { width: 32px; height: 32px; border-radius: 50%; cursor: pointer; filter: drop-shadow(0 0 6px rgba(0, 180, 255, 0.5)); }
 
         /* 🖥️ ÁREA PRINCIPAL CENTRAL */
         .main-content {
-            flex: 1;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            position: relative;
-            padding: 20px;
-            z-index: 2;
+            flex: 1; height: 100vh; display: flex; flex-direction: column; align-items: center;
+            justify-content: center; position: relative; padding: 20px; z-index: 2;
         }
 
         .sys-status-text {
-            position: absolute; top: 20px; right: 25px;
-            font-family: var(--font-mono); font-size: 0.72rem; color: var(--stark-cyan);
-            letter-spacing: 1px; opacity: 0.85; text-shadow: 0 0 8px var(--stark-glow); z-index: 10;
+            position: absolute; top: 20px; right: 25px; font-family: var(--font-mono);
+            font-size: 0.72rem; color: var(--stark-cyan); opacity: 0.7; z-index: 10;
         }
 
         .hero-container {
             display: flex; flex-direction: column; align-items: center; justify-content: center;
-            width: 100%; max-width: 720px; transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+            width: 100%; max-width: 740px; transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
         .main-content.chat-mode .hero-container { position: absolute; bottom: 25px; }
 
         .welcome-title {
             font-size: 2.1rem; font-weight: 400; color: #e3e8f0; margin-bottom: 28px;
-            letter-spacing: -0.4px; text-align: center; opacity: 0; transform: translateY(14px);
-            animation: geminiEntrance 0.65s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            letter-spacing: -0.4px; text-align: center; opacity: 0; transform: translateY(12px);
+            animation: geminiEntrance 0.6s ease forwards;
         }
-
         @keyframes geminiEntrance { to { opacity: 1; transform: translateY(0); } }
         .welcome-title.hidden { display: none; }
 
+        /* 💬 ZONA DE CONVERSACIÓN Y BARRA DE DESPLAZAMIENTO ESTILO GEMINI */
         .chat-container {
-            width: 100%; max-width: 760px; height: calc(100vh - 165px);
-            overflow-y: auto; display: none; flex-direction: column; gap: 20px;
+            width: 100%; max-width: 740px; height: calc(100vh - 160px);
+            overflow-y: auto; display: none; flex-direction: column; gap: 24px;
             padding-top: 20px; padding-bottom: 20px; scroll-behavior: smooth;
         }
         .chat-container.active { display: flex; }
 
-        .message {
-            max-width: 85%; font-size: 0.98rem; line-height: 1.6; word-break: break-word;
-            padding: 12px 18px; border-radius: 18px;
+        /* SCROLLBAR TRANSPARENTE / GRIS ESTILO GEMINI */
+        .chat-container::-webkit-scrollbar { width: 6px; }
+        .chat-container::-webkit-scrollbar-track { background: transparent; }
+        .chat-container::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.12);
+            border-radius: 10px;
         }
-        .user-message {
-            align-self: flex-end; background: #1c2230; border: 1px solid rgba(0, 136, 255, 0.35); color: #ffffff; border-bottom-right-radius: 4px;
-        }
-        .jarvis-message {
-            align-self: flex-start; background: #111520; border: 1px solid rgba(255, 255, 255, 0.08); color: var(--text-main); border-bottom-left-radius: 4px;
+        .chat-container::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.25);
         }
 
-        .input-container {
-            width: 100%; max-width: 720px; background: var(--input-bg); border-radius: 28px;
-            padding: 6px 14px; display: flex; align-items: center; gap: 10px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6); border: 1px solid rgba(255, 255, 255, 0.07); transition: all 0.3s ease;
+        .message {
+            max-width: 85%; font-size: 0.98rem; line-height: 1.6; word-break: break-word; padding: 12px 18px;
         }
+
+        .user-message {
+            align-self: flex-end; background: #232734; border-radius: 20px; border-bottom-right-radius: 4px; color: #ffffff;
+        }
+
+        .jarvis-message {
+            align-self: flex-start; background: transparent; color: #e3e8f0; padding-left: 0;
+        }
+
+        /* 🔍 BARRA DE BÚSQUEDA REDONDEADA */
+        .input-container {
+            width: 100%; max-width: 740px; background: var(--input-bg); border-radius: 28px;
+            padding: 8px 16px; display: flex; align-items: center; gap: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.08); transition: all 0.25s ease;
+        }
+
         .input-container:focus-within {
-            border-color: rgba(0, 136, 255, 0.5); box-shadow: 0 8px 38px rgba(0, 0, 0, 0.8), 0 0 18px var(--stark-glow);
+            border-color: rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
         }
 
         .stark-input {
-            flex: 1; background: transparent; border: none; outline: none; color: #ffffff; font-size: 0.95rem; padding: 10px 4px;
+            flex: 1; background: transparent; border: none; outline: none; color: #ffffff; font-size: 0.98rem; padding: 8px 4px;
         }
         .stark-input::placeholder { color: #6c727e; }
 
@@ -180,7 +168,7 @@
             background: transparent; border: none; color: var(--text-sub); cursor: pointer;
             width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease;
         }
-        .action-btn:hover { background: rgba(255, 255, 255, 0.08); color: var(--stark-cyan); }
+        .action-btn:hover { background: rgba(255, 255, 255, 0.08); color: #ffffff; }
         .action-btn svg { width: 19px; height: 19px; fill: currentColor; }
 
         .model-selector {
@@ -189,7 +177,7 @@
         }
 
         @media (max-width: 768px) {
-            .welcome-title { font-size: 1.5rem; padding: 0 10px; }
+            .welcome-title { font-size: 1.5rem; }
             .input-container { max-width: 92%; }
             .chat-container { max-width: 95%; }
         }
@@ -197,14 +185,13 @@
 </head>
 <body>
 
-    <div class="jarvis-presence-glow"></div>
+    <div class="presence-bg"></div>
 
     <aside class="sidebar">
         <div class="sidebar-top">
             <div class="arc-nav-container">
-                <canvas id="arcReactorNav" title="Reactor Arc J.A.R.V.I.S."></canvas>
+                <canvas id="arcReactorNav" title="J.A.R.V.I.S. Core"></canvas>
             </div>
-
             <button class="side-btn" title="Nuevo Chat" onclick="location.reload()">
                 <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
             </button>
@@ -224,8 +211,7 @@
             <h1 class="welcome-title" id="welcomeTitle">Hola, Cristian, ¿qué vamos a hacer?</h1>
 
             <div class="input-container">
-                <button class="action-btn" onclick="document.getElementById('fileInput').click()"><svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg></button>
-                <input type="file" id="fileInput" accept="*/*" multiple style="display:none;">
+                <button class="action-btn" title="Adjuntar"><svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg></button>
                 <input type="text" id="userInput" class="stark-input" placeholder="Pregunta a Jarvis..." autocomplete="off">
                 <div class="model-selector"><span>Mark V</span></div>
                 <button class="action-btn" id="micBtn"><svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg></button>
@@ -253,27 +239,26 @@
         // ANIMACIÓN REACTOR ARC
         const coreCanvas = document.getElementById("arcReactorNav");
         const ctx = coreCanvas.getContext("2d");
-        coreCanvas.width = 68; coreCanvas.height = 68;
-        let angleOuter = 0, angleInner = 0, pulseGlow = 0;
+        coreCanvas.width = 64; coreCanvas.height = 64;
+        let angleOuter = 0;
 
         function drawArcReactor() {
-            ctx.clearRect(0, 0, 68, 68);
-            const cx = 34, cy = 34;
-            angleOuter += 0.015; angleInner -= 0.02; pulseGlow += 0.04;
-            const pulseRadius = Math.sin(pulseGlow) * 1.2;
+            ctx.clearRect(0, 0, 64, 64);
+            const cx = 32, cy = 32;
+            angleOuter += 0.015;
 
             ctx.save(); ctx.translate(cx, cy); ctx.rotate(angleOuter);
             for (let i = 0; i < 10; i++) {
                 ctx.save(); ctx.rotate((i / 10) * Math.PI * 2);
-                ctx.fillStyle = "#a84e2a"; ctx.fillRect(-3.5, -29, 7, 7);
+                ctx.fillStyle = "#a84e2a"; ctx.fillRect(-3, -26, 6, 6);
                 ctx.restore();
             }
             ctx.restore();
 
             ctx.save(); ctx.translate(cx, cy);
-            const radGrad = ctx.createRadialGradient(0, 0, 1, 0, 0, 12 + pulseRadius);
-            radGrad.addColorStop(0, "#ffffff"); radGrad.addColorStop(0.35, "#0088ff"); radGrad.addColorStop(1, "transparent");
-            ctx.fillStyle = radGrad; ctx.beginPath(); ctx.arc(0, 0, 12 + pulseRadius, 0, Math.PI * 2); ctx.fill();
+            const radGrad = ctx.createRadialGradient(0, 0, 1, 0, 0, 11);
+            radGrad.addColorStop(0, "#ffffff"); radGrad.addColorStop(0.4, "#0088ff"); radGrad.addColorStop(1, "transparent");
+            ctx.fillStyle = radGrad; ctx.beginPath(); ctx.arc(0, 0, 11, 0, Math.PI * 2); ctx.fill();
             ctx.restore();
 
             requestAnimationFrame(drawArcReactor);
@@ -313,10 +298,10 @@
                 if (response.ok && data.reply) {
                     agregarMensajeJarvis(data.reply);
                 } else {
-                    agregarMensajeJarvis("Servidores de Jarvis sincronizados. ¿En qué le puedo asistir, señor?");
+                    agregarMensajeJarvis("A su servicio, señor. ¿En qué le puedo asistir ahora?");
                 }
             } catch (error) {
-                agregarMensajeJarvis("Error de red al consultar con el núcleo central.");
+                agregarMensajeJarvis("Inconveniente de conexión temporal.");
             }
         }
 
