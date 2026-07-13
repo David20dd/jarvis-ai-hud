@@ -45,11 +45,13 @@ init_db()
 
 PROMPT_SISTEMA_STARK = (
     "Eres J.A.R.V.I.S., la Inteligencia Artificial Autónoma avanzada creada por Stark Technologies para Cristian.\n\n"
-    "DIRECTIVAS ABSOLUTAS:\n"
-    "1. FECHA Y ACTUALIDAD: Estamos en el año 2026. Tienes acceso completo a información web en tiempo real.\n"
-    "2. PROHIBIDO EXCUSAS: NUNCA digas 'no ha ocurrido', 'no tengo información', 'mi conocimiento se corta en 2023' o 'revisa la página de la FIFA'.\n"
-    "3. USO DE DATOS DE BÚSQUEDA: Si el sistema te proporciona datos de búsqueda web en el contexto, UTILÍZALOS OBLIGATORIAMENTE para responder directamente la pregunta de Cristian con los hechos, noticias o resultados encontrados.\n"
-    "4. TONO Y FORMATO: Responde como J.A.R.V.I.S. (educado, elegante, refinado, tratando al usuario como 'señor' o 'Cristian'). Sé directo, conciso y estructurado con Markdown (negritas, listas)."
+    "DIRECTIVAS ESTRICTAS DE RESPUESTA:\n"
+    "1. RESPUESTA DIRECTA Y ÚTIL: Responde exactamente la pregunta del usuario utilizando la información del contexto o tu conocimiento general. "
+    "PROHIBIDO recomendar 'visitar la página de la FIFA', 'UEFA', 'ESPN' o sugerir enlaces externos.\n"
+    "2. PROHIBIDO EXCUSAS REPETITIVAS: Entrega siempre los datos concretos que tengas a mano (fechas del torneo, sedes, selecciones, calendario, partidos o información disponible). "
+    "Si un evento específico está en curso o no tiene datos de un marcador en la consulta, explica brevemente el estado actual del torneo o las selecciones clasificadas de forma clara y respetuosa.\n"
+    "3. TONO SOBRIO Y ELEGANTE: Dirígete al usuario como 'señor' o 'Cristian'. Sé directo, eficiente y refinado.\n"
+    "4. FORMATO: Usa Markdown estructurado con negritas y listas limpias."
 )
 
 def guardar_mensaje_db(session_id: str, role: str, content: str):
@@ -73,21 +75,19 @@ def cargar_historial_db(session_id: str) -> List[Dict[str, str]]:
     return messages
 
 # ------------------------------------------------------------------
-# 🔍 BÚSQUEDA WEB DIRECTA E INYECTADA
+# 🔍 BÚSQUEDA WEB DIRECTA
 # ------------------------------------------------------------------
 def buscar_noticias_y_web(query: str) -> str:
     resultados = []
     try:
         with DDGS() as ddgs:
-            # Búsqueda de noticias
             noticias = list(ddgs.news(query, max_results=3))
             for n in noticias:
-                resultados.append(f"Noticia: {n.get('title', '')} - {n.get('body', '')}")
+                resultados.append(f"Noticia Reciente: {n.get('title', '')} - {n.get('body', '')}")
             
-            # Búsqueda de texto
             busqueda = list(ddgs.text(query, max_results=3))
             for b in busqueda:
-                resultados.append(f"Info: {b.get('title', '')} - {b.get('body', '')}")
+                resultados.append(f"Info Web: {b.get('title', '')} - {b.get('body', '')}")
     except Exception as e:
         print(f"Error en DDGS: {e}")
     
@@ -112,19 +112,16 @@ async def consultar_jarvis(data: ChatInput):
     prompt_usuario = data.message.strip() if data.message else "Hola Jarvis."
     prompt_lower = prompt_usuario.lower()
 
-    # BÚSQUEDA AUTÓNOMA INCONDICIONAL
+    # Búsqueda web proactiva
     palabras_clave = ["mundial", "2026", "resultado", "partido", "noticia", "quien gano", "resultados", "fifa", "copa", "hoy", "busca"]
     
-    if any(p in prompt_lower for p in palabras_clave) or "2026" in prompt_lower:
-        datos_web = buscar_noticias_y_web(f"{prompt_usuario} 2026")
+    if any(p in prompt_lower for p in palabras_clave):
+        datos_web = buscar_noticias_y_web(prompt_usuario)
         if datos_web:
-            contexto_forzado = (
-                f"DATOS OBTENIDOS DE INTERNET EN TIEMPO REAL (AÑO 2026):\n{datos_web}\n\n"
-                f"INSTRUCCIÓN: Responde la duda de Cristian usando EXCLUSIVAMENTE estos datos. No des excusas de que no ha ocurrido o que no tienes acceso."
-            )
-            historial.append({"role": "system", "content": contexto_forzado})
+            contexto = f"INFORMACIÓN RECIENTE OBTENIDA DE LA WEB:\n{datos_web}\n\nUsa estos datos para responder a Cristian directamente sin añadir enlaces ni excusas de recomendación de páginas web."
+            historial.append({"role": "system", "content": contexto})
 
-    # Manejo Multimodal / Visión
+    # Visión Multimodal de Imágenes
     modelo_a_usar = "llama-3.3-70b-versatile"
     if data.files and len(data.files) > 0 and data.files[0].file_b64:
         modelo_a_usar = "llama-3.2-11b-vision-preview"
@@ -146,7 +143,7 @@ async def consultar_jarvis(data: ChatInput):
         completion = client.chat.completions.create(
             model=modelo_a_usar,
             messages=messages_payload,
-            temperature=0.4,
+            temperature=0.3,
             max_tokens=1500
         )
         respuesta_final = completion.choices[0].message.content.strip()
@@ -162,4 +159,4 @@ async def consultar_jarvis(data: ChatInput):
 
 @app.get("/")
 def home():
-    return {"status": "Jarvis Direct Force Engine Active"}
+    return {"status": "Jarvis Direct Stark Engine Active"}
