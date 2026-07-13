@@ -3,12 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>J.A.R.V.I.S. // STARK HUD MK-VI</title>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <title>J.A.R.V.I.S.</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     
-    <!-- Librerías Necesarias -->
+    <!-- MathJax y Renderizadores -->
     <script>
-        window.MathJax = { tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] }, svg: { fontCache: 'global' } };
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']]
+            },
+            svg: { fontCache: 'global' }
+        };
     </script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
@@ -20,309 +26,520 @@
 
     <style>
         :root {
-            --stark-cyan: #00f2fe;
-            --stark-cyan-dim: rgba(0, 242, 254, 0.4);
-            --stark-amber: #ffb700;
-            --stark-green: #00ff88;
-            --stark-red: #ff3366;
-            --stark-dark-bg: #020509;
-            --stark-glass: rgba(10, 20, 35, 0.9);
-            --stark-border: rgba(0, 242, 254, 0.25);
-            --font-main: 'Share Tech Mono', monospace;
-            --font-titles: 'Orbitron', sans-serif;
+            --bg-dark: #0d0f12;
+            --sidebar-bg: #0d0f12;
+            --input-bg: #1e2025;
+            --text-main: #e3e5e8;
+            --text-sub: #9ea3ac;
+            --accent-blue: #a8c7fa;
+            --border-color: rgba(255, 255, 255, 0.08);
         }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: var(--font-main); -webkit-tap-highlight-color: transparent; }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
 
         body {
-            background-color: var(--stark-dark-bg);
-            /* Gradiente central azulado sutil como en image_e427b6.png */
-            background-image: radial-gradient(circle at 50% 50%, rgba(0, 150, 255, 0.08) 0%, transparent 60%);
-            color: #d1f7ff;
+            background-color: var(--bg-dark);
+            /* Destello radial azul profundo en el centro idéntico a image_e427b6.png */
+            background-image: radial-gradient(circle at 50% 55%, rgba(20, 35, 65, 0.4) 0%, rgba(13, 15, 18, 0) 65%);
+            color: var(--text-main);
             height: 100vh;
-            display: flex; 
-            justify-content: center; 
-            align-items: center;
+            display: flex;
             overflow: hidden;
         }
 
-        .jarvis-main-container {
-            width: 100%; height: 100%; display: flex; flex-direction: column; position: relative;
+        /* 📌 BARRA LATERAL IZQUIERDA (FIDELIDAD EXACTA A image_e427b6.png) */
+        .sidebar {
+            width: 64px;
+            height: 100vh;
+            background-color: var(--sidebar-bg);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 0;
+            z-index: 10;
         }
 
-        /* 🔒 PORTADA BIOMÉTRICA (ESTILO image_e427b6.png) */
-        .splash-screen {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: #010306; z-index: 999; display: flex; flex-direction: column;
-            align-items: center; justify-content: center; transition: opacity 0.8s ease, visibility 0.8s;
+        .sidebar-top {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 22px;
         }
-        .splash-screen.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
-        .biometric-ring {
-            width: 120px; height: 120px; border-radius: 50%;
-            border: 2px dashed var(--stark-cyan); animation: spinRing 5s linear infinite;
-            display: flex; align-items: center; justify-content: center;
-            box-shadow: 0 0 40px rgba(0, 242, 254, 0.3); margin-bottom: 25px;
-        }
-        @keyframes spinRing { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .splash-title { font-family: var(--font-titles); font-size: 1.5rem; letter-spacing: 3px; color: var(--stark-cyan); text-shadow: 0 0 15px var(--stark-cyan); }
 
-        /* HEADER SUPERIOR (ESTILO image_e427b6.png) */
-        .hud-header {
-            width: 100%; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center;
-            border-bottom: 1px solid var(--stark-border); background: rgba(0,0,0,0.4); z-index: 10;
+        .sidebar-bottom {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
         }
-        .header-left { display: flex; align-items: center; gap: 15px; }
-        .stark-logo { font-family: var(--font-titles); font-weight: 900; color: var(--stark-cyan); font-size: 1.1rem; letter-spacing: 2px; }
-        .system-status { font-size: 0.75rem; color: rgba(209, 247, 255, 0.6); }
 
-        /* CANALES LATERALES DE TELEMETRÍA (ESTILO HUD) */
-        .hud-side-bar {
-            position: absolute; top: 70px; bottom: 70px; width: 60px;
-            display: flex; flex-direction: column; align-items: center; gap: 20px;
-            padding: 20px 0; border-radius: 10px; border: 1px solid var(--stark-border);
-            background: rgba(10, 20, 35, 0.4); backdrop-filter: blur(5px);
+        .side-btn {
+            background: transparent;
+            border: none;
+            color: #8e939e;
+            cursor: pointer;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
         }
-        .hud-left { left: 15px; }
-        .hud-right { right: 15px; }
-        .side-icon {
-            width: 35px; height: 35px; border-radius: 6px;
-            border: 1px solid var(--stark-border);
-            display: flex; align-items: center; justify-content: center;
-            color: var(--stark-cyan); cursor: pointer; transition: 0.3s;
-        }
-        .side-icon:hover { background: var(--stark-cyan); color: #000; box-shadow: 0 0 10px var(--stark-cyan); }
 
-        /* ZONA CENTRAL DE CHAT (ESTILO image_e427b6.png) */
-        .chat-container {
-            flex: 1; width: 100%; max-width: 900px; margin: 0 auto;
-            display: flex; flex-direction: column; justify-content: flex-end;
-            padding-bottom: 90px; /* Espacio para la barra de entrada */
+        .side-btn:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #ffffff;
+        }
+
+        .side-btn svg {
+            width: 20px;
+            height: 20px;
+            fill: currentColor;
+        }
+
+        .star-logo {
+            width: 24px;
+            height: 24px;
+            margin-bottom: 8px;
+        }
+
+        /* 🖥️ ÁREA PRINCIPAL CENTRAL */
+        .main-content {
+            flex: 1;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
             position: relative;
+            padding: 20px;
         }
 
-        .chat-box {
-            width: 100%; padding: 20px; overflow-y: auto; display: flex;
-            flex-direction: column; gap: 20px;
+        /* TÍTULO BIENVENIDA (image_e427b6.png) */
+        .welcome-title {
+            font-size: 2rem;
+            font-weight: 400;
+            color: #e3e5e8;
+            margin-bottom: 28px;
+            letter-spacing: -0.5px;
+            text-align: center;
+            transition: opacity 0.3s ease;
         }
-        .chat-box::-webkit-scrollbar { width: 4px; }
-        .chat-box::-webkit-scrollbar-thumb { background: var(--stark-border); }
+
+        .welcome-title.hidden {
+            display: none;
+        }
+
+        /* ZONA DE CONVERSACIÓN / MESSAGES */
+        .chat-container {
+            width: 100%;
+            max-width: 780px;
+            max-height: calc(100vh - 180px);
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            padding-bottom: 20px;
+            scroll-behavior: smooth;
+        }
+
+        .chat-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        .chat-container::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
 
         .message {
-            max-width: 80%; padding: 12px 18px; border-radius: 8px;
-            font-size: 0.95rem; line-height: 1.5; word-break: break-word;
-        }
-        .user-message {
-            align-self: flex-end;
-            background: rgba(0, 242, 254, 0.1); border: 1px solid var(--stark-cyan-dim);
-            color: #fff; border-bottom-right-radius: 2px;
-        }
-        .jarvis-message {
-            align-self: flex-start;
-            background: rgba(10, 25, 45, 0.7); border: 1px solid rgba(209, 247, 255, 0.15);
-            color: #d1f7ff; border-bottom-left-radius: 2px;
+            max-width: 85%;
+            font-size: 0.98rem;
+            line-height: 1.6;
+            word-break: break-word;
         }
 
-        /* BARRA DE ENTRADA CENTRAL (ESTILO image_e427b6.png) */
-        .input-wrapper {
-            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
-            width: calc(100% - 40px); max-width: 700px;
-            display: flex; align-items: center; gap: 10px;
-            padding: 10px 15px; border-radius: 30px; /* Esquinas muy redondeadas */
-            background: rgba(15, 30, 50, 0.95);
-            border: 1px solid var(--stark-border);
-            box-shadow: 0 5px 25px rgba(0,0,0,0.5);
-            z-index: 5;
+        .user-message {
+            align-self: flex-end;
+            background: #282a30;
+            color: #ffffff;
+            padding: 12px 20px;
+            border-radius: 20px;
+            border-bottom-right-radius: 4px;
+        }
+
+        .jarvis-message {
+            align-self: flex-start;
+            color: #e3e5e8;
+            padding: 4px 8px;
+        }
+
+        /* 🔍 BARRA BÚSQUEDA CENTRAL (FLOTANTE - image_e427b6.png) */
+        .input-container {
+            position: absolute;
+            bottom: 30px;
+            width: calc(100% - 40px);
+            max-width: 760px;
+            background: var(--input-bg);
+            border-radius: 30px;
+            padding: 8px 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.3s ease;
+        }
+
+        .input-container:focus-within {
+            border-color: rgba(255, 255, 255, 0.15);
+            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
         }
 
         .stark-input {
-            flex: 1; background: transparent; border: none; outline: none;
-            color: #fff; font-size: 1rem; padding: 5px 0;
-        }
-        .stark-input::placeholder { color: rgba(209, 247, 255, 0.5); }
-
-        .input-btn {
-            width: 35px; height: 35px; border-radius: 50%; background: transparent;
-            border: 1px solid transparent; color: var(--stark-cyan);
-            display: flex; align-items: center; justify-content: center;
-            cursor: pointer; transition: 0.3s;
-        }
-        .input-btn:hover { background: rgba(0, 242, 254, 0.15); border-color: var(--stark-border); }
-
-        /* NÚCLEO HOLOGRÁFICO 3D (Rediseñado para la barra de entrada) */
-        #core3DCanvas {
-            width: 30px; height: 30px; border-radius: 50%;
-            border: 1px solid var(--stark-border); background: #000;
-            filter: drop-shadow(0 0 5px var(--stark-cyan));
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: #ffffff;
+            font-size: 0.98rem;
+            padding: 10px 4px;
         }
 
+        .stark-input::placeholder {
+            color: #727782;
+        }
+
+        .action-btn {
+            background: transparent;
+            border: none;
+            color: #9ea3ac;
+            cursor: pointer;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .action-btn:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #ffffff;
+        }
+
+        .action-btn svg {
+            width: 20px;
+            height: 20px;
+            fill: currentColor;
+        }
+
+        .model-selector {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.85rem;
+            color: #9ea3ac;
+            cursor: pointer;
+            padding: 6px 10px;
+            border-radius: 12px;
+            user-select: none;
+        }
+
+        .model-selector:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: #ffffff;
+        }
+
+        /* PREVIEW BARRA ARCHIVOS */
+        .preview-bar {
+            display: none;
+            position: absolute;
+            bottom: 95px;
+            background: #1e2025;
+            padding: 8px 16px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            align-items: center;
+            gap: 12px;
+            font-size: 0.85rem;
+            color: var(--accent-blue);
+        }
+        .preview-bar.active { display: flex; }
+
+        .mic-active {
+            color: #ff4d4d !important;
+            animation: pulse 1.2s infinite alternate;
+        }
+        @keyframes pulse { 0% { transform: scale(1); } 100% { transform: scale(1.15); } }
+
+        .hud-link-btn {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 8px 16px;
+            background: rgba(168, 199, 250, 0.15);
+            border: 1px solid var(--accent-blue);
+            color: var(--accent-blue);
+            text-decoration: none;
+            border-radius: 8px;
+            font-size: 0.85rem;
+        }
+
+        .code-block {
+            background: #16181d;
+            border-radius: 8px;
+            padding: 12px;
+            margin: 10px 0;
+            font-family: monospace;
+            color: #a8c7fa;
+            overflow-x: auto;
+        }
     </style>
 </head>
 <body>
 
-    <!-- 🔒 PORTADA BIOMÉTRICA (ESTILO image_e427b6.png) -->
-    <div class="splash-screen" id="splashScreen">
-        <div class="biometric-ring">
-            <svg width="60" height="60" viewBox="0 0 24 24" fill="#00f2fe">
-                <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8s0 0 0 0z"/>
-            </svg>
+    <!-- 📌 BARRA LATERAL IZQUIERDA (IDÉNTICA A LA IMAGEN) -->
+    <aside class="sidebar">
+        <div class="sidebar-top">
+            <!-- Logo Gemini de 4 Puntas Centelleantes -->
+            <div class="side-btn">
+                <svg class="star-logo" viewBox="0 0 24 24">
+                    <path fill="url(#gemini-grad)" d="M12 0C12 6.627 6.627 12 0 12c6.627 0 12 5.373 12 12 0-6.627 5.373-12 12-12-6.627 0-12-5.373-12-12z"/>
+                    <defs>
+                        <linearGradient id="gemini-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#4285f4"/>
+                            <stop offset="50%" stop-color="#9b51e0"/>
+                            <stop offset="100%" stop-color="#e91e63"/>
+                        </linearGradient>
+                    </defs>
+                </svg>
+            </div>
+
+            <!-- Nuevo Chat / Editar -->
+            <button class="side-btn" title="Nuevo Chat" onclick="location.reload()">
+                <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+            </button>
+
+            <!-- Lupa / Buscar -->
+            <button class="side-btn" title="Buscar">
+                <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+            </button>
+
+            <!-- Historial / Reloj -->
+            <button class="side-btn" title="Historial">
+                <svg viewBox="0 0 24 24"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
+            </button>
+
+            <!-- Guardados / Archivo -->
+            <button class="side-btn" title="Guardados">
+                <svg viewBox="0 0 24 24"><path d="M17 3H7c-1.1 0-1.99.9-1.99 2L5 21l7-3 7 3V5c0-1.1-.9-2-2-2zm0 15l-5-2.18L7 18V5h10v13z"/></svg>
+            </button>
+
+            <!-- Aplicaciones / Mosaico -->
+            <button class="side-btn" title="Aplicaciones">
+                <svg viewBox="0 0 24 24"><path d="M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-10v4h4V4h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zm0 6h4v-4h-4v4z"/></svg>
+            </button>
         </div>
-        <div class="splash-title">AUTENTICANDO CRISTIAN...</div>
-    </div>
 
-    <div class="jarvis-main-container">
-        
-        <!-- HEADER (ESTILO image_e427b6.png) -->
-        <header class="hud-header">
-            <div class="header-left">
-                <span class="stark-logo">STARK INDUSTRIES</span>
-                <span class="system-status" id="sys-status">J.A.R.V.I.S. MK-VI // ONLINE</span>
+        <div class="sidebar-bottom">
+            <!-- Engranaje / Configuración (Abajo a la izquierda en image_e427b6.png) -->
+            <button class="side-btn" title="Configuración">
+                <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+            </button>
+        </div>
+    </aside>
+
+    <!-- 🖥️ ÁREA CENTRADA PRINCIPAL -->
+    <main class="main-content">
+
+        <!-- TÍTULO CENTRAL (EXACTO A image_e427b6.png) -->
+        <h1 class="welcome-title" id="welcomeTitle">Pregunta lo que quieras, Cristian</h1>
+
+        <!-- CONTENEDOR DE MENSAJES (APARECE AL HABLAR) -->
+        <div class="chat-container" id="chatBox"></div>
+
+        <!-- BARRA ADJUNTOS DETECTADOS -->
+        <div class="preview-bar" id="previewBar">
+            <span id="previewText">Archivos listos</span>
+            <span style="cursor:pointer;" onclick="cancelarArchivos()">✕</span>
+        </div>
+
+        <!-- 🔍 BARRA DE ENTRADA CENTRALIZADA (EXACTA A image_e427b6.png) -->
+        <div class="input-container">
+            <!-- Botón + Adjuntar -->
+            <button class="action-btn" onclick="document.getElementById('fileInput').click()" title="Adjuntar archivo o imagen">
+                <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+            </button>
+
+            <input type="file" id="fileInput" accept="*/*" multiple style="display:none;" onchange="procesarArchivosSeleccionados(event)">
+
+            <!-- Entrada de Texto Principal -->
+            <input type="text" id="userInput" class="stark-input" placeholder="Pregunta a Jarvis" autocomplete="off">
+
+            <!-- Selector de Modelo / Nivel -->
+            <div class="model-selector" title="Modelo de IA activo">
+                <span>Mark V</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>
             </div>
-            <div class="header-right">
-                <!-- Iconos de la derecha como en la imagen -->
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="rgba(209, 247, 255, 0.6)"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
-            </div>
-        </header>
 
-        <!-- CANAL LATERAL IZQUIERDO -->
-        <aside class="hud-side-bar hud-left">
-            <div class="side-icon"><span>T</span></div>
-            <div class="side-icon"><span>D</span></div>
-            <div class="side-icon"><span>M</span></div>
-        </aside>
+            <!-- Botón Micrófono -->
+            <button class="action-btn" id="micBtn" onclick="toggleMicrofono()" title="Usar micrófono">
+                <svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
+            </button>
+        </div>
 
-        <!-- ZONA CENTRAL DE CHAT -->
-        <main class="chat-container">
-            <div class="chat-box" id="chatBox">
-                <div class="message jarvis-message">¿En qué puedo asistirle hoy, señor Cristian? Los sistemas Mark VI están a su disposición.</div>
-            </div>
-
-            <!-- BARRA DE ENTRADA CENTRALIZADA (FUSIÓN ESTILO image_e427b6.png Y STARK) -->
-            <div class="input-wrapper">
-                <!-- Adjuntar Archivo -->
-                <button class="input-btn" onclick="document.getElementById('fileInput').click()">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"/></svg>
-                </button>
-                <input type="file" id="fileInput" accept="*/*" multiple style="display:none;" onchange="procesarArchivosSeleccionados(event)">
-
-                <!-- Entrada de Texto -->
-                <input type="text" id="userInput" class="stark-input" placeholder="Pregunta lo que quieras, Cristian..." autocomplete="off">
-
-                <!-- Micrófono -->
-                <button class="input-btn" id="micBtn" onclick="toggleMicrofono()">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
-                </button>
-
-                <!-- NÚCLEO HOLOGRÁFICO (Integrado como indicador de estado) -->
-                <canvas id="core3DCanvas"></canvas>
-            </div>
-        </main>
-
-        <!-- CANAL LATERAL DERECHO -->
-        <aside class="hud-side-bar hud-right">
-            <div class="side-icon"><span>⚙️</span></div>
-            <div class="side-icon"><span>📊</span></div>
-        </aside>
-
-    </div>
+    </main>
 
     <script>
-        // --- 🔒 LÓGICA DE PORTADA BIOMÉTRICA (image_e427b6.png) ---
-        window.addEventListener("load", () => {
-            setTimeout(() => {
-                document.getElementById("splashScreen").classList.add("hidden");
-                // Reproducir sonido de inicio de Stark Industries aquí
-            }, 1500);
-        });
+        const API_URL = "https://jarvis-ai-hud.onrender.com/api/jarvis";
 
-        // --- 🌌 MOTOR DEL NÚCLEO HOLOGRÁFICO 3D (Integrado en barra) ---
-        const coreCanvas = document.getElementById("core3DCanvas");
-        const ctx3D = coreCanvas.getContext("2d");
-        coreCanvas.width = 30; coreCanvas.height = 30;
+        const chatBox = document.getElementById("chatBox");
+        const userInput = document.getElementById("userInput");
+        const welcomeTitle = document.getElementById("welcomeTitle");
+        const micBtn = document.getElementById("micBtn");
+        const previewBar = document.getElementById("previewBar");
+        const previewText = document.getElementById("previewText");
+        const fileInput = document.getElementById("fileInput");
 
-        let numParticles = 15;
-        let particles = [];
-        let estadoCore = "ready"; // ready, processing, speaking, listening
+        let recognition = null;
+        let isListening = false;
+        let listaArchivosCargados = [];
 
-        // Colores de estado
-        const coreColors = { ready: "#00f2fe", processing: "#ffb700", speaking: "#00ff88", listening: "#ff3366" };
-
-        for (let i = 0; i < numParticles; i++) {
-            particles.push({
-                angle: (i / numParticles) * Math.PI * 2,
-                radius: 8 + Math.random() * 3,
-                speed: 0.04 + Math.random() * 0.02,
-                size: 1 + Math.random() * 1
-            });
-        }
-
-        function render3DCore() {
-            ctx3D.clearRect(0, 0, 30, 30);
-            const cx = 15, cy = 15;
-            let colorHex = coreColors[estadoCore];
-
-            // Núcleo Central
-            ctx3D.beginPath(); ctx3D.arc(cx, cy, 3, 0, Math.PI * 2);
-            ctx3D.fillStyle = colorHex; ctx3D.fill();
-
-            // Partículas orbitales 3D
-            particles.forEach((p) => {
-                p.angle += (estadoCore === "processing" ? p.speed * 2 : p.speed);
-                let x = cx + Math.cos(p.angle) * p.radius;
-                let y = cy + Math.sin(p.angle) * (p.radius * 0.4); // Elipse 3D
-
-                ctx3D.beginPath(); ctx3D.arc(x, y, p.size, 0, Math.PI * 2);
-                ctx3D.fillStyle = colorHex; ctx3D.fill();
-            });
-
-            requestAnimationFrame(render3DCore);
-        }
-        render3DCore();
-
-        // --- LÓGICA DE CHAT Y ESTADOS (Simplificada) ---
-        function setEstado(estado) {
-            estadoCore = estado;
-            // Actualizar texto del header si es necesario
-        }
-
-        // Simulación de respuesta de Jarvis
-        document.getElementById('userInput').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                const text = e.target.value;
-                if (!text) return;
-                
-                // Mensaje Usuario
-                const chatBox = document.getElementById('chatBox');
-                chatBox.innerHTML += `<div class="message user-message">${text}</div>`;
-                e.target.value = '';
-                chatBox.scrollTop = chatBox.scrollHeight;
-
-                // Jarvis Procesando
-                setEstado("processing");
-
-                setTimeout(() => {
-                    // Jarvis Responde
-                    chatBox.innerHTML += `<div class="message jarvis-message">Procesando solicitud, señor Cristian. Ejecutando análisis Mark VI...</div>`;
-                    chatBox.scrollTop = chatBox.scrollHeight;
-                    setEstado("speaking");
-                    setTimeout(() => setEstado("ready"), 2000);
-                }, 1500);
+        function obtenerSessionId() {
+            let sid = localStorage.getItem("jarvis_session_id");
+            if (!sid) {
+                sid = "stark_user_" + Math.random().toString(36).substring(2, 9) + "_" + Date.now();
+                localStorage.setItem("jarvis_session_id", sid);
             }
-        });
-        
-        // --- 🎤 LÓGICA DEL MICRÓFONO ---
+            return sid;
+        }
+
+        async function procesarArchivosSeleccionados(event) {
+            const files = Array.from(event.target.files);
+            if (!files || files.length === 0) return;
+
+            listaArchivosCargados = [];
+
+            for (const file of files) {
+                const item = { name: file.name, b64: await leerArchivoB64(file) };
+                listaArchivosCargados.push(item);
+            }
+
+            previewText.innerText = `${listaArchivosCargados.length} archivo(s) listo(s)`;
+            previewBar.classList.add("active");
+        }
+
+        function leerArchivoB64(file) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function cancelarArchivos() {
+            listaArchivosCargados = [];
+            fileInput.value = "";
+            previewBar.classList.remove("active");
+        }
+
+        if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.lang = 'es-ES';
+            recognition.continuous = false;
+
+            recognition.onstart = () => {
+                isListening = true;
+                micBtn.classList.add("mic-active");
+            };
+
+            recognition.onresult = (event) => {
+                const textoCapturado = event.results[0][0].transcript;
+                userInput.value = textoCapturado;
+                enviarMensaje();
+            };
+
+            recognition.onerror = () => apagarMicrofono();
+            recognition.onend = () => apagarMicrofono();
+        }
+
         function toggleMicrofono() {
-            const micBtn = document.getElementById('micBtn');
-            if (estadoCore !== 'listening') {
-                setEstado('listening');
-                micBtn.style.color = '#ff3366';
-                // Iniciar reconocimiento de voz aquí
+            if (!recognition) return alert("Navegador sin micrófono.");
+            if (isListening) {
+                recognition.stop();
+                apagarMicrofono();
             } else {
-                setEstado('ready');
-                micBtn.style.color = '#00f2fe';
-                // Detener reconocimiento de voz aquí
+                recognition.start();
             }
         }
 
+        function apagarMicrofono() {
+            isListening = false;
+            micBtn.classList.remove("mic-active");
+        }
+
+        userInput.addEventListener("keypress", (e) => { if (e.key === "Enter") enviarMensaje(); });
+
+        async function enviarMensaje() {
+            const texto = userInput.value.trim();
+            const archivosEnviar = listaArchivosCargados.map(a => ({ file_b64: a.b64, file_name: a.name }));
+
+            if (!texto && archivosEnviar.length === 0) return;
+
+            welcomeTitle.classList.add("hidden");
+
+            agregarMensajeUsuario(texto);
+
+            userInput.value = "";
+            cancelarArchivos();
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ 
+                        message: texto || "Consulta de archivo.",
+                        session_id: obtenerSessionId(),
+                        files: archivosEnviar
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.status === "success" && data.reply) {
+                    agregarMensajeJarvis(data.reply);
+                } else {
+                    agregarMensajeJarvis("Ocurrió un inconveniente al procesar la respuesta.");
+                }
+            } catch (error) {
+                agregarMensajeJarvis("Error de conexión con el servidor central.");
+            }
+        }
+
+        function agregarMensajeUsuario(texto) {
+            const msgDiv = document.createElement("div");
+            msgDiv.className = "message user-message";
+            msgDiv.innerText = texto;
+            chatBox.appendChild(msgDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function agregarMensajeJarvis(texto) {
+            const msgDiv = document.createElement("div");
+            msgDiv.className = "message jarvis-message";
+            msgDiv.innerText = texto;
+            chatBox.appendChild(msgDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
     </script>
 </body>
 </html>
