@@ -21,7 +21,7 @@
         :root {
             --bg-dark: #06080d;
             --sidebar-bg: #080c14;
-            --sidebar-expanded-width: 260px;
+            --sidebar-expanded-width: 270px;
             --sidebar-collapsed-width: 68px;
             --input-bg: #121722;
             --card-jarvis-bg: #0d121d;
@@ -71,7 +71,7 @@
             100% { opacity: 1.0; }
         }
 
-        /* 📌 BARRA LATERAL PERFECCIONADA Y ALINEADA */
+        /* 📌 BARRA LATERAL DESPLEGABLE Y SIMÉTRICA */
         .sidebar-overlay {
             position: fixed;
             inset: 0;
@@ -97,7 +97,7 @@
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-            padding: 16px 12px;
+            padding: 14px;
             z-index: 20;
             flex-shrink: 0;
             transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
@@ -111,14 +111,14 @@
             box-shadow: 10px 0 30px rgba(0, 0, 0, 0.6);
         }
 
-        /* CABECERA DE BARRA LATERAL TOTALMENTE CENTRADA EN AMBOS ESTADOS */
+        /* CABECERA DE LA BARRA LATERAL */
         .sidebar-header {
             display: flex;
             align-items: center;
             justify-content: flex-start;
             gap: 12px;
             width: 100%;
-            height: 44px;
+            height: 40px;
             margin-bottom: 20px;
         }
 
@@ -127,9 +127,9 @@
             border: none;
             color: var(--text-sub);
             cursor: pointer;
-            width: 44px;
-            height: 44px;
-            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -144,10 +144,9 @@
 
         .toggle-menu-btn svg { width: 22px; height: 22px; fill: currentColor; }
 
-        /* ☢️ NAV CONTAINER REACTOR ARC MARK VI (NUNCA SE RECORTA) */
         .arc-nav-container {
-            width: 44px;
-            height: 44px;
+            width: 40px;
+            height: 40px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -155,8 +154,8 @@
         }
 
         #arcReactorNav {
-            width: 38px;
-            height: 38px;
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
             cursor: pointer;
             filter: drop-shadow(0 0 10px rgba(0, 150, 255, 0.7));
@@ -167,7 +166,7 @@
 
         .brand-logo-text {
             font-family: var(--font-orbitron);
-            font-size: 1rem;
+            font-size: 0.95rem;
             font-weight: 700;
             color: var(--stark-cyan);
             letter-spacing: 1.5px;
@@ -178,7 +177,7 @@
 
         .sidebar.expanded .brand-logo-text { opacity: 1; }
 
-        /* BOTÓN NUEVA CONVERSACIÓN (PÍLDORA / CIRCULO ADAPTABLE) */
+        /* BOTÓN NUEVA CONVERSACIÓN (PÍLDORA / CÍRCULO ADAPTABLE) */
         .btn-new-chat {
             display: flex;
             align-items: center;
@@ -187,19 +186,19 @@
             background: rgba(255, 255, 255, 0.04);
             border: 1px solid rgba(0, 210, 255, 0.2);
             color: var(--text-main);
-            height: 44px;
-            padding: 0 12px;
-            border-radius: 22px;
+            height: 42px;
+            padding: 0 10px;
+            border-radius: 21px;
             cursor: pointer;
-            width: 44px;
+            width: 40px;
             transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-            margin-bottom: 20px;
+            margin-bottom: 16px;
             overflow: hidden;
         }
 
         .sidebar.expanded .btn-new-chat {
             width: 100%;
-            padding: 0 16px;
+            padding: 0 14px;
         }
 
         .btn-new-chat:hover {
@@ -223,11 +222,55 @@
 
         .sidebar.expanded .menu-item-text { opacity: 1; }
 
-        /* SECCIONES Y LISTA DE CHATS RECIENTES */
+        /* CAMPO DE BÚSQUEDA INTERACTIVO EN LA BARRA LATERAL */
+        .search-box-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            height: 42px;
+            padding: 0 10px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid transparent;
+            color: var(--text-sub);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-bottom: 12px;
+            width: 40px;
+            overflow: hidden;
+        }
+
+        .sidebar.expanded .search-box-container {
+            width: 100%;
+        }
+
+        .search-box-container:hover, .search-box-container.active {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(0, 210, 255, 0.25);
+            color: var(--stark-cyan);
+        }
+
+        .search-box-container svg { width: 20px; height: 20px; fill: currentColor; flex-shrink: 0; }
+
+        .sidebar-search-input {
+            background: transparent;
+            border: none;
+            outline: none;
+            color: #ffffff;
+            font-size: 0.85rem;
+            width: 100%;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .sidebar.expanded .sidebar-search-input { opacity: 1; }
+        .sidebar-search-input::placeholder { color: #6c727e; }
+
+        /* SECCIONES Y LISTAS DE CHATS RECIENTES */
         .sidebar-menu-list {
             display: flex;
             flex-direction: column;
-            gap: 6px;
+            gap: 4px;
             width: 100%;
             overflow-y: auto;
             flex: 1;
@@ -245,7 +288,7 @@
             color: var(--text-sub);
             text-transform: uppercase;
             letter-spacing: 0.8px;
-            margin: 14px 0 6px 12px;
+            margin: 12px 0 6px 10px;
             opacity: 0;
             transition: opacity 0.2s ease;
         }
@@ -255,14 +298,14 @@
         .menu-item {
             display: flex;
             align-items: center;
-            gap: 14px;
-            height: 40px;
-            padding: 0 12px;
-            border-radius: 12px;
+            gap: 12px;
+            height: 38px;
+            padding: 0 10px;
+            border-radius: 10px;
             color: var(--text-sub);
             cursor: pointer;
             transition: all 0.2s ease;
-            font-size: 0.88rem;
+            font-size: 0.86rem;
             width: 100%;
         }
 
@@ -271,18 +314,19 @@
             color: var(--stark-cyan);
         }
 
-        .menu-item svg { width: 20px; height: 20px; fill: currentColor; flex-shrink: 0; }
+        .menu-item svg { width: 18px; height: 18px; fill: currentColor; flex-shrink: 0; }
 
         /* PERFIL DE USUARIO CRISTIAN TERCERO */
         .user-profile-bar {
             display: flex;
             align-items: center;
             gap: 12px;
-            padding: 8px 4px;
+            padding: 8px 2px;
             border-top: 1px solid rgba(255, 255, 255, 0.06);
             margin-top: 10px;
             width: 100%;
             height: 48px;
+            cursor: pointer;
         }
 
         .user-avatar {
@@ -573,7 +617,7 @@
     <div class="jarvis-presence-bg"></div>
     <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
 
-    <!-- 📌 BARRA LATERAL ESTABILIZADA Y SIMÉTRICA -->
+    <!-- 📌 BARRA LATERAL ESTABILIZADA CON BUSCADOR INTERACTIVO -->
     <aside class="sidebar" id="sidebar">
         <div>
             <!-- CABECERA ALINEADA -->
@@ -593,13 +637,14 @@
                 <span class="menu-item-text">Nueva conversación</span>
             </button>
 
-            <!-- MENÚ PRINCIPAL -->
-            <div class="sidebar-menu-list">
-                <div class="menu-item" onclick="iniciarNuevoChat()">
-                    <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
-                    <span class="menu-item-text">Buscar conversaciones</span>
-                </div>
+            <!-- CAMPO DE BÚSQUEDA INTERACTIVO EN LA BARRA LATERAL -->
+            <div class="search-box-container" id="searchBoxContainer" onclick="activarBuscadorSidebar()">
+                <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+                <input type="text" class="sidebar-search-input" id="searchChatInput" placeholder="Buscar proyecto o chat..." oninput="filtrarChatsRecientes(this.value)">
+            </div>
 
+            <!-- MENÚ PRINCIPAL Y CHATS RECIENTES -->
+            <div class="sidebar-menu-list">
                 <div class="sidebar-section-title">Recientes</div>
                 <div id="recentChatsList" style="display: flex; flex-direction: column; gap: 4px;">
                     <!-- Se cargan dinámicamente -->
@@ -665,6 +710,7 @@
         const sidebarOverlay = document.getElementById("sidebarOverlay");
         const typingIndicator = document.getElementById("typingIndicator");
         const recentChatsList = document.getElementById("recentChatsList");
+        const searchChatInput = document.getElementById("searchChatInput");
 
         let archivoBase64 = null;
         let nombreArchivo = null;
@@ -737,6 +783,13 @@
             }
         }
 
+        function activarBuscadorSidebar() {
+            if (!sidebar.classList.contains("expanded") && window.innerWidth > 768) {
+                sidebar.classList.add("expanded");
+            }
+            searchChatInput.focus();
+        }
+
         function obtenerSessionId() {
             let sid = localStorage.getItem("jarvis_session_id");
             if (!sid) {
@@ -755,12 +808,19 @@
             let recientes = JSON.parse(localStorage.getItem("jarvis_recientes") || "[]");
             if (nuevoTitulo && !recientes.includes(nuevoTitulo)) {
                 recientes.unshift(nuevoTitulo);
-                if (recientes.length > 8) recientes.pop();
+                if (recientes.length > 10) recientes.pop();
                 localStorage.setItem("jarvis_recientes", JSON.stringify(recientes));
             }
+            renderizarChatsFiltrados(recientes);
+        }
 
+        function renderizarChatsFiltrados(lista) {
             recentChatsList.innerHTML = "";
-            recientes.forEach(titulo => {
+            if (lista.length === 0) {
+                recentChatsList.innerHTML = '<div style="font-size:0.78rem; color:var(--text-sub); padding:8px 10px;">Sin conversaciones</div>';
+                return;
+            }
+            lista.forEach(titulo => {
                 const item = document.createElement("div");
                 item.className = "menu-item";
                 item.innerHTML = `<svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/></svg><span class="menu-item-text">${titulo}</span>`;
@@ -769,6 +829,17 @@
                 };
                 recentChatsList.appendChild(item);
             });
+        }
+
+        function filtrarChatsRecientes(query) {
+            let recientes = JSON.parse(localStorage.getItem("jarvis_recientes") || "[]");
+            const q = query.toLowerCase().trim();
+            if (!q) {
+                renderizarChatsFiltrados(recientes);
+            } else {
+                const filtrados = recientes.filter(t => t.toLowerCase().includes(q));
+                renderizarChatsFiltrados(filtrados);
+            }
         }
 
         actualizarListaRecientes();
