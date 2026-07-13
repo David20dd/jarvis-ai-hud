@@ -39,10 +39,11 @@
             -webkit-tap-highlight-color: transparent;
         }
 
-        body {
+        html, body {
             background-color: var(--bg-dark);
             color: var(--text-main);
             height: 100vh;
+            height: 100dvh;
             width: 100vw;
             display: flex;
             overflow: hidden;
@@ -52,8 +53,7 @@
         /* 🌀 FONDO CON RESPLANDOR NEÓN UNIFORME Y PULSO SUAVE */
         .jarvis-presence-bg {
             position: absolute;
-            top: 0;
-            left: 0;
+            inset: 0;
             width: 100%;
             height: 100%;
             background: radial-gradient(circle at 50% 50%, rgba(0, 110, 255, 0.22) 0%, rgba(0, 210, 255, 0.07) 45%, rgba(6, 8, 13, 0) 80%);
@@ -71,6 +71,7 @@
         .sidebar {
             width: 60px;
             height: 100vh;
+            height: 100dvh;
             background-color: var(--sidebar-bg);
             border-right: 1px solid rgba(255, 255, 255, 0.04);
             display: flex;
@@ -79,13 +80,14 @@
             align-items: center;
             padding: 16px 0;
             z-index: 10;
+            flex-shrink: 0;
         }
 
         .sidebar-top, .sidebar-bottom {
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 20px;
+            gap: 18px;
         }
 
         .side-btn {
@@ -113,7 +115,7 @@
             fill: currentColor;
         }
 
-        /* ☢️ NAV CONTAINER REACTOR ARC (HD Canvas 80x80) */
+        /* ☢️ NAV CONTAINER REACTOR ARC MARK I HD */
         .arc-nav-container {
             width: 40px;
             height: 40px;
@@ -138,6 +140,7 @@
         .main-content {
             flex: 1;
             height: 100vh;
+            height: 100dvh;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -145,12 +148,13 @@
             position: relative;
             padding: 20px;
             z-index: 2;
+            min-width: 0;
         }
 
         .sys-status-text {
             position: absolute;
-            top: 20px;
-            right: 25px;
+            top: 18px;
+            right: 22px;
             font-family: var(--font-mono);
             font-size: 0.72rem;
             color: var(--stark-cyan);
@@ -158,6 +162,7 @@
             opacity: 0.85;
             text-shadow: 0 0 8px var(--stark-glow);
             z-index: 10;
+            pointer-events: none;
         }
 
         /* HERO CONTAINER CENTRADO INICIALMENTE CON TRANSICIÓN SUAVE */
@@ -174,12 +179,12 @@
         /* DESPLAZAMIENTO HACIA ABAJO AL ENVIAR MENSAJE */
         .main-content.chat-mode .hero-container {
             position: absolute;
-            bottom: 25px;
+            bottom: 20px;
         }
 
-        /* TÍTULO BIENVENIDA DINÁMICO */
+        /* TÍTULO BIENVENIDA DINÁMICO ESCALABLE */
         .welcome-title {
-            font-size: 2.1rem;
+            font-size: clamp(1.3rem, 4.5vw, 2.1rem);
             font-weight: 400;
             color: #e3e8f0;
             margin-bottom: 28px;
@@ -188,6 +193,7 @@
             opacity: 0;
             transform: translateY(14px);
             animation: geminiEntrance 0.65s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            padding: 0 10px;
         }
 
         @keyframes geminiEntrance {
@@ -200,25 +206,21 @@
         .chat-container {
             width: 100%;
             max-width: 780px;
-            height: calc(100vh - 165px);
+            height: calc(100dvh - 150px);
             overflow-y: auto;
             display: none;
             flex-direction: column;
-            gap: 20px;
-            padding-top: 20px;
+            gap: 18px;
+            padding-top: 40px;
             padding-bottom: 20px;
-            padding-right: 32px;
+            padding-right: 20px;
             scroll-behavior: smooth;
         }
 
         .chat-container.active { display: flex; }
 
-        .chat-container::-webkit-scrollbar {
-            width: 6px;
-        }
-        .chat-container::-webkit-scrollbar-track {
-            background: transparent;
-        }
+        .chat-container::-webkit-scrollbar { width: 5px; }
+        .chat-container::-webkit-scrollbar-track { background: transparent; }
         .chat-container::-webkit-scrollbar-thumb {
             background: rgba(255, 255, 255, 0.14);
             border-radius: 10px;
@@ -251,16 +253,34 @@
             padding-left: 0;
         }
 
+        /* PREVIEW BARRA ARCHIVOS */
+        .preview-bar {
+            display: none;
+            margin-bottom: 10px;
+            background: var(--input-bg);
+            padding: 8px 16px;
+            border-radius: 12px;
+            border: 1px solid var(--stark-cyan);
+            align-items: center;
+            gap: 12px;
+            font-size: 0.85rem;
+            color: var(--stark-cyan);
+            z-index: 10;
+            max-width: 720px;
+            width: 100%;
+        }
+        .preview-bar.active { display: flex; }
+
         /* 🔍 BARRA BÚSQUEDA CENTRAL REDONDEADA */
         .input-container {
             width: 100%;
             max-width: 720px;
             background: var(--input-bg);
             border-radius: 28px;
-            padding: 6px 14px;
+            padding: 6px 12px;
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
             border: 1px solid rgba(255, 255, 255, 0.07);
             transition: all 0.3s ease;
@@ -280,6 +300,7 @@
             color: #ffffff;
             font-size: 0.95rem;
             padding: 10px 4px;
+            min-width: 0;
         }
 
         .stark-input::placeholder { color: #6c727e; }
@@ -296,6 +317,7 @@
             align-items: center;
             justify-content: center;
             transition: all 0.2s ease;
+            flex-shrink: 0;
         }
 
         .action-btn:hover {
@@ -316,6 +338,7 @@
             border-radius: 10px;
             user-select: none;
             transition: all 0.2s ease;
+            flex-shrink: 0;
         }
 
         .model-selector:hover {
@@ -323,10 +346,63 @@
             color: var(--stark-cyan);
         }
 
+        /* 📱 REGLAS DE ADAPTABILIDAD RESPONSIVA (MÓVILES Y TABLETS) */
         @media (max-width: 768px) {
-            .welcome-title { font-size: 1.5rem; padding: 0 10px; }
-            .input-container { max-width: 92%; }
-            .chat-container { max-width: 95%; padding-right: 12px; }
+            .sidebar {
+                width: 50px;
+                padding: 12px 0;
+            }
+            .side-btn {
+                width: 34px;
+                height: 34px;
+            }
+            .side-btn svg {
+                width: 18px;
+                height: 18px;
+            }
+            .arc-nav-container {
+                width: 34px;
+                height: 34px;
+            }
+            #arcReactorNav {
+                width: 32px;
+                height: 32px;
+            }
+            .main-content {
+                padding: 12px 10px;
+            }
+            .sys-status-text {
+                font-size: 0.65rem;
+                top: 12px;
+                right: 14px;
+            }
+            .chat-container {
+                padding-right: 10px;
+                padding-left: 4px;
+                gap: 14px;
+                height: calc(100dvh - 135px);
+            }
+            .message {
+                max-width: 92%;
+                font-size: 0.92rem;
+                padding: 10px 14px;
+            }
+            .input-container {
+                padding: 4px 8px;
+                gap: 6px;
+            }
+            .model-selector span {
+                font-size: 0.75rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .model-selector {
+                padding: 4px 6px;
+            }
+            .stark-input {
+                font-size: 0.9rem;
+            }
         }
     </style>
 </head>
@@ -381,8 +457,17 @@
         <div class="hero-container" id="heroContainer">
             <h1 class="welcome-title" id="welcomeTitle">Hola, Cristian, ¿qué vamos a hacer?</h1>
 
+            <div class="preview-bar" id="previewBar">
+                <span id="previewText">Imagen/Archivo cargado</span>
+                <span style="cursor:pointer;" onclick="cancelarArchivos()">✕</span>
+            </div>
+
             <div class="input-container">
-                <button class="action-btn" title="Adjuntar"><svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg></button>
+                <button class="action-btn" onclick="document.getElementById('fileInput').click()" title="Adjuntar imagen o archivo">
+                    <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                </button>
+                <input type="file" id="fileInput" accept="image/*" style="display:none;" onchange="procesarArchivoSeleccionado(event)">
+
                 <input type="text" id="userInput" class="stark-input" placeholder="Pregunta a Jarvis..." autocomplete="off">
                 <div class="model-selector"><span>Mark V</span></div>
                 <button class="action-btn" id="micBtn"><svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg></button>
@@ -397,6 +482,12 @@
         const chatBox = document.getElementById("chatBox");
         const userInput = document.getElementById("userInput");
         const welcomeTitle = document.getElementById("welcomeTitle");
+        const previewBar = document.getElementById("previewBar");
+        const previewText = document.getElementById("previewText");
+        const fileInput = document.getElementById("fileInput");
+
+        let archivoBase64 = null;
+        let nombreArchivo = null;
 
         /* ✨ MENSAJES DE ENTRADA DINÁMICOS EN RECARGA */
         const mensajesEntrada = [
@@ -430,8 +521,8 @@
             ctx.clearRect(0, 0, 80, 80);
             const cx = 40, cy = 40;
 
-            angleOuter += 0.02;      // Rotación horaria exterior
-            angleInner -= 0.03;      // Rotación antihoraria interior
+            angleOuter += 0.02;
+            angleInner -= 0.03;
             pulseGlow += 0.04;
             const pulseRadius = Math.sin(pulseGlow) * 1.5;
 
@@ -464,7 +555,6 @@
             ctx.fillStyle = "#0048aa";
             ctx.fill();
 
-            // Rejilla interna animada
             ctx.strokeStyle = "rgba(0, 210, 255, 0.4)";
             ctx.lineWidth = 1;
             for (let x = -20; x <= 20; x += 8) {
@@ -488,7 +578,6 @@
             ctx.lineWidth = 2.5;
             ctx.stroke();
 
-            // Celdas cortadas
             for (let i = 0; i < 8; i++) {
                 ctx.beginPath();
                 ctx.arc(0, 0, 23, (i / 8) * Math.PI * 2, (i / 8) * Math.PI * 2 + 0.3);
@@ -536,24 +625,56 @@
             return sid;
         }
 
+        function procesarArchivoSeleccionado(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            nombreArchivo = file.name;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                archivoBase64 = e.target.result;
+                previewText.innerText = `Imagen lista: ${nombreArchivo}`;
+                previewBar.classList.add("active");
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function cancelarArchivos() {
+            archivoBase64 = null;
+            nombreArchivo = null;
+            fileInput.value = "";
+            previewBar.classList.remove("active");
+        }
+
         userInput.addEventListener("keypress", (e) => { if (e.key === "Enter") enviarMensaje(); });
 
         async function enviarMensaje() {
             const texto = userInput.value.trim();
-            if (!texto) return;
+            if (!texto && !archivoBase64) return;
 
             welcomeTitle.classList.add("hidden");
             chatBox.classList.add("active");
             mainContent.classList.add("chat-mode");
 
-            agregarMensajeUsuario(texto);
+            let promptMostrar = texto;
+            if (nombreArchivo) promptMostrar += ` [Adjunto: ${nombreArchivo}]`;
+
+            agregarMensajeUsuario(promptMostrar);
+
+            const filesPayload = archivoBase64 ? [{ file_b64: archivoBase64, file_name: nombreArchivo }] : [];
+
             userInput.value = "";
+            cancelarArchivos();
 
             try {
                 const response = await fetch(API_URL, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ message: texto, session_id: obtenerSessionId() })
+                    body: JSON.stringify({
+                        message: texto || "Por favor analiza la imagen adjunta.",
+                        session_id: obtenerSessionId(),
+                        files: filesPayload
+                    })
                 });
 
                 const data = await response.json();
@@ -563,7 +684,7 @@
                     agregarMensajeJarvis("A su servicio, señor. ¿En qué le puedo asistir ahora?");
                 }
             } catch (error) {
-                agregarMensajeJarvis("Sistemas sincronizados, señor. ¿Qué desea analizar?");
+                agregarMensajeJarvis("Sistemas sincronizados con la memoria permanente, señor. ¿Qué desea analizar?");
             }
         }
 
