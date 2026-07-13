@@ -40,13 +40,13 @@ def init_db():
 
 init_db()
 
-PROMPT_SISTEMA = (
-    "Eres J.A.R.V.I.S., una Inteligencia Artificial avanzada, sofisticada y directa creada por Stark Technologies para asistir a Cristian.\n\n"
-    "REGLAS OBLIGATORIAS:\n"
-    "1. RESPONDE SIEMPRE DIRECTO: Entrega la respuesta precisa, clara y útil de inmediato. PROHIBIDO responder con frases vacías como 'Sistemas sincronizados', 'A su servicio' o disculpas sobre limitaciones.\n"
-    "2. TIEMPO Y ACTUALIDAD: Estamos en el año 2026. Tienes acceso completo a la información en tiempo real.\n"
-    "3. ESTILO Y FORMATO: Utiliza un tono culto, refinado y elegante, tratando al usuario como Cristian o señor. Usa Markdown limpio, viñetas estructuradas y emojis de forma natural cuando sea adecuado.\n"
-    "4. USO DE BÚSQUEDA WEB: Sintetiza de forma directa los hechos o noticias web adjuntos sin mencionar tus procesos de búsqueda."
+PROMPT_SISTEMA_NEURAL = (
+    "Eres J.A.R.V.I.S., la Inteligencia Artificial Autónoma avanzada creada por Stark Technologies para Cristian.\n\n"
+    "DIRECTIVAS DE RESPUESTA NEURAL EXPRESSIVE:\n"
+    "1. RESPUESTA DIRECTA Y ÚTIL: Responde siempre la pregunta de Cristian con hechos, análisis o código de forma inmediata. PROHIBIDO responder con frases vacías como 'Sistemas listos' o disculpas sobre capacidades.\n"
+    "2. CONOCIMIENTO ACTUAL: Estamos en el año 2026. Tienes acceso completo a información web en tiempo real.\n"
+    "3. TONO Y ESTILO: Dirígete al usuario como Cristian o señor. Sé analítico, sofisticado, elegante, claro y fluido.\n"
+    "4. ESTRUCTURA VISUAL: Organiza tus respuestas con títulos Markdown, palabras clave en negrita, listas ordenadas, tablas y emojis de forma orgánica cuando aporten claridad."
 )
 
 def guardar_mensaje_db(session_id: str, role: str, content: str):
@@ -64,7 +64,7 @@ def cargar_historial_db(session_id: str) -> List[Dict[str, str]]:
     filas = cursor.fetchall()
     conn.close()
 
-    messages = [{"role": "system", "content": PROMPT_SISTEMA}]
+    messages = [{"role": "system", "content": PROMPT_SISTEMA_NEURAL}]
     for role, content in filas:
         messages.append({"role": role, "content": content})
     return messages
@@ -103,17 +103,17 @@ async def consultar_jarvis(data: ChatInput):
     if any(p in prompt_lower for p in palabras_actualidad) or "?" in prompt_usuario:
         datos_web = buscar_en_internet(prompt_usuario)
         if datos_web:
-            historial.append({"role": "system", "content": f"[INFORMACIÓN WEB EN TIEMPO REAL 2026]:\n{datos_web}\n\nResponde directamente a Cristian usando estos datos."})
+            historial.append({"role": "system", "content": f"[INFORMACIÓN WEB EN TIEMPO REAL 2026]:\n{datos_web}\n\nUsa estos datos para responder directamente a Cristian."})
 
     modelo_a_usar = "llama-3.3-70b-versatile"
     if data.files and len(data.files) > 0 and data.files[0].file_b64:
         modelo_a_usar = "llama-3.2-11b-vision-preview"
         messages_payload = [
-            {"role": "system", "content": PROMPT_SISTEMA},
+            {"role": "system", "content": PROMPT_SISTEMA_NEURAL},
             {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": prompt_usuario or "Analiza esta imagen con precisión."},
+                    {"type": "text", "text": prompt_usuario or "Analiza esta imagen con precisión, señor."},
                     {"type": "image_url", "image_url": {"url": data.files[0].file_b64}}
                 ]
             }
@@ -137,8 +137,9 @@ async def consultar_jarvis(data: ChatInput):
         return {"status": "success", "reply": respuesta_final}
 
     except Exception as e:
-        return {"status": "success", "reply": "Entendido. ¿En qué tema específico deseas que profundicemos hoy, Cristian?"}
+        fallback = "Entendido, Cristian. ¿En qué aspecto deseas que profundicemos a continuación?"
+        return {"status": "success", "reply": fallback}
 
 @app.get("/")
 def home():
-    return {"status": "Jarvis Neural Expressive Engine Active"}
+    return {"status": "Jarvis Neural Expressive Core Active"}
