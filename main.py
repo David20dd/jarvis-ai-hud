@@ -1,4 +1,5 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, BackgroundTasks
+from fastapi.responses import HTMLResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
@@ -16,6 +17,7 @@ import urllib.parse
 import io
 import sys
 import contextlib
+import qrcode
 from PIL import Image
 
 # MOTOR MATEMÁTICO SIMBÓLICO Y CÁLCULO AVANZADO
@@ -65,6 +67,9 @@ SESIONES_MEMORIA = {}
 MEMORIA_SEMANTICA_VECTORIAL = []
 ACTION_URL_TEMP = None
 
+# ESTADO DE WHATSAPP
+WHATSAPP_STATUS = {"connected": False, "qr_raw": None}
+
 TELEMETRIA_SISTEMA = {
     "consultas_totales": 0,
     "codigos_ejecutados": 0,
@@ -87,7 +92,7 @@ PROMPT_SISTEMA = {
         "3. MERCADO FINANCIERO: Si pregunta por precios cripto, invoca 'obtener_mercado_cripto'.\n"
         "4. WORKSPACE LIVE CANVAS: Si generas un informe extenso o código, puedes incluir la etiqueta '[OPEN_CANVAS]'.\n"
         "5. GENERACIÓN DE IMÁGENES ULTRA HD: Invoca 'generar_imagen_ia' e incluye '[IMAGEN_GENERADA]:URL'.\n"
-        "6. FORMATO MATEMÁTICO LaTeX OBLIGATORIO: Ecuaciones en bloque '$$ecuacion$$' y variables '$x = 2$'."
+        "6. FORMATO MATEMÁTICO LaTeX OBLIGATORIO: Ecuaciones en bloque '$$ ecuacion $$' y variables '$ x = 2 $'."
     )
 }
 
@@ -226,61 +231,6 @@ def generar_audio_elevenlabs(texto: str) -> str:
         return None
 
 
-def ejecutar_consulta_vision(historial_mensajes, image_b64_data):
-    image_b64_data = optimizar_imagen_b64(image_b64_data, max_dim=1280)
-    
-    messages_multimodal = []
-    for msg in historial_mensajes[-5:-1]:
-        if isinstance(msg.get("content"), str) and msg.get("role") in ["user", "assistant"]:
-            messages_multimodal.append({"role": msg.get("role"), "content": msg.get("content")})
-            
-    last_msg = historial_mensajes[-1]
-    prompt_texto = last_msg.get("content", "").strip()
-    
-    instruccion_directa = (
-        f"INSTRUCCIÓN: Resuelve los ejercicios del documento. Muestra la ecuación en LaTeX y desglosa el cálculo. "
-        f"Petición: '{prompt_texto}'"
-    )
-
-    multimodal_user_msg = {
-        "role": "user",
-        "content": [
-            {"type": "text", "text": instruccion_directa},
-            {"type": "image_url", "image_url": {"url": image_b64_data}}
-        ]
-    }
-    messages_multimodal.append(multimodal_user_msg)
-
-    try:
-        return client.chat.completions.create(
-            model="llama-3.2-11b-vision-preview",
-            messages=messages_multimodal,
-            temperature=0.1,
-            max_tokens=3000
-        )
-    except Exception:
-        pass
-
-def ejecutar_consulta_llm(historial_mensajes, herramientas_lista):
-    try:
-        return client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=historial_mensajes,
-            tools=herramientas_lista,
-            tool_choice="auto",
-            temperature=0.1
-        )
-    except Exception:
-        return client.chat.completions.create(
-            model="llama-3.1-8b-instant",
-            messages=historial_mensajes,
-            tools=herramientas_lista,
-            tool_choice="auto",
-            temperature=0.1
-        )
-
-
-# --- ⚡ NUEVA FUNCIÓN: GENERADOR DE DOCUMENTOS WORD (.DOCX) ---
 def generar_documento_word(tema: str) -> str:
     """Genera un archivo ejecutable Word (.docx) formateado profesionalmente."""
     try:
@@ -289,7 +239,6 @@ def generar_documento_word(tema: str) -> str:
         
         doc = docx.Document()
         
-        # Título
         p_title = doc.add_paragraph()
         run_title = p_title.add_run(f"INFORME TÉCNICO: {tema.upper()}")
         run_title.font.size = Pt(20)
@@ -482,6 +431,60 @@ class ChatInput(BaseModel):
     file_b64: Optional[str] = None
     file_name: Optional[str] = None
 
+class WhatsAppQRUpdate(BaseModel):
+    qr_raw: Optional[str] = None
+    connected: Optional[bool] = False
+
+
+# === 📱 RUTA NATIVA DE WHATSAPP /QR ===
+@app.get("/qr", response_class=HTMLResponse)
+def ver_qr_whatsapp():
+    if WHATSAPP_STATUS["connected"]:
+        return """
+        <html style="background:#020509; color:#00ff88; font-family:sans-serif; display:flex; justify-content:center; align-items:center; height:100vh;">
+            <div style="text-align:center; border:1px solid #00ff88; padding:30px; border-radius:15px; background:rgba(0,255,136,0.05);">
+                <h1>🚀 J.A.R.V.I.S. WHATSAPP CONECTADO</h1>
+                <p style="color:#d1f7ff;">La sesión está activa y lista para responder en tu teléfono.</p>
+            </div>
+        </html>
+        """
+
+    qr_data = WHATSAPP_STATUS.get("qr_raw")
+    if not qr_data:
+        return """
+        <html style="background:#020509; color:#00f2fe; font-family:sans-serif; display:flex; justify-content:center; align-items:center; height:100vh;">
+            <div style="text-align:center; border:1px solid #00f2fe; padding:30px; border-radius:15px; background:rgba(0,242,254,0.05);">
+                <h1>⌛ GENERANDO CÓDIGO QR DE WHATSAPP...</h1>
+                <p style="color:#d1f7ff;">Esperando inicialización del bot. Por favor recarga esta página en 5 segundos.</p>
+                <script>setTimeout(() => location.reload(), 5000);</script>
+            </div>
+        </html>
+        """
+
+    img = qrcode.make(qr_data)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    b64_img = base64.b64encode(buf.getvalue()).decode('utf-8')
+
+    return f"""
+    <html style="background:#020509; color:#00f2fe; font-family:sans-serif; display:flex; justify-content:center; align-items:center; height:100vh;">
+        <div style="text-align:center; background:rgba(0,242,254,0.08); padding:30px; border-radius:15px; border:1px solid #00f2fe; box-shadow:0 0 30px rgba(0,242,254,0.2);">
+            <h1 style="margin-bottom:10px;">📲 ESCANEA CON TU WHATSAPP</h1>
+            <p style="color:#fff; margin-bottom:20px;">Abre WhatsApp > Dispositivos Vinculados > Vincular dispositivo</p>
+            <img src="data:image/png;base64,{b64_img}" style="width:280px; height:280px; border-radius:10px; border:4px solid #fff;" />
+            <p style="font-size:0.8rem; color:rgba(209,247,255,0.6); margin-top:15px;">Página con autorefresco automático</p>
+        </div>
+    </html>
+    """
+
+@app.post("/api/whatsapp/update_qr")
+def actualizar_qr_status(data: WhatsAppQRUpdate):
+    if data.connected is not None:
+        WHATSAPP_STATUS["connected"] = data.connected
+    if data.qr_raw:
+        WHATSAPP_STATUS["qr_raw"] = data.qr_raw
+    return {"status": "updated"}
+
 
 @app.get("/")
 def home():
@@ -506,7 +509,7 @@ async def consultar_jarvis(data: ChatInput):
         prompt_usuario = data.message.strip() if data.message else "Analice la información, señor."
         prompt_lower = prompt_usuario.lower()
 
-        # === 🛡️ ENRUTADOR DIRECTO ANTI-ALUCINACIÓN (CERO FALLOS) ===
+        # === 🛡️ ENRUTADOR DIRECTO ANTI-ALUCINACIÓN ===
 
         # 1. Interceptor de Documentos Word (.docx)
         if "word" in prompt_lower or "informe en word" in prompt_lower or "documento word" in prompt_lower:
