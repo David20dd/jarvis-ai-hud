@@ -6,7 +6,6 @@
     <title>J.A.R.V.I.S.</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
     
-    <!-- Renderizadores MathJax, PDF.js, Chart.js y Mermaid -->
     <script>
         window.MathJax = {
             tex: {
@@ -22,13 +21,13 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
     <script>mermaid.initialize({ startOnLoad: true, theme: 'dark' });</script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
     <style>
         :root {
             --bg-dark: #0a0c10;
             --sidebar-bg: #07090d;
             --input-bg: #161a22;
+            --dropdown-bg: #1e222d;
             --stark-cyan: #00f2fe;
             --stark-cyan-glow: rgba(0, 242, 254, 0.25);
             --stark-amber: #ffb700;
@@ -52,7 +51,7 @@
 
         body {
             background-color: var(--bg-dark);
-            /* Destello radial exacto al de image_e4fcf1.png */
+            /* Destello radial exacto al del video */
             background-image: radial-gradient(circle at 50% 50%, rgba(0, 140, 255, 0.14) 0%, rgba(10, 12, 16, 0) 58%);
             color: var(--text-main);
             height: 100vh;
@@ -60,7 +59,7 @@
             overflow: hidden;
         }
 
-        /* 📌 BARRA LATERAL IZQUIERDA (FIDELIDAD EXACTA A image_e4fcf1.png) */
+        /* 📌 BARRA LATERAL IZQUIERDA */
         .sidebar {
             width: 60px;
             height: 100vh;
@@ -106,7 +105,6 @@
             fill: currentColor;
         }
 
-        /* LOGO ESTRELLA DE 4 PUNTAS CIAN EN LA ESQUINA SUPERIOR IZQUIERDA */
         .star-logo-btn {
             width: 32px;
             height: 32px;
@@ -134,7 +132,7 @@
             padding: 20px;
         }
 
-        /* ⚡ ESQUINA SUPERIOR DERECHA: REACTOR ARC COMPACTO Y ELEGANTE */
+        /* ⚡ ESQUINA SUPERIOR DERECHA: REACTOR ARC COMPACTO */
         .top-hud-bar {
             position: absolute;
             top: 20px;
@@ -154,7 +152,6 @@
             text-shadow: 0 0 8px var(--stark-cyan-glow);
         }
 
-        /* REACTOR ARC 32px - PROPORCIONADO Y FIEL A image_e49f56.jpg */
         #arcReactor3D {
             width: 32px;
             height: 32px;
@@ -168,7 +165,7 @@
             transform: scale(1.12);
         }
 
-        /* TÍTULO BIENVENIDA DINÁMICO (ANIMACIÓN ESTILO GEMINI) */
+        /* TÍTULO BIENVENIDA DINÁMICO (ANIMACIÓN DEL VIDEO) */
         .welcome-title {
             font-size: 2.1rem;
             font-weight: 400;
@@ -178,7 +175,7 @@
             text-align: center;
             opacity: 0;
             transform: translateY(12px);
-            animation: geminiEntrance 0.7s ease forwards;
+            animation: geminiEntrance 0.6s ease forwards;
         }
 
         @keyframes geminiEntrance {
@@ -196,12 +193,12 @@
         .chat-container {
             width: 100%;
             max-width: 760px;
-            max-height: calc(100vh - 180px);
+            height: calc(100vh - 170px);
             overflow-y: auto;
             display: flex;
             flex-direction: column;
             gap: 20px;
-            padding-bottom: 20px;
+            padding-bottom: 30px;
             scroll-behavior: smooth;
         }
 
@@ -238,7 +235,29 @@
             border-bottom-left-radius: 4px;
         }
 
-        /* 🔍 BARRA BÚSQUEDA CENTRAL (FLOTANTE - FIDELIDAD TOTAL A image_e4fcf1.png) */
+        /* INDICADOR BÚSQUEDA / PENSANDO */
+        .thinking-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.88rem;
+            color: var(--stark-cyan);
+            font-family: var(--font-mono);
+        }
+
+        .dot-pulse {
+            width: 8px; height: 8px;
+            background: var(--stark-cyan);
+            border-radius: 50%;
+            animation: pulse 1s infinite alternate;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.2; transform: scale(0.8); }
+            100% { opacity: 1; transform: scale(1.2); }
+        }
+
+        /* 🔍 BARRA BÚSQUEDA CENTRAL (FLOTANTE) */
         .input-container {
             position: absolute;
             bottom: 35px;
@@ -253,6 +272,7 @@
             box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
             border: 1px solid rgba(255, 255, 255, 0.07);
             transition: all 0.25s ease;
+            z-index: 20;
         }
 
         .input-container:focus-within {
@@ -317,7 +337,44 @@
             color: var(--stark-cyan);
         }
 
-        /* PREVIEW BARRA ARCHIVOS */
+        /* 📋 MENÚ DESPLEGABLE DE HERRAMIENTAS DE MÁS CORRESPONDIENTE AL VIDEO (00:25) */
+        .tools-menu {
+            display: none;
+            position: absolute;
+            bottom: 85px;
+            left: 20px;
+            width: 230px;
+            background: var(--dropdown-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 8px;
+            box-shadow: 0 12px 35px rgba(0, 0, 0, 0.6);
+            z-index: 30;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .tools-menu.active {
+            display: flex;
+        }
+
+        .menu-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 14px;
+            color: var(--text-main);
+            font-size: 0.88rem;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .menu-item:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--stark-cyan);
+        }
+
         .preview-bar {
             display: none;
             position: absolute;
@@ -330,6 +387,7 @@
             gap: 12px;
             font-size: 0.85rem;
             color: var(--stark-cyan);
+            z-index: 25;
         }
         .preview-bar.active { display: flex; }
 
@@ -354,7 +412,6 @@
 </head>
 <body>
 
-    <!-- 📌 BARRA LATERAL IZQUIERDA (FIDELIDAD A image_e4fcf1.png) -->
     <aside class="sidebar">
         <div class="sidebar-top">
             <div class="star-logo-btn">
@@ -397,17 +454,14 @@
         </div>
     </aside>
 
-    <!-- 🖥️ ÁREA CENTRADA PRINCIPAL -->
     <main class="main-content">
 
-        <!-- ⚡ HEADER SUPERIOR DERECHA CON REACTOR ARC COMPACTO DE 32PX -->
         <div class="top-hud-bar">
             <span class="sys-status-text" id="sysStatus">MARK V // ONLINE</span>
             <canvas id="arcReactor3D" title="Reactor Arc Mark I - Jarvis State"></canvas>
         </div>
 
-        <!-- TÍTULO CENTRAL CON ANIMACIÓN ESTILO GEMINI -->
-        <h1 class="welcome-title" id="welcomeTitle">Hola, Cristian, empecemos</h1>
+        <h1 class="welcome-title" id="welcomeTitle">El micrófono es tuyo, Cristian</h1>
 
         <div class="chat-container" id="chatBox"></div>
 
@@ -416,8 +470,15 @@
             <span style="cursor:pointer;" onclick="cancelarArchivos()">✕</span>
         </div>
 
+        <div class="tools-menu" id="toolsMenu">
+            <div class="menu-item" onclick="document.getElementById('fileInput').click()">📁 Subir archivos</div>
+            <div class="menu-item" onclick="solicitarAnalisisWeb()">🌐 Buscar en la Web</div>
+            <div class="menu-item" onclick="solicitarImagen()">🎨 Crear imagen</div>
+            <div class="menu-item" onclick="solicitarDocumentoWord()">📝 Crear documento Word</div>
+        </div>
+
         <div class="input-container">
-            <button class="action-btn" onclick="document.getElementById('fileInput').click()" title="Adjuntar archivo o imagen">
+            <button class="action-btn" onclick="toggleMenuHerramientas()" title="Añadir elementos">
                 <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
             </button>
 
@@ -448,34 +509,62 @@
         const previewText = document.getElementById("previewText");
         const fileInput = document.getElementById("fileInput");
         const sysStatus = document.getElementById("sysStatus");
+        const toolsMenu = document.getElementById("toolsMenu");
 
-        /* ✨ SISTEMA DE MENSAJES DE ENTRADA DINÁMICOS ESTILO GEMINI */
-        const mensajesEntrada = [
-            "Hola, Cristian, empecemos",
-            "Pregunta lo que quieras, Cristian",
-            "¿En qué trabajamos hoy, Cristian?",
-            "Sistemas listos. ¿Cuál es el plan, Cristian?",
-            "Hola, Cristian, ¿qué deseas analizar hoy?"
+        /* ✨ FRASES DE ENTRADA CAMBIANTES EXTRAÍDAS DEL VIDEO (00:00 - 00:20) */
+        const frasesVideo = [
+            "El micrófono es tuyo, Cristian",
+            "Hola, Cristian, ¿qué vamos a hacer?",
+            "Manos a la obra, Cristian",
+            "¿Qué toca ahora, Cristian?",
+            "¿Qué toca hoy, Cristian?",
+            "Hola, Cristian, ¿qué tienes en mente?"
         ];
 
-        // Selecciona un saludo dinámico al cargar o recargar
-        welcomeTitle.innerText = mensajesEntrada[Math.floor(Math.random() * mensajesEntrada.length)];
+        welcomeTitle.innerText = frasesVideo[Math.floor(Math.random() * frasesVideo.length)];
 
-        /* 🌌 RENDERIZADOR COMPACTO DEL REACTOR ARC (REPLICANDO image_e49f56.jpg A 32PX) */
+        function toggleMenuHerramientas() {
+            toolsMenu.classList.toggle("active");
+        }
+
+        document.addEventListener("click", (e) => {
+            if (!e.target.closest(".input-container") && !e.target.closest(".tools-menu")) {
+                toolsMenu.classList.remove("active");
+            }
+        });
+
+        function solicitarAnalisisWeb() {
+            userInput.value = "Busca en la web sobre: ";
+            toolsMenu.classList.remove("active");
+            userInput.focus();
+        }
+
+        function solicitarImagen() {
+            userInput.value = "Genera una imagen de ";
+            toolsMenu.classList.remove("active");
+            userInput.focus();
+        }
+
+        function solicitarDocumentoWord() {
+            userInput.value = "Genera un documento Word sobre ";
+            toolsMenu.classList.remove("active");
+            userInput.focus();
+        }
+
+        /* 🌌 RENDERIZADOR COMPACTO DEL REACTOR ARC (image_e49f56.jpg A 32PX) */
         const coreCanvas = document.getElementById("arcReactor3D");
         const ctx = coreCanvas.getContext("2d");
-        coreCanvas.width = 64; coreCanvas.height = 64; // Renderizado HD escalado a 32px CSS
+        coreCanvas.width = 64; coreCanvas.height = 64;
 
         let angleOuter = 0;
         let angleInner = 0;
         let pulseGlow = 0;
-        let estadoCore = "ready"; // ready, processing, speaking, listening
+        let estadoCore = "ready";
 
         function drawArcReactor() {
             ctx.clearRect(0, 0, 64, 64);
             const cx = 32, cy = 32;
 
-            // Determinar color de energía según estado
             let energyColor = "#00f2fe";
             let glowColor = "rgba(0, 242, 254, 0.5)";
             if (estadoCore === "processing") { energyColor = "#ffb700"; glowColor = "rgba(255, 183, 0, 0.5)"; }
@@ -488,7 +577,6 @@
             pulseGlow += 0.04;
             const pulseRadius = Math.sin(pulseGlow) * 1.2;
 
-            // 1. ANILLO EXTERIOR DE BOBINAS DE COBRE (10 Bloques)
             ctx.save();
             ctx.translate(cx, cy);
             ctx.rotate(angleOuter);
@@ -499,11 +587,9 @@
                 ctx.save();
                 ctx.rotate(angle);
 
-                // Bloque de Cobre (Bobinado)
                 ctx.fillStyle = "#b85d38";
                 ctx.fillRect(-3.5, -28, 7, 7);
 
-                // Hilos de Cobre
                 ctx.strokeStyle = "#7a3519";
                 ctx.lineWidth = 0.8;
                 for (let j = -2; j <= 2; j += 1.5) {
@@ -513,7 +599,6 @@
                     ctx.stroke();
                 }
 
-                // Luz Cian en los intermedios del anillo exterior
                 ctx.fillStyle = energyColor;
                 ctx.shadowColor = energyColor;
                 ctx.shadowBlur = 5;
@@ -525,7 +610,6 @@
             }
             ctx.restore();
 
-            // 2. ANILLO METÁLICO INTERMEDIO CON RANURAS LED
             ctx.save();
             ctx.translate(cx, cy);
             ctx.rotate(angleInner);
@@ -536,7 +620,6 @@
             ctx.lineWidth = 3.5;
             ctx.stroke();
 
-            // Ranuras LED Interiores Brillantes
             const numSlots = 10;
             ctx.strokeStyle = energyColor;
             ctx.shadowColor = energyColor;
@@ -550,7 +633,6 @@
             }
             ctx.restore();
 
-            // 3. NÚCLEO CENTRAL CON PULSO CIAN / BLANCO
             ctx.save();
             ctx.translate(cx, cy);
 
@@ -565,7 +647,6 @@
             ctx.arc(0, 0, 12 + pulseRadius, 0, Math.PI * 2);
             ctx.fill();
 
-            // Centro cristalino blanco brillante
             ctx.fillStyle = "#ffffff";
             ctx.shadowColor = energyColor;
             ctx.shadowBlur = 8;
@@ -611,6 +692,7 @@
 
             previewText.innerText = `${listaArchivosCargados.length} archivo(s) listo(s)`;
             previewBar.classList.add("active");
+            toolsMenu.classList.remove("active");
         }
 
         function leerArchivoB64(file) {
@@ -678,6 +760,15 @@
 
             userInput.value = "";
             cancelarArchivos();
+            toolsMenu.classList.remove("active");
+
+            // Muestra indicador de pensamiento
+            const thinkingDiv = document.createElement("div");
+            thinkingDiv.className = "message jarvis-message thinking-indicator";
+            thinkingDiv.id = "thinkingElem";
+            thinkingDiv.innerHTML = `<div class="dot-pulse"></div> <span>Consultando en la Web...</span>`;
+            chatBox.appendChild(thinkingDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
 
             setEstado("processing", "PROCESANDO...");
 
@@ -694,6 +785,9 @@
 
                 const data = await response.json();
 
+                const elemP = document.getElementById("thinkingElem");
+                if (elemP) elemP.remove();
+
                 if (response.ok && data.status === "success" && data.reply) {
                     setEstado("speaking", "RESPONDIENDO");
                     agregarMensajeJarvis(data.reply);
@@ -708,6 +802,8 @@
                     agregarMensajeJarvis("Ocurrió un inconveniente al procesar la respuesta.");
                 }
             } catch (error) {
+                const elemP = document.getElementById("thinkingElem");
+                if (elemP) elemP.remove();
                 setEstado("ready", "MARK V // ONLINE");
                 agregarMensajeJarvis("Error de conexión con el servidor central.");
             }
