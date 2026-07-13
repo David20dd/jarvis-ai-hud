@@ -16,6 +16,8 @@ import time
 import urllib.parse
 import io
 import sys
+import subprocess
+import threading
 import contextlib
 import qrcode
 from PIL import Image
@@ -95,6 +97,21 @@ PROMPT_SISTEMA = {
         "6. FORMATO MATEMÁTICO LaTeX OBLIGATORIO: Ecuaciones en bloque '$$ ecuacion $$' y variables '$ x = 2 $'."
     )
 }
+
+# --- 🚀 ARRANQUE AUTOMÁTICO DEL BOT DE WHATSAPP ---
+def ejecutar_bot_whatsapp():
+    try:
+        if os.path.exists("whatsapp_bot.js"):
+            print("🚀 Iniciando servicio de WhatsApp Node.js en segundo plano...")
+            subprocess.Popen(["node", "whatsapp_bot.js"])
+    except Exception as e:
+        print(f"⚠️ Error iniciando bot WhatsApp: {e}")
+
+@app.on_event("startup")
+def startup_event():
+    hilo_wa = threading.Thread(target=ejecutar_bot_whatsapp, daemon=True)
+    hilo_wa.start()
+
 
 def obtener_historial_sesion(session_id: str):
     now = time.time()
@@ -232,7 +249,6 @@ def generar_audio_elevenlabs(texto: str) -> str:
 
 
 def generar_documento_word(tema: str) -> str:
-    """Genera un archivo ejecutable Word (.docx) formateado profesionalmente."""
     try:
         TELEMETRIA_SISTEMA["documentos_word"] += 1
         if not docx: return "Error: librería python-docx no instalada."
@@ -267,7 +283,6 @@ def generar_documento_word(tema: str) -> str:
 
 
 def obtener_mercado_cripto(criptomoneda: str) -> str:
-    """Obtiene precios usando la API de Coinbase (Amigable con servidores Cloud en EE.UU)"""
     try:
         symbol = criptomoneda.upper().strip()
         if symbol in ["BITCOIN", "BTC"]: symbol = "BTC"
@@ -455,8 +470,8 @@ def ver_qr_whatsapp():
         <html style="background:#020509; color:#00f2fe; font-family:sans-serif; display:flex; justify-content:center; align-items:center; height:100vh;">
             <div style="text-align:center; border:1px solid #00f2fe; padding:30px; border-radius:15px; background:rgba(0,242,254,0.05);">
                 <h1>⌛ GENERANDO CÓDIGO QR DE WHATSAPP...</h1>
-                <p style="color:#d1f7ff;">Esperando inicialización del bot. Por favor recarga esta página en 5 segundos.</p>
-                <script>setTimeout(() => location.reload(), 5000);</script>
+                <p style="color:#d1f7ff;">El bot se está ejecutando. Por favor recarga esta página en 3 segundos.</p>
+                <script>setTimeout(() => location.reload(), 3000);</script>
             </div>
         </html>
         """
@@ -472,7 +487,6 @@ def ver_qr_whatsapp():
             <h1 style="margin-bottom:10px;">📲 ESCANEA CON TU WHATSAPP</h1>
             <p style="color:#fff; margin-bottom:20px;">Abre WhatsApp > Dispositivos Vinculados > Vincular dispositivo</p>
             <img src="data:image/png;base64,{b64_img}" style="width:280px; height:280px; border-radius:10px; border:4px solid #fff;" />
-            <p style="font-size:0.8rem; color:rgba(209,247,255,0.6); margin-top:15px;">Página con autorefresco automático</p>
         </div>
     </html>
     """
