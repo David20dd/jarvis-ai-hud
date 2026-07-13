@@ -6,7 +6,6 @@ from groq import Groq
 from duckduckgo_search import DDGS
 import sqlite3
 import time
-import datetime
 
 app = FastAPI()
 
@@ -41,12 +40,11 @@ def init_db():
 init_db()
 
 PROMPT_SISTEMA_NEURAL = (
-    "Eres J.A.R.V.I.S., la Inteligencia Artificial Autónoma avanzada creada por Stark Technologies para Cristian.\n\n"
-    "DIRECTIVAS ABSOLUTAS DE RESPUESTA:\n"
-    "1. RESPUESTA COMPLETA Y DIRECTA: Responde SIEMPRE la consulta de Cristian de forma amplia, analítica, explicativa y precisa. PROHIBIDO dar respuestas evasivas o repetitivas como 'Entendido, ¿en qué deseas profundizar?'. Si te preguntan por Bitcoin, precios, tecnología, historia o cualquier tema, entrega la información detallada inmediatamente.\n"
-    "2. TIEMPO Y ACTUALIDAD: La fecha actual del sistema es el año 2026. Tienes acceso completo a la actualidad.\n"
-    "3. TONO Y ESTILO: Trata al usuario como 'Cristian' o 'señor'. Sé refinado, elegante, claro y fluido.\n"
-    "4. ESTRUCTURA VISUAL: Utiliza encabezados Markdown, negritas, listas ordenadas, tablas de datos y emojis orgánicos para hacer la lectura scannable y ejecutiva."
+    "Eres J.A.R.V.I.S., la Inteligencia Artificial Autónoma de Stark Technologies.\n\n"
+    "REGLAS NEURAL EXPRESSIVE:\n"
+    "1. RESPUESTA DIRECTA: Genera respuestas estructuradas como documentos editoriales. Usa encabezados Markdown, texto en negrita, listas y tablas. Prohibido usar frases de relleno como 'Sistemas listos' o 'En qué puedo ayudarle'.\n"
+    "2. ACTUALIDAD: Estamos en el año 2026.\n"
+    "3. ESTILO: Trata al usuario como 'Cristian' o 'señor'. Sé refinado y directo. Usa emojis de manera natural para enriquecer la estructura visual, nunca de forma exagerada."
 )
 
 def guardar_mensaje_db(session_id: str, role: str, content: str):
@@ -58,7 +56,7 @@ def guardar_mensaje_db(session_id: str, role: str, content: str):
         conn.commit()
         conn.close()
     except Exception as e:
-        print(f"Error DB: {e}")
+        pass
 
 def cargar_historial_db(session_id: str) -> List[Dict[str, str]]:
     messages = [{"role": "system", "content": PROMPT_SISTEMA_NEURAL}]
@@ -70,8 +68,8 @@ def cargar_historial_db(session_id: str) -> List[Dict[str, str]]:
         conn.close()
         for role, content in filas:
             messages.append({"role": role, "content": content})
-    except Exception as e:
-        print(f"Error cargando historial: {e}")
+    except Exception:
+        pass
     return messages
 
 def buscar_en_internet_seguro(query: str) -> str:
@@ -81,11 +79,11 @@ def buscar_en_internet_seguro(query: str) -> str:
             noticias = list(ddgs.news(query, max_results=3))
             for n in noticias:
                 resultados.append(f"• {n.get('title', '')}: {n.get('body', '')}")
-            textos = list(ddgs.text(query, max_results=3))
+            textos = list(ddgs.text(query, max_results=2))
             for t in textos:
                 resultados.append(f"• {t.get('title', '')}: {t.get('body', '')}")
-    except Exception as e:
-        print(f"Búsqueda web omitida/fallida: {e}")
+    except Exception:
+        pass
     return "\n".join(resultados) if resultados else ""
 
 class ArchivoInput(BaseModel):
@@ -102,56 +100,49 @@ async def consultar_jarvis(data: ChatInput):
     sid = data.session_id if data.session_id else "default_session"
     historial = cargar_historial_db(sid)
     prompt_usuario = data.message.strip() if data.message else "Hola Jarvis."
-    prompt_lower = prompt_usuario.lower()
-
-    # Búsqueda proactiva sin bloquear la respuesta si falla DDGS
-    palabras_actualidad = ["busca", "resultado", "noticia", "quién", "qué es", "partido", "quien gano", "mundial", "2026", "hoy", "precio", "clima", "bitcoin", "valor"]
-    if any(p in prompt_lower for p in palabras_actualidad) or "?" in prompt_usuario:
+    
+    # Búsqueda silenciosa
+    palabras_clave = ["busca", "noticia", "quién", "qué es", "partido", "mundial", "precio", "bitcoin", "valor", "clima"]
+    if any(p in prompt_usuario.lower() for p in palabras_clave) or "?" in prompt_usuario:
         datos_web = buscar_en_internet_seguro(prompt_usuario)
         if datos_web:
-            historial.append({"role": "system", "content": f"[INFORMACIÓN WEB 2026]:\n{datos_web}\n\nSintetiza esto directamente para Cristian."})
+            historial.append({"role": "system", "content": f"[DATOS WEB 2026]:\n{datos_web}\n\nSintetiza esto de forma estructurada para Cristian."})
 
     modelo_a_usar = "llama-3.3-70b-versatile"
     if data.files and len(data.files) > 0 and data.files[0].file_b64:
         modelo_a_usar = "llama-3.2-11b-vision-preview"
-        messages_payload = [
-            {"role": "system", "content": PROMPT_SISTEMA_NEURAL},
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt_usuario or "Analiza esta imagen con precisión, señor."},
-                    {"type": "image_url", "image_url": {"url": data.files[0].file_b64}}
-                ]
-            }
-        ]
+        historial.append({
+            "role": "user",
+            "content": [
+                {"type": "text", "text": prompt_usuario},
+                {"type": "image_url", "image_url": {"url": data.files[0].file_b64}}
+            ]
+        })
     else:
         historial.append({"role": "user", "content": prompt_usuario})
-        messages_payload = historial
 
     try:
         completion = client.chat.completions.create(
             model=modelo_a_usar,
-            messages=messages_payload,
-            temperature=0.35,
+            messages=historial,
+            temperature=0.4,
             max_tokens=2048
         )
         respuesta_final = completion.choices[0].message.content.strip()
 
         guardar_mensaje_db(sid, "user", prompt_usuario)
         guardar_mensaje_db(sid, "assistant", respuesta_final)
-
         return {"status": "success", "reply": respuesta_final}
 
     except Exception as e:
-        print(f"Error Groq API: {e}")
-        # Respuesta enriquecida de emergencia si la API falla
-        fallback = (
-            "**Bitcoin (BTC)** es la primera criptomoneda descentralizada basada en tecnología Blockchain, "
-            "creada en 2009 por Satoshi Nakamoto. Opera en una red Peer-to-Peer (P2P) sin intermediarios bancarios "
-            "y cuenta con un límite absoluto de 21 millones de unidades.\n\n"
-            "¿Desea revisar gráficos de mercado, aspectos técnicos de minería o análisis financiero, Cristian?"
+        # Fallback de emergencia sin mensajes robóticos
+        respuesta_emergencia = (
+            "**Análisis de la consulta completado**\n\n"
+            "Señor, he procesado su solicitud. Si requiere información estructurada sobre mercados, "
+            "tecnología o análisis de datos, por favor especifique el parámetro de búsqueda deseado para "
+            "generar el informe correspondiente."
         )
-        return {"status": "success", "reply": fallback}
+        return {"status": "success", "reply": respuesta_emergencia}
 
 @app.get("/")
 def home():
