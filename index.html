@@ -44,7 +44,7 @@
             -webkit-tap-highlight-color: transparent;
         }
 
-        /* 🎨 SCROLLBARS MINIMALISTAS Y ELEGANTES (ESTILO GEMINI) */
+        /* 🎨 SCROLLBARS MINIMALISTAS (ESTILO GEMINI) */
         ::-webkit-scrollbar {
             width: 5px;
             height: 5px;
@@ -96,7 +96,7 @@
             100% { opacity: 1.0; }
         }
 
-        /* 📌 BARRA LATERAL ESTILO GEMINI EXACTO (image_44e3e1.png e image_44e41e.png) */
+        /* 📌 BARRA LATERAL ESTILO GEMINI EXACTO */
         .sidebar-overlay {
             position: fixed;
             inset: 0;
@@ -134,7 +134,6 @@
             padding: 14px;
         }
 
-        /* CABECERA CON ISOTIPO */
         .sidebar-header {
             display: flex;
             align-items: center;
@@ -168,11 +167,13 @@
         .arc-nav-container {
             width: 38px;
             height: 38px;
-            display: flex;
+            display: none;
             align-items: center;
             justify-content: center;
             flex-shrink: 0;
         }
+
+        .sidebar.expanded .arc-nav-container { display: flex; }
 
         #arcReactorNav {
             width: 34px;
@@ -194,7 +195,6 @@
 
         .sidebar.expanded .brand-logo-text { display: block; }
 
-        /* BOTÓN NUEVA CONVERSACIÓN (PÍLDORA / CÍRCULO ADAPTABLE) */
         .btn-new-chat-wrapper { display: flex; justify-content: center; width: 100%; margin-bottom: 10px; }
 
         .btn-new-chat {
@@ -240,7 +240,6 @@
 
         .sidebar.expanded .menu-item-text { display: block; }
 
-        /* BUSCADOR LATERAL */
         .search-box-wrapper { display: flex; justify-content: center; width: 100%; margin-bottom: 12px; }
 
         .search-box-container {
@@ -286,8 +285,7 @@
         .sidebar:not(.expanded) .empty-chats-notice,
         .sidebar:not(.expanded) .menu-item-text,
         .sidebar:not(.expanded) .chat-options-btn,
-        .sidebar:not(.expanded) .user-info,
-        .sidebar:not(.expanded) .notebook-item {
+        .sidebar:not(.expanded) .user-info {
             display: none !important;
             visibility: hidden !important;
             opacity: 0 !important;
@@ -370,7 +368,6 @@
         .chat-options-btn:hover { background: rgba(255, 255, 255, 0.15); color: var(--stark-cyan); }
         .chat-options-btn svg { width: 16px; height: 18px; fill: currentColor; }
 
-        /* PERFIL DE USUARIO EN LA PARTE INFERIOR */
         .user-profile-bar {
             display: flex;
             align-items: center;
@@ -409,7 +406,6 @@
         .user-name { font-size: 0.86rem; font-weight: 600; color: #ffffff; }
         .user-plan { font-size: 0.72rem; color: var(--stark-cyan); }
 
-        /* 📌 MENÚS FLOTANTES CON GLASSMORPHISM (ESTILO image_440283.png e image_4406e0.png) */
         .dropdown-menu {
             position: fixed;
             background: var(--dropdown-bg);
@@ -443,7 +439,6 @@
         .dropdown-item svg { width: 18px; height: 18px; fill: currentColor; }
         .dropdown-item.danger:hover { background: rgba(255, 50, 50, 0.15); color: #ff5555; }
 
-        /* 🖥️ ÁREA PRINCIPAL CENTRAL */
         .main-content {
             flex: 1;
             height: 100vh;
@@ -458,7 +453,6 @@
             min-width: 0;
         }
 
-        /* BARRA SUPERIOR (SOLO MUESTRA CORTESÍA DENTRO DE CHAT ACTIVO) */
         .chat-top-header {
             position: absolute;
             top: 16px;
@@ -478,7 +472,7 @@
             text-shadow: 0 0 8px var(--stark-glow);
         }
 
-        /* 📌 OPCIÓN TRES PUNTOS SUPERIOR (SOLO VISIBLE DENTRO DE UN CHAT) */
+        /* 📌 OPCIÓN TRES PUNTOS SUPERIOR (SOLO VISIBLE DENTRO DE CHAT ACTIVO) */
         .top-options-btn {
             background: transparent;
             border: none;
@@ -487,7 +481,7 @@
             width: 34px;
             height: 34px;
             border-radius: 50%;
-            display: none; /* OCULTO POR DEFECTO EN INICIO */
+            display: none;
             align-items: center;
             justify-content: center;
             transition: all 0.2s ease;
@@ -524,7 +518,7 @@
         @keyframes geminiEntrance { to { opacity: 1; transform: translateY(0); } }
         .welcome-title.hidden { display: none; }
 
-        /* 💬 CONVERSACIÓN LIMPIA ESTILO GEMINI (CORRECCIÓN image_44e45b.jpg) */
+        /* 💬 CONVERSACIÓN LIMPIA ESTILO GEMINI */
         .chat-container {
             width: 100%;
             max-width: 780px;
@@ -1065,7 +1059,7 @@
             welcomeTitle.classList.add("hidden");
             chatBox.classList.add("active");
             mainContent.classList.add("chat-mode");
-            topOptionsBtn.classList.add("active"); // MOSTRAR TRES PUNTOS AL ABRIR CHAT
+            topOptionsBtn.classList.add("active");
 
             chatBox.innerHTML = "";
             chatsObj[sessionId].historial.forEach(m => {
@@ -1161,7 +1155,7 @@
             welcomeTitle.classList.add("hidden");
             chatBox.classList.add("active");
             mainContent.classList.add("chat-mode");
-            topOptionsBtn.classList.add("active"); // MOSTRAR TRES PUNTOS DENTRO DEL CHAT ACTIVO
+            topOptionsBtn.classList.add("active");
 
             let promptMostrar = texto;
             if (nombreArchivo) promptMostrar += ` [Adjunto: ${nombreArchivo}]`;
