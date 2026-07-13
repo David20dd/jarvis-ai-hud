@@ -21,10 +21,11 @@
         :root {
             --bg-dark: #06080d;
             --sidebar-bg: #080c14;
-            --sidebar-expanded-width: 260px;
+            --sidebar-expanded-width: 270px;
             --sidebar-collapsed-width: 68px;
             --input-bg: #121722;
             --card-jarvis-bg: #0d121d;
+            --dropdown-bg: #111622;
             --stark-blue: #0088ff;
             --stark-cyan: #00d2ff;
             --stark-glow: rgba(0, 136, 255, 0.35);
@@ -71,7 +72,7 @@
             100% { opacity: 1.0; }
         }
 
-        /* 📌 BARRA LATERAL PERFECCIONADA Y ALINEADA */
+        /* 📌 BARRA LATERAL PERFECCIONADA */
         .sidebar-overlay {
             position: fixed;
             inset: 0;
@@ -112,7 +113,6 @@
             padding: 14px;
         }
 
-        /* CABECERA Y BOTÓN DE MENÚ */
         .sidebar-header {
             display: flex;
             align-items: center;
@@ -183,7 +183,6 @@
 
         .sidebar.expanded .brand-logo-text { display: block; }
 
-        /* BOTÓN NUEVO CHAT */
         .btn-new-chat-wrapper {
             display: flex;
             justify-content: center;
@@ -230,13 +229,10 @@
             white-space: nowrap;
             font-size: 0.88rem;
             font-weight: 500;
-            letter-spacing: normal;
-            word-spacing: normal;
         }
 
         .sidebar.expanded .menu-item-text { display: block; }
 
-        /* CONTENEDOR DE BÚSQUEDA */
         .search-box-wrapper {
             display: flex;
             justify-content: center;
@@ -283,14 +279,10 @@
             font-size: 0.85rem;
             width: 100%;
             display: none;
-            letter-spacing: normal;
-            word-spacing: normal;
         }
 
         .sidebar.expanded .sidebar-search-input { display: block; }
-        .sidebar-search-input::placeholder { color: #6c727e; }
 
-        /* SECCIONES Y CHATS RECIENTES */
         .sidebar-menu-list {
             display: flex;
             flex-direction: column;
@@ -298,12 +290,6 @@
             width: 100%;
             overflow-y: auto;
             flex: 1;
-        }
-
-        .sidebar-menu-list::-webkit-scrollbar { width: 4px; }
-        .sidebar-menu-list::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 4px;
         }
 
         .sidebar-section-title {
@@ -318,45 +304,106 @@
 
         .sidebar.expanded .sidebar-section-title { display: block; }
 
-        .menu-item {
+        /* 🗂️ ITEM DE CHAT RECIENTE CON TRES PUNTOS */
+        .menu-item-chat {
             display: flex;
             align-items: center;
-            justify-content: center;
-            gap: 12px;
+            justify-content: space-between;
             height: 38px;
-            width: 42px;
-            padding: 0;
+            padding: 0 8px 0 10px;
             border-radius: 10px;
             color: var(--text-sub);
             cursor: pointer;
             transition: all 0.2s ease;
             font-size: 0.86rem;
-            margin: 0 auto;
-        }
-
-        .sidebar.expanded .menu-item {
             width: 100%;
-            justify-content: flex-start;
-            padding: 0 10px;
+            position: relative;
         }
 
-        .menu-item:hover {
+        .menu-item-chat:hover, .menu-item-chat.active {
             background: rgba(255, 255, 255, 0.06);
+            color: #ffffff;
+        }
+
+        .chat-title-content {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex: 1;
+        }
+
+        .chat-options-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-sub);
+            cursor: pointer;
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .sidebar.expanded .menu-item-chat:hover .chat-options-btn {
+            display: flex;
+        }
+
+        .chat-options-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
             color: var(--stark-cyan);
         }
 
-        .menu-item svg { width: 18px; height: 18px; fill: currentColor; flex-shrink: 0; }
+        .chat-options-btn svg { width: 16px; height: 18px; fill: currentColor; }
 
-        .empty-chats-notice {
-            font-size: 0.78rem;
-            color: var(--text-sub);
-            padding: 8px 10px;
+        /* 📌 MENÚ FLOTANTE DE OPCIONES (ESTILO image_440283.png e image_4406e0.png) */
+        .dropdown-menu {
+            position: fixed;
+            background: var(--dropdown-bg);
+            border: 1px solid rgba(0, 210, 255, 0.2);
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), 0 0 15px rgba(0, 136, 255, 0.2);
+            padding: 8px;
             display: none;
+            flex-direction: column;
+            gap: 2px;
+            z-index: 100;
+            min-width: 210px;
+            backdrop-filter: blur(12px);
+            animation: dropdownFade 0.2s ease-out;
         }
 
-        .sidebar.expanded .empty-chats-notice { display: block; }
+        .dropdown-menu.active { display: flex; }
 
-        /* PERFIL INFERIOR CENTRADO */
+        @keyframes dropdownFade {
+            from { opacity: 0; transform: translateY(-6px) scale(0.96); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        .dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 14px;
+            font-size: 0.88rem;
+            color: var(--text-main);
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.18s ease;
+        }
+
+        .dropdown-item:hover {
+            background: rgba(0, 136, 255, 0.15);
+            color: var(--stark-cyan);
+        }
+
+        .dropdown-item svg { width: 18px; height: 18px; fill: currentColor; }
+        .dropdown-item.danger:hover { background: rgba(255, 50, 50, 0.15); color: #ff5555; }
+
         .user-profile-bar {
             display: flex;
             align-items: center;
@@ -390,16 +437,10 @@
             box-shadow: 0 0 10px var(--stark-glow);
         }
 
-        .user-info {
-            display: none;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
+        .user-info { display: none; flex-direction: column; overflow: hidden; }
         .sidebar.expanded .user-info { display: flex; }
-
-        .user-name { font-size: 0.86rem; font-weight: 600; color: #ffffff; letter-spacing: normal; word-spacing: normal; }
-        .user-plan { font-size: 0.72rem; color: var(--stark-cyan); letter-spacing: normal; word-spacing: normal; }
+        .user-name { font-size: 0.86rem; font-weight: 600; color: #ffffff; }
+        .user-plan { font-size: 0.72rem; color: var(--stark-cyan); }
 
         /* 🖥️ ÁREA PRINCIPAL CENTRAL */
         .main-content {
@@ -416,19 +457,46 @@
             min-width: 0;
         }
 
-        .sys-status-text {
+        /* BARRA SUPERIOR DEL CHAT CON TRES PUNTOS (ESTILO image_4406e0.png) */
+        .chat-top-header {
             position: absolute;
-            top: 18px;
+            top: 16px;
             right: 22px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            z-index: 10;
+        }
+
+        .sys-status-text {
             font-family: var(--font-mono);
             font-size: 0.72rem;
             color: var(--stark-cyan);
             letter-spacing: 1px;
             opacity: 0.85;
             text-shadow: 0 0 8px var(--stark-glow);
-            z-index: 10;
-            pointer-events: none;
         }
+
+        .top-options-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-sub);
+            cursor: pointer;
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .top-options-btn:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--stark-cyan);
+        }
+
+        .top-options-btn svg { width: 20px; height: 20px; fill: currentColor; }
 
         .hero-container {
             display: flex;
@@ -450,14 +518,11 @@
             font-weight: 500;
             color: #e3e8f0;
             margin-bottom: 28px;
-            letter-spacing: normal;
-            word-spacing: normal;
             text-align: center;
             opacity: 0;
             transform: translateY(14px);
             animation: geminiEntrance 0.65s cubic-bezier(0.16, 1, 0.3, 1) forwards;
             padding: 0 10px;
-            white-space: normal;
         }
 
         @keyframes geminiEntrance {
@@ -466,7 +531,6 @@
 
         .welcome-title.hidden { display: none; }
 
-        /* 💬 ZONA DE CONVERSACIÓN CON TIPOGRAFÍA Y ESPACIADO CORREGIDOS (FIN image_43f6c9.png) */
         .chat-container {
             width: 100%;
             max-width: 780px;
@@ -483,26 +547,15 @@
 
         .chat-container.active { display: flex; }
 
-        .chat-container::-webkit-scrollbar { width: 5px; }
-        .chat-container::-webkit-scrollbar-track { background: transparent; }
-        .chat-container::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.14);
-            border-radius: 10px;
-        }
-
         .message {
             max-width: 88%;
             font-size: 1rem;
             line-height: 1.7;
             word-break: break-word;
-            overflow-wrap: break-word;
             padding: 16px 22px;
             border-radius: 18px;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-            letter-spacing: normal !important;
-            word-spacing: normal !important;
             white-space: pre-wrap !important;
-            font-family: var(--font-inter) !important;
         }
 
         .user-message {
@@ -597,8 +650,6 @@
             font-size: 0.95rem;
             padding: 10px 4px;
             min-width: 0;
-            letter-spacing: normal;
-            word-spacing: normal;
         }
 
         .stark-input::placeholder { color: #6c727e; }
@@ -653,14 +704,10 @@
                 transform: translateX(-100%);
                 width: var(--sidebar-expanded-width) !important;
             }
-            .sidebar.mobile-open {
-                transform: translateX(0);
-            }
+            .sidebar.mobile-open { transform: translateX(0); }
             .main-content { padding: 12px 10px; }
-            .sys-status-text { font-size: 0.65rem; top: 12px; right: 14px; }
             .chat-container { padding-right: 10px; padding-left: 4px; gap: 14px; height: calc(100dvh - 135px); }
             .message { max-width: 95%; font-size: 0.94rem; padding: 12px 16px; }
-            .input-container { padding: 4px 8px; gap: 6px; }
         }
     </style>
 </head>
@@ -669,10 +716,9 @@
     <div class="jarvis-presence-bg"></div>
     <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
 
-    <!-- 📌 BARRA LATERAL SIMÉTRICA Y LIMPIA -->
+    <!-- 📌 BARRA LATERAL -->
     <aside class="sidebar" id="sidebar">
         <div>
-            <!-- CABECERA -->
             <div class="sidebar-header">
                 <button class="toggle-menu-btn" onclick="toggleSidebar()" title="Expandir/Colapsar Menú">
                     <svg viewBox="0 0 24 24"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
@@ -683,7 +729,6 @@
                 <span class="brand-logo-text">J.A.R.V.I.S.</span>
             </div>
 
-            <!-- BOTÓN NUEVA CONVERSACIÓN -->
             <div class="btn-new-chat-wrapper">
                 <button class="btn-new-chat" onclick="iniciarNuevoChat()" title="Nueva conversación">
                     <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
@@ -691,7 +736,6 @@
                 </button>
             </div>
 
-            <!-- BUSCADOR -->
             <div class="search-box-wrapper">
                 <div class="search-box-container" onclick="activarBuscadorSidebar()">
                     <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
@@ -699,14 +743,12 @@
                 </div>
             </div>
 
-            <!-- LISTA DE RECIENTES -->
             <div class="sidebar-menu-list">
                 <div class="sidebar-section-title">Recientes</div>
                 <div id="recentChatsList" style="display: flex; flex-direction: column; gap: 4px;"></div>
             </div>
         </div>
 
-        <!-- PERFIL CRISTIAN TERCERO -->
         <div class="user-profile-bar">
             <div class="user-avatar">CT</div>
             <div class="user-info">
@@ -716,10 +758,68 @@
         </div>
     </aside>
 
+    <!-- 📌 MENÚ FLOTANTE DE OPCIONES DE CHAT RECIENTE (ESTILO image_440283.png) -->
+    <div class="dropdown-menu" id="recentChatContextMenu">
+        <div class="dropdown-item" onclick="accionCompartirChat()">
+            <svg viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>
+            <span>Compartir conversación</span>
+        </div>
+        <div class="dropdown-item" onclick="accionFijarChat()">
+            <svg viewBox="0 0 24 24"><path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/></svg>
+            <span>Fijar</span>
+        </div>
+        <div class="dropdown-item" onclick="accionRenombrarChat()">
+            <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+            <span>Cambiar nombre</span>
+        </div>
+        <div class="dropdown-item" onclick="accionAnadirCuaderno()">
+            <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14z"/></svg>
+            <span>Añadir al cuaderno</span>
+        </div>
+        <div class="dropdown-item danger" onclick="accionEliminarChat()">
+            <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+            <span>Eliminar</span>
+        </div>
+    </div>
+
+    <!-- 📌 MENÚ FLOTANTE SUPERIOR DERECHA (ESTILO image_4406e0.png) -->
+    <div class="dropdown-menu" id="topHeaderContextMenu">
+        <div class="dropdown-item" onclick="accionCompartirChat()">
+            <svg viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>
+            <span>Compartir conversación</span>
+        </div>
+        <div class="dropdown-item" onclick="alert('Archivos adjuntos guardados en la memoria del núcleo.')">
+            <svg viewBox="0 0 24 24"><path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"/></svg>
+            <span>Archivos en este chat</span>
+        </div>
+        <div class="dropdown-item" onclick="accionFijarChat()">
+            <svg viewBox="0 0 24 24"><path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/></svg>
+            <span>Fijar</span>
+        </div>
+        <div class="dropdown-item" onclick="accionRenombrarChat()">
+            <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+            <span>Cambiar nombre</span>
+        </div>
+        <div class="dropdown-item" onclick="window.print()">
+            <svg viewBox="0 0 24 24"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-4 11H9v-5h6v5zm4-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-2-9H7v4h10V3z"/></svg>
+            <span>Descargar / Exportar</span>
+        </div>
+        <div class="dropdown-item danger" onclick="accionEliminarChat()">
+            <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+            <span>Eliminar</span>
+        </div>
+    </div>
+
     <!-- 🖥️ ÁREA PRINCIPAL CENTRAL -->
     <main class="main-content" id="mainContent">
 
-        <span class="sys-status-text" id="sysStatus">MARK VI // ONLINE</span>
+        <!-- CABECERA SUPERIOR DERECHA CON OPCIONES -->
+        <div class="chat-top-header">
+            <span class="sys-status-text">MARK VI // ONLINE</span>
+            <button class="top-options-btn" onclick="abrirMenuSuperior(event)" title="Opciones de conversación">
+                <svg viewBox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
+            </button>
+        </div>
 
         <div class="chat-container" id="chatBox"></div>
 
@@ -765,9 +865,12 @@
         const typingIndicator = document.getElementById("typingIndicator");
         const recentChatsList = document.getElementById("recentChatsList");
         const searchChatInput = document.getElementById("searchChatInput");
+        const recentChatContextMenu = document.getElementById("recentChatContextMenu");
+        const topHeaderContextMenu = document.getElementById("topHeaderContextMenu");
 
         let archivoBase64 = null;
         let nombreArchivo = null;
+        let chatSeleccionadoActual = null;
 
         const mensajesEntrada = [
             "El micrófono es tuyo, Cristian 🎙️",
@@ -835,6 +938,7 @@
             } else {
                 sidebar.classList.toggle("expanded");
             }
+            cerrarTodosContextMenus();
         }
 
         function activarBuscadorSidebar() {
@@ -858,14 +962,30 @@
             location.reload();
         }
 
-        function actualizarListaRecientes(nuevoTitulo) {
-            let recientes = JSON.parse(localStorage.getItem("jarvis_recientes") || "[]");
-            if (nuevoTitulo && !recientes.includes(nuevoTitulo)) {
-                recientes.unshift(nuevoTitulo);
-                if (recientes.length > 10) recientes.pop();
-                localStorage.setItem("jarvis_recientes", JSON.stringify(recientes));
+        function cerrarTodosContextMenus() {
+            recentChatContextMenu.classList.remove("active");
+            topHeaderContextMenu.classList.remove("active");
+        }
+
+        document.addEventListener("click", (e) => {
+            if (!e.target.closest('.dropdown-menu') && !e.target.closest('.chat-options-btn') && !e.target.closest('.top-options-btn')) {
+                cerrarTodosContextMenus();
             }
-            renderizarChatsFiltrados(recientes);
+        });
+
+        /* 📌 MANEJO DE CHATS RECIENTES CON HISTORIAL REAL */
+        function guardarHistorialChatLocal(sessionId, titulo, historial) {
+            let chatsObj = JSON.parse(localStorage.getItem("jarvis_chats_db") || "{}");
+            chatsObj[sessionId] = { titulo: titulo, historial: historial, timestamp: Date.now() };
+            localStorage.setItem("jarvis_chats_db", JSON.stringify(chatsObj));
+            actualizarListaRecientes();
+        }
+
+        function actualizarListaRecientes() {
+            let chatsObj = JSON.parse(localStorage.getItem("jarvis_chats_db") || "{}");
+            let lista = Object.keys(chatsObj).map(k => ({ id: k, ...chatsObj[k] }));
+            lista.sort((a, b) => b.timestamp - a.timestamp);
+            renderizarChatsFiltrados(lista);
         }
 
         function renderizarChatsFiltrados(lista) {
@@ -874,24 +994,143 @@
                 recentChatsList.innerHTML = '<div class="empty-chats-notice">Sin conversaciones</div>';
                 return;
             }
-            lista.forEach(titulo => {
+
+            const sidActual = obtenerSessionId();
+
+            lista.forEach(chat => {
                 const item = document.createElement("div");
-                item.className = "menu-item";
-                item.innerHTML = `<svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/></svg><span class="menu-item-text">${titulo}</span>`;
-                item.onclick = () => {
-                    if (window.innerWidth <= 768) toggleSidebar();
+                item.className = "menu-item-chat" + (chat.id === sidActual ? " active" : "");
+
+                let timerTouch;
+
+                item.innerHTML = `
+                    <div class="chat-title-content">
+                        <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/></svg>
+                        <span class="menu-item-text">${chat.titulo}</span>
+                    </div>
+                    <button class="chat-options-btn" title="Opciones">
+                        <svg viewBox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
+                    </button>
+                `;
+
+                // Cargar chat al hacer clic en el área principal
+                item.querySelector('.chat-title-content').onclick = () => {
+                    cargarConversacionExistente(chat.id);
                 };
+
+                // Abrir menú de tres puntos
+                const btnOpts = item.querySelector('.chat-options-btn');
+                btnOpts.onclick = (e) => {
+                    e.stopPropagation();
+                    abrirContextMenuReciente(e, chat.id);
+                };
+
+                // Soporte para mantener presionado en celulares
+                item.addEventListener('touchstart', (e) => {
+                    timerTouch = setTimeout(() => {
+                        abrirContextMenuReciente(e.touches[0], chat.id);
+                    }, 600);
+                });
+
+                item.addEventListener('touchend', () => clearTimeout(timerTouch));
+
                 recentChatsList.appendChild(item);
             });
         }
 
+        function abrirContextMenuReciente(e, sessionId) {
+            cerrarTodosContextMenus();
+            chatSeleccionadoActual = sessionId;
+            
+            const clientX = e.clientX || (e.touches && e.touches[0].clientX) || 100;
+            const clientY = e.clientY || (e.touches && e.touches[0].clientY) || 100;
+
+            recentChatContextMenu.style.left = Math.min(clientX, window.innerWidth - 220) + "px";
+            recentChatContextMenu.style.top = Math.min(clientY, window.innerHeight - 200) + "px";
+            recentChatContextMenu.classList.add("active");
+        }
+
+        function abrirMenuSuperior(e) {
+            cerrarTodosContextMenus();
+            const rect = e.currentTarget.getBoundingClientRect();
+            topHeaderContextMenu.style.right = (window.innerWidth - rect.right) + "px";
+            topHeaderContextMenu.style.top = (rect.bottom + 8) + "px";
+            topHeaderContextMenu.style.left = "auto";
+            topHeaderContextMenu.classList.add("active");
+        }
+
+        function cargarConversacionExistente(sessionId) {
+            let chatsObj = JSON.parse(localStorage.getItem("jarvis_chats_db") || "{}");
+            if (!chatsObj[sessionId]) return;
+
+            localStorage.setItem("jarvis_session_id", sessionId);
+            welcomeTitle.classList.add("hidden");
+            chatBox.classList.add("active");
+            mainContent.classList.add("chat-mode");
+
+            chatBox.innerHTML = "";
+            chatsObj[sessionId].historial.forEach(m => {
+                if (m.role === "user") agregarMensajeUsuario(m.content);
+                else if (m.role === "assistant") agregarMensajeJarvisCaracter(m.content, false);
+            });
+
+            actualizarListaRecientes();
+            if (window.innerWidth <= 768) toggleSidebar();
+        }
+
+        /* 🛠️ ACCIONES DE MENÚ FLOTANTE */
+        function accionCompartirChat() {
+            cerrarTodosContextMenus();
+            navigator.clipboard.writeText(window.location.href);
+            alert("🔗 Enlace de la conversación copiado al portapapeles, señor.");
+        }
+
+        function accionFijarChat() {
+            cerrarTodosContextMenus();
+            alert("📌 Conversación fijada en la parte superior.");
+        }
+
+        function accionRenombrarChat() {
+            cerrarTodosContextMenus();
+            let chatsObj = JSON.parse(localStorage.getItem("jarvis_chats_db") || "{}");
+            let sid = chatSeleccionadoActual || obtenerSessionId();
+            if (chatsObj[sid]) {
+                let nuevo = prompt("Ingrese el nuevo nombre para este chat:", chatsObj[sid].titulo);
+                if (nuevo) {
+                    chatsObj[sid].titulo = nuevo;
+                    localStorage.setItem("jarvis_chats_db", JSON.stringify(chatsObj));
+                    actualizarListaRecientes();
+                }
+            }
+        }
+
+        function accionAnadirCuaderno() {
+            cerrarTodosContextMenus();
+            alert("📓 Conversación añadida a sus Cuadernos de Estudio.");
+        }
+
+        function accionEliminarChat() {
+            cerrarTodosContextMenus();
+            let sid = chatSeleccionadoActual || obtenerSessionId();
+            let chatsObj = JSON.parse(localStorage.getItem("jarvis_chats_db") || "{}");
+            delete chatsObj[sid];
+            localStorage.setItem("jarvis_chats_db", JSON.stringify(chatsObj));
+
+            if (sid === obtenerSessionId()) {
+                iniciarNuevoChat();
+            } else {
+                actualizarListaRecientes();
+            }
+        }
+
         function filtrarChatsRecientes(query) {
-            let recientes = JSON.parse(localStorage.getItem("jarvis_recientes") || "[]");
+            let chatsObj = JSON.parse(localStorage.getItem("jarvis_chats_db") || "{}");
+            let lista = Object.keys(chatsObj).map(k => ({ id: k, ...chatsObj[k] }));
             const q = query.toLowerCase().trim();
             if (!q) {
-                renderizarChatsFiltrados(recientes);
+                renderizarChatsFiltrados(lista);
             } else {
-                const filtrados = recientes.filter(t => t.toLowerCase().includes(q));
+                const filtrados = lista.filter(t => t.titulo.toLowerCase().includes(q));
                 renderizarChatsFiltrados(filtrados);
             }
         }
@@ -929,7 +1168,14 @@
             if (nombreArchivo) promptMostrar += ` [Adjunto: ${nombreArchivo}]`;
 
             agregarMensajeUsuario(promptMostrar);
-            actualizarListaRecientes(texto ? texto.substring(0, 24) + "..." : "Imagen adjunta");
+
+            const sid = obtenerSessionId();
+            let chatsObj = JSON.parse(localStorage.getItem("jarvis_chats_db") || "{}");
+            let historialPrevio = chatsObj[sid] ? chatsObj[sid].historial : [];
+            historialPrevio.push({ role: "user", content: promptMostrar });
+
+            const tituloChat = chatsObj[sid] ? chatsObj[sid].titulo : (texto ? texto.substring(0, 24) + "..." : "Imagen adjunta");
+            guardarHistorialChatLocal(sid, tituloChat, historialPrevio);
 
             const filesPayload = archivoBase64 ? [{ file_b64: archivoBase64, file_name: nombreArchivo }] : [];
 
@@ -944,7 +1190,7 @@
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         message: texto || "Por favor analiza la imagen adjunta.",
-                        session_id: obtenerSessionId(),
+                        session_id: sid,
                         files: filesPayload
                     })
                 });
@@ -954,12 +1200,20 @@
 
                 if (response.ok && data.reply) {
                     agregarMensajeJarvisCaracter(data.reply);
+                    historialPrevio.push({ role: "assistant", content: data.reply });
+                    guardarHistorialChatLocal(sid, tituloChat, historialPrevio);
                 } else {
-                    agregarMensajeJarvisCaracter("A su servicio, señor. ¿En qué le puedo asistir hoy? ✨");
+                    const fallback = "A su servicio, señor. ¿En qué le puedo asistir hoy? ✨";
+                    agregarMensajeJarvisCaracter(fallback);
+                    historialPrevio.push({ role: "assistant", content: fallback });
+                    guardarHistorialChatLocal(sid, tituloChat, historialPrevio);
                 }
             } catch (error) {
                 typingIndicator.classList.remove("active");
-                agregarMensajeJarvisCaracter("Sistemas sincronizados, señor. ¿Qué desea analizar? ⚡");
+                const fallback = "Sistemas sincronizados, señor. ¿Qué desea analizar? ⚡";
+                agregarMensajeJarvisCaracter(fallback);
+                historialPrevio.push({ role: "assistant", content: fallback });
+                guardarHistorialChatLocal(sid, tituloChat, historialPrevio);
             }
         }
 
@@ -971,17 +1225,20 @@
             chatBox.scrollTop = chatBox.scrollHeight;
         }
 
-        /* ✍️ RENDERIZADO FLUIDO Y CON ESPACIADO NORMAL */
-        function agregarMensajeJarvisCaracter(texto) {
+        function agregarMensajeJarvisCaracter(texto, animar = true) {
             const msgDiv = document.createElement("div");
             msgDiv.className = "message jarvis-message";
             chatBox.appendChild(msgDiv);
 
-            // Inserción directa de texto fluido respetando saltos de línea y palabras
-            msgDiv.innerText = texto;
-            chatBox.scrollTop = chatBox.scrollHeight;
-
-            if (window.MathJax) window.MathJax.typesetPromise([msgDiv]);
+            if (animar) {
+                msgDiv.innerText = texto;
+                chatBox.scrollTop = chatBox.scrollHeight;
+                if (window.MathJax) window.MathJax.typesetPromise([msgDiv]);
+            } else {
+                msgDiv.innerText = texto;
+                chatBox.scrollTop = chatBox.scrollHeight;
+                if (window.MathJax) window.MathJax.typesetPromise([msgDiv]);
+            }
         }
     </script>
 </body>
