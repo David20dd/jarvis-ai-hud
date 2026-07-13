@@ -14,30 +14,35 @@ async function connectToWhatsApp() {
 
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect, qr } = update;
+        
         if (qr) {
-            console.log("\n📲 ESCANEA ESTE CÓDIGO QR DESDE TU WHATSAPP:\n");
+            console.log("\n==========================================");
+            console.log("📲 ESCANEA ESTE CÓDIGO QR DESDE TU WHATSAPP:");
+            console.log("==========================================\n");
             qrcode.generate(qr, { small: true });
         }
+
         if (connection === 'close') {
             const shouldReconnect = (lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut);
-            console.log('Conexión cerrada. Reconectando...', shouldReconnect);
-            if (shouldReconnect) connectToWhatsApp();
+            console.log('⚠️ Conexión cerrada. Intentando reconectar...', shouldReconnect);
+            if (shouldReconnect) {
+                setTimeout(connectToWhatsApp, 3000);
+            }
         } else if (connection === 'open') {
-            console.log('🚀 J.A.R.V.I.S. CONECTADO A WHATSAPP CON ÉXITO');
+            console.log('🚀 J.A.R.V.I.S. CONECTADO A WHATSAPP EXITOSAMENTE');
         }
     });
 
     sock.ev.on('messages.upsert', async m => {
         const msg = m.messages[0];
-        if (!msg.message || msg.key.fromMe) return;
+        if (!msg || !msg.message || msg.key.fromMe) return;
 
         const sender = msg.key.remoteJid;
         const textMessage = msg.message.conversation || msg.message.extendedTextMessage?.text;
 
         if (textMessage) {
-            console.log(`📩 Mensaje de ${sender}: ${textMessage}`);
+            console.log(`📩 Consulta recibida de ${sender}: ${textMessage}`);
             try {
-                // Enviar la consulta al backend de Jarvis en Render
                 const response = await axios.post('https://jarvis-ai-hud.onrender.com/api/jarvis', {
                     message: textMessage,
                     session_id: sender
@@ -47,7 +52,7 @@ async function connectToWhatsApp() {
                     await sock.sendMessage(sender, { text: response.data.reply });
                 }
             } catch (err) {
-                console.error("⚠️ Error comunicando con Jarvis Backend:", err.message);
+                console.error("⚠️ Error comunicando con el servidor de Jarvis:", err.message);
             }
         }
     });
