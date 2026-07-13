@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>J.A.R.V.I.S. // STARK HUD</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <title>J.A.R.V.I.S. // STARK HUD MK VI</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
     
     <script>
         window.MathJax = {
@@ -22,7 +22,6 @@
             --bg-dark: #06080d;
             --sidebar-bg: #040508;
             --input-bg: #141824;
-            --card-jarvis-bg: #0d121d;
             --stark-blue: #0088ff;
             --stark-cyan: #00d2ff;
             --stark-glow: rgba(0, 136, 255, 0.35);
@@ -68,7 +67,7 @@
             100% { opacity: 1.0; }
         }
 
-        /* 📌 BARRA LATERAL IZQUIERDA */
+        /* 📌 BARRA LATERAL IZQUIERDA Adaptable y Desplazable (Estilo Stark image_2.png, image_3.png) */
         .sidebar {
             width: 60px;
             height: 100vh;
@@ -82,7 +81,11 @@
             padding: 16px 0;
             z-index: 10;
             flex-shrink: 0;
+            transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            overflow-y: auto;
+            scrollbar-width: none;
         }
+        .sidebar::-webkit-scrollbar { display: none; }
 
         .sidebar-top, .sidebar-bottom {
             display: flex;
@@ -111,7 +114,11 @@
             color: var(--stark-cyan);
         }
 
-        .side-btn svg { width: 20px; height: 20px; fill: currentColor; }
+        .side-btn svg {
+            width: 20px;
+            height: 20px;
+            fill: currentColor;
+        }
 
         /* ☢️ NAV CONTAINER REACTOR ARC MARK I HD */
         .arc-nav-container {
@@ -147,6 +154,7 @@
             padding: 20px;
             z-index: 2;
             min-width: 0;
+            transition: margin-left 0.3s ease;
         }
 
         .sys-status-text {
@@ -163,6 +171,7 @@
             pointer-events: none;
         }
 
+        /* HERO CONTAINER CENTRADO INICIALMENTE CON TRANSICIÓN SUAVE */
         .hero-container {
             display: flex;
             flex-direction: column;
@@ -173,14 +182,16 @@
             transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
+        /* DESPLAZAMIENTO HACIA ABAJO AL ENVIAR MENSAJE */
         .main-content.chat-mode .hero-container {
             position: absolute;
             bottom: 20px;
         }
 
+        /* TÍTULO BIENVENIDA DINÁMICO ESCALABLE */
         .welcome-title {
             font-size: clamp(1.3rem, 4.5vw, 2.1rem);
-            font-weight: 500;
+            font-weight: 400;
             color: #e3e8f0;
             margin-bottom: 28px;
             letter-spacing: -0.4px;
@@ -197,7 +208,7 @@
 
         .welcome-title.hidden { display: none; }
 
-        /* 💬 ZONA DE CONVERSACIÓN CON TIPOGRAFÍA ESTILO GEMINI / CLAUDE */
+        /* 💬 ZONA DE CONVERSACIÓN CON CUADROS ESTRUCTURADOS */
         .chat-container {
             width: 100%;
             max-width: 780px;
@@ -205,7 +216,7 @@
             overflow-y: auto;
             display: none;
             flex-direction: column;
-            gap: 20px;
+            gap: 18px;
             padding-top: 40px;
             padding-bottom: 20px;
             padding-right: 18px;
@@ -223,136 +234,69 @@
 
         .message {
             max-width: 88%;
-            font-size: 1rem;
-            line-height: 1.7;
+            font-size: 0.98rem;
+            line-height: 1.65;
             word-break: break-word;
-            padding: 16px 22px;
+            padding: 12px 18px;
             border-radius: 18px;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-            letter-spacing: -0.1px;
         }
 
         .user-message {
             align-self: flex-end;
-            background: #182030;
-            border: 1px solid rgba(0, 136, 255, 0.3);
+            background: #1c2230;
+            border: 1px solid rgba(0, 136, 255, 0.35);
             color: #ffffff;
             border-bottom-right-radius: 4px;
         }
 
+        /* 📦 CUADRO DE TEXTO ESTRUCTURADO DE JARVIS (BASADO EN image_1.png) */
         .jarvis-message {
             align-self: flex-start;
-            background: var(--card-jarvis-bg);
+            background: #0d121d;
             border: 1px solid rgba(0, 210, 255, 0.18);
             color: var(--text-main);
             border-bottom-left-radius: 4px;
+            opacity: 0;
+            transform: translateX(-10px);
+            animation: messageEntrance 0.5s ease-out forwards;
         }
 
-        /* ✍️ ANIMACIÓN "JARVIS ESTÁ ESCRIBIENDO" */
+        @keyframes messageEntrance {
+            to { opacity: 1; transform: translateX(0); }
+        }
+
         .typing-indicator {
-            display: flex;
-            align-items: center;
+            align-self: flex-start;
+            display: none;
             gap: 6px;
             padding: 12px 18px;
-            background: var(--card-jarvis-bg);
+            background: #0d121d;
             border: 1px solid rgba(0, 210, 255, 0.18);
             border-radius: 16px;
-            width: fit-content;
-            align-self: flex-start;
         }
+        .typing-indicator.active { display: flex; }
 
         .typing-dot {
-            width: 7px;
-            height: 7px;
+            width: 6px;
+            height: 6px;
             background: var(--stark-cyan);
             border-radius: 50%;
-            animation: typingPulse 1.4s infinite ease-in-out;
+            animation: typingPulse 1.2s infinite ease-in-out;
         }
-
         .typing-dot:nth-child(2) { animation-delay: 0.2s; }
         .typing-dot:nth-child(3) { animation-delay: 0.4s; }
 
         @keyframes typingPulse {
-            0%, 100% { transform: scale(1); opacity: 0.4; }
-            50% { transform: scale(1.4); opacity: 1; }
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 1; }
         }
 
-        /* 🪟 PANELES MODALES LATERALES Y DE CONFIGURACIÓN */
-        .modal-overlay {
-            position: absolute;
-            inset: 0;
-            background: rgba(4, 5, 8, 0.82);
-            backdrop-filter: blur(8px);
-            z-index: 100;
-            display: none;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-
-        .modal-overlay.active { display: flex; }
-
-        .modal-box {
-            background: #0d121d;
-            border: 1px solid rgba(0, 210, 255, 0.3);
-            border-radius: 20px;
-            width: 100%;
-            max-width: 520px;
-            padding: 24px;
-            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.8), 0 0 20px var(--stark-glow);
-            display: flex;
-            flex-direction: column;
-            gap: 18px;
-            color: var(--text-main);
-        }
-
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-            padding-bottom: 12px;
-        }
-
-        .modal-header h2 {
-            font-size: 1.15rem;
-            font-weight: 600;
-            color: var(--stark-cyan);
-            font-family: var(--font-mono);
-            letter-spacing: 1px;
-        }
-
-        .close-modal {
-            background: transparent;
-            border: none;
-            color: var(--text-sub);
-            font-size: 1.2rem;
-            cursor: pointer;
-        }
-
-        .close-modal:hover { color: #ffffff; }
-
-        .modal-item {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-            font-size: 0.9rem;
-        }
-
-        .modal-item label { color: var(--text-sub); font-size: 0.82rem; }
-
-        .modal-input {
-            background: #141824;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            color: #ffffff;
-            padding: 10px 14px;
-            border-radius: 10px;
-            outline: none;
-        }
-
+        /* PREVIEW BARRA ARCHIVOS */
         .preview-bar {
             display: none;
-            margin-bottom: 10px;
+            position: absolute;
+            bottom: 95px;
             background: var(--input-bg);
             padding: 8px 16px;
             border-radius: 12px;
@@ -362,20 +306,19 @@
             font-size: 0.85rem;
             color: var(--stark-cyan);
             z-index: 10;
-            max-width: 720px;
-            width: 100%;
         }
         .preview-bar.active { display: flex; }
 
+        /* 🔍 BARRA BÚSQUEDA CENTRAL REDONDEADA */
         .input-container {
             width: 100%;
             max-width: 720px;
             background: var(--input-bg);
             border-radius: 28px;
-            padding: 6px 12px;
+            padding: 6px 14px;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
             border: 1px solid rgba(255, 255, 255, 0.07);
             transition: all 0.3s ease;
@@ -441,60 +384,108 @@
             color: var(--stark-cyan);
         }
 
+        /* 📱 REGLAS DE ADAPTABILIDAD RESPONSIVA (MÓVILES Y TABLETS) */
         @media (max-width: 768px) {
-            .sidebar { width: 50px; padding: 12px 0; }
-            .side-btn { width: 34px; height: 34px; }
-            .side-btn svg { width: 18px; height: 18px; }
-            .arc-nav-container { width: 34px; height: 34px; }
-            #arcReactorNav { width: 32px; height: 32px; }
-            .main-content { padding: 12px 10px; }
-            .sys-status-text { font-size: 0.65rem; top: 12px; right: 14px; }
-            .chat-container { padding-right: 10px; padding-left: 4px; gap: 14px; height: calc(100dvh - 135px); }
-            .message { max-width: 95%; font-size: 0.94rem; padding: 12px 16px; }
-            .input-container { padding: 4px 8px; gap: 6px; }
+            .sidebar {
+                width: 50px;
+                padding: 12px 0;
+            }
+            .side-btn {
+                width: 34px;
+                height: 34px;
+            }
+            .side-btn svg {
+                width: 18px;
+                height: 18px;
+            }
+            .arc-nav-container {
+                width: 34px;
+                height: 34px;
+            }
+            #arcReactorNav {
+                width: 32px;
+                height: 32px;
+            }
+            .main-content {
+                padding: 12px 10px;
+            }
+            .sys-status-text {
+                font-size: 0.65rem;
+                top: 12px;
+                right: 14px;
+            }
+            .chat-container {
+                padding-right: 10px;
+                padding-left: 4px;
+                gap: 14px;
+                height: calc(100dvh - 135px);
+            }
+            .message {
+                max-width: 92%;
+                font-size: 0.92rem;
+                padding: 10px 14px;
+            }
+            .input-container {
+                padding: 4px 8px;
+                gap: 6px;
+            }
+            .model-selector span {
+                font-size: 0.75rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .model-selector {
+                padding: 4px 6px;
+            }
+            .stark-input {
+                font-size: 0.9rem;
+            }
         }
     </style>
 </head>
 <body>
 
+    <!-- 🌀 FONDO CON RESPLANDOR AZUL UNIFORME -->
     <div class="jarvis-presence-bg"></div>
 
-    <!-- 📌 BARRA LATERAL IZQUIERDA -->
+    <!-- 📌 BARRA LATERAL IZQUIERDA (Estilo Stark image_2.png, image_3.png) -->
     <aside class="sidebar">
         <div class="sidebar-top">
+            <!-- ☢️ REACTOR ARC (ROTACIÓN ROTATORIA MULTICAPA HD) -->
             <div class="arc-nav-container">
-                <canvas id="arcReactorNav" title="Reactor Arc J.A.R.V.I.S. Mark V"></canvas>
+                <canvas id="arcReactorNav" title="Reactor Arc J.A.R.V.I.S. Mark VI"></canvas>
             </div>
 
             <!-- ✏️ BOTÓN NUEVO CHAT -->
-            <button class="side-btn" title="Nuevo Chat" onclick="iniciarNuevoChat()">
+            <button class="side-btn" title="Nuevo Chat" id="newChatBtn">
                 <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
             </button>
 
-            <!-- 🔍 BOTÓN BÚSQUEDA DE PROYECTOS -->
-            <button class="side-btn" title="Buscar Proyectos" onclick="abrirModal('modalBuscar')">
+            <!-- 🔍 BOTÓN BÚSQUEDA PROYECTOS -->
+            <button class="side-btn" title="Buscar Proyectos">
                 <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
             </button>
 
-            <!-- 📜 BOTÓN HISTORIAL DE CHATS -->
-            <button class="side-btn" title="Historial de Conversaciones" onclick="abrirModal('modalHistorial')">
+            <!-- 📜 BOTÓN HISTORIAL -->
+            <button class="side-btn" title="Historial">
                 <svg viewBox="0 0 24 24"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
             </button>
 
-            <!-- 📌 BOTÓN GUARDADOS / MARCADORES -->
-            <button class="side-btn" title="Marcadores y Guardados" onclick="abrirModal('modalGuardados')">
+            <!-- 📌 BOTÓN GUARDADOS -->
+            <button class="side-btn" title="Guardados">
                 <svg viewBox="0 0 24 24"><path d="M17 3H7c-1.1 0-1.99.9-1.99 2L5 21l7-3 7 3V5c0-1.1-.9-2-2-2zm0 15l-5-2.18L7 18V5h10v13z"/></svg>
             </button>
 
-            <!-- 🚀 BOTÓN PANEL DE APLICACIONES -->
-            <button class="side-btn" title="Módulos de Sistema" onclick="abrirModal('modalApps')">
+            <!-- 🚀 BOTÓN APPS -->
+            <button class="side-btn" title="Aplicaciones de Sistema">
                 <svg viewBox="0 0 24 24"><path d="M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-10v4h4V4h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zm0 6h4v-4h-4v4z"/></svg>
             </button>
         </div>
 
         <!-- ⚙️ BOTÓN CONFIGURACIÓN -->
         <div class="sidebar-bottom">
-            <button class="side-btn" title="Configuración de Jarvis" onclick="abrirModal('modalConfig')">
+            <button class="side-btn" title="Configuración" id="configBtn">
                 <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
             </button>
         </div>
@@ -502,11 +493,20 @@
 
     <!-- 🖥️ ÁREA PRINCIPAL CENTRAL -->
     <main class="main-content" id="mainContent">
-        <span class="sys-status-text" id="sysStatus">MARK V // ONLINE</span>
+
+        <span class="sys-status-text" id="sysStatus">MARK VI // ONLINE</span>
+
         <div class="chat-container" id="chatBox"></div>
 
+        <!-- INDICADOR ESCRITURA CARACTER (Typing Caracter) -->
+        <div class="typing-indicator" id="typingIndicator">
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+        </div>
+
         <div class="hero-container" id="heroContainer">
-            <h1 class="welcome-title" id="welcomeTitle">Hola, Cristian, ¿qué vamos a hacer hoy? ⚡</h1>
+            <h1 class="welcome-title" id="welcomeTitle">Hola, Cristian, ¿qué vamos a hacer? ✨</h1>
 
             <div class="preview-bar" id="previewBar">
                 <span id="previewText">Imagen/Archivo cargado</span>
@@ -514,90 +514,18 @@
             </div>
 
             <div class="input-container">
-                <button class="action-btn" onclick="document.getElementById('fileInput').click()" title="Adjuntar imagen o archivo"><svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg></button>
+                <button class="action-btn" onclick="document.getElementById('fileInput').click()" title="Adjuntar imagen o archivo">
+                    <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                </button>
                 <input type="file" id="fileInput" accept="image/*" style="display:none;" onchange="procesarArchivoSeleccionado(event)">
 
                 <input type="text" id="userInput" class="stark-input" placeholder="Pregunta a Jarvis..." autocomplete="off">
-                <div class="model-selector"><span>Mark V</span></div>
+                <div class="model-selector"><span>Mark VI</span></div>
                 <button class="action-btn" id="micBtn"><svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg></button>
             </div>
         </div>
+
     </main>
-
-    <!-- 🪟 MODAL DE CONFIGURACIÓN -->
-    <div class="modal-overlay" id="modalConfig">
-        <div class="modal-box">
-            <div class="modal-header">
-                <h2>⚙️ CONFIGURACIÓN DE J.A.R.V.I.S.</h2>
-                <button class="close-modal" onclick="cerrarModal('modalConfig')">✕</button>
-            </div>
-            <div class="modal-item">
-                <label>Protocolo Activo</label>
-                <input type="text" class="modal-input" value="Mark V.8 Multimodal Persistent Core" readonly>
-            </div>
-            <div class="modal-item">
-                <label>Creatividad / Temperatura</label>
-                <input type="text" class="modal-input" value="0.4 (Optimizado para precisión y elegancia)" readonly>
-            </div>
-            <div class="modal-item">
-                <label>Base de Datos SQLite</label>
-                <input type="text" class="modal-input" value="jarvis_memory.db (Conectada)" readonly>
-            </div>
-        </div>
-    </div>
-
-    <!-- 🪟 MODAL BÚSQUEDA DE PROYECTOS -->
-    <div class="modal-overlay" id="modalBuscar">
-        <div class="modal-box">
-            <div class="modal-header">
-                <h2>🔍 BUSCAR EN PROYECTOS</h2>
-                <button class="close-modal" onclick="cerrarModal('modalBuscar')">✕</button>
-            </div>
-            <input type="text" class="modal-input" placeholder="Escribe para buscar conversaciones..." id="searchChatInput">
-            <p style="font-size: 0.85rem; color: var(--text-sub);">Resultados recientes guardados en la memoria persistente.</p>
-        </div>
-    </div>
-
-    <!-- 🪟 MODAL HISTORIAL -->
-    <div class="modal-overlay" id="modalHistorial">
-        <div class="modal-box">
-            <div class="modal-header">
-                <h2>📜 HISTORIAL DE CONVERSACIONES</h2>
-                <button class="close-modal" onclick="cerrarModal('modalHistorial')">✕</button>
-            </div>
-            <div style="font-size: 0.9rem; color: var(--text-main); display: flex; flex-direction: column; gap: 10px;">
-                <p>• Sesión Actual: <strong style="color: var(--stark-cyan);" id="currentSessionDisplay"></strong></p>
-                <p>• Memoria SQLite: 100% Sincronizada</p>
-            </div>
-        </div>
-    </div>
-
-    <!-- 🪟 MODAL MARCADORES Y GUARDADOS -->
-    <div class="modal-overlay" id="modalGuardados">
-        <div class="modal-box">
-            <div class="modal-header">
-                <h2>📌 ELEMENTOS GUARDADOS</h2>
-                <button class="close-modal" onclick="cerrarModal('modalGuardados')">✕</button>
-            </div>
-            <p style="font-size: 0.88rem; color: var(--text-sub);">Aquí se archivarán las respuestas y códigos que marque como favoritos.</p>
-        </div>
-    </div>
-
-    <!-- 🪟 MODAL MÓDULOS / APPS -->
-    <div class="modal-overlay" id="modalApps">
-        <div class="modal-box">
-            <div class="modal-header">
-                <h2>🚀 MÓDULOS DE SISTEMA STARK</h2>
-                <button class="close-modal" onclick="cerrarModal('modalApps')">✕</button>
-            </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 0.85rem;">
-                <div style="background: #141824; padding: 12px; border-radius: 10px;">👁️ Visión Multimodal</div>
-                <div style="background: #141824; padding: 12px; border-radius: 10px;">🐍 Sandbox Python</div>
-                <div style="background: #141824; padding: 12px; border-radius: 10px;">🌐 Búsqueda Web 2026</div>
-                <div style="background: #141824; padding: 12px; border-radius: 10px;">💾 Memoria SQLite</div>
-            </div>
-        </div>
-    </div>
 
     <script>
         const API_URL = "https://jarvis-ai-hud.onrender.com/api/jarvis";
@@ -608,16 +536,18 @@
         const previewBar = document.getElementById("previewBar");
         const previewText = document.getElementById("previewText");
         const fileInput = document.getElementById("fileInput");
+        const newChatBtn = document.getElementById("newChatBtn");
+        const typingIndicator = document.getElementById("typingIndicator");
 
         let archivoBase64 = null;
         let nombreArchivo = null;
 
         const mensajesEntrada = [
             "El micrófono es tuyo, Cristian 🎙️",
-            "Hola, Cristian, ¿qué vamos a hacer hoy? ⚡",
+            "Hola, Cristian, ¿qué vamos a hacer? ✨",
             "Manos a la obra, Cristian 🛠️",
             "¿Qué toca ahora, Cristian? 🚀",
-            "¿Qué toca hoy, Cristian? ✨",
+            "¿Qué toca hoy, Cristian? 🔮",
             "Hola, Cristian, ¿qué tienes en mente? 💡",
             "Sistemas listos, Cristian 🤖",
             "Diseñemos algo increíble hoy, Cristian 🌌",
@@ -626,7 +556,7 @@
         ];
         welcomeTitle.innerText = mensajesEntrada[Math.floor(Math.random() * mensajesEntrada.length)];
 
-        /* 🌌 REACTOR ARC CANVAS HD */
+        /* 🌌 REACTOR ARC CANVAS HD (Estilo image_2.png, image_3.png) */
         const coreCanvas = document.getElementById("arcReactorNav");
         const ctx = coreCanvas.getContext("2d");
         coreCanvas.width = 80; coreCanvas.height = 80;
@@ -639,37 +569,94 @@
             angleOuter += 0.02; angleInner -= 0.03; pulseGlow += 0.04;
             const pulseRadius = Math.sin(pulseGlow) * 1.5;
 
-            ctx.save(); ctx.translate(cx, cy); ctx.rotate(angleOuter);
-            ctx.beginPath(); ctx.arc(0, 0, 35, 0, Math.PI * 2); ctx.strokeStyle = "#080c14"; ctx.lineWidth = 5; ctx.stroke();
+            // 1. ANILLO EXTERIOR NEGRO CON MUESCAS METÁLICAS
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(angleOuter);
+            ctx.beginPath();
+            ctx.arc(0, 0, 35, 0, Math.PI * 2);
+            ctx.strokeStyle = "#080c14";
+            ctx.lineWidth = 5;
+            ctx.stroke();
+
             for (let i = 0; i < 6; i++) {
-                ctx.save(); ctx.rotate((i / 6) * Math.PI * 2); ctx.fillStyle = "#121824"; ctx.fillRect(-4.5, -38, 9, 6); ctx.restore();
+                ctx.save();
+                ctx.rotate((i / 6) * Math.PI * 2);
+                ctx.fillStyle = "#121824";
+                ctx.fillRect(-4.5, -38, 9, 6);
+                ctx.restore();
             }
             ctx.restore();
 
-            ctx.save(); ctx.translate(cx, cy);
-            ctx.beginPath(); ctx.arc(0, 0, 30, 0, Math.PI * 2); ctx.fillStyle = "#0048aa"; ctx.fill();
-            ctx.strokeStyle = "rgba(0, 210, 255, 0.4)"; ctx.lineWidth = 1;
+            // 2. TRAMA HEXAGONAL DE PANAL CON RESPLANDOR AZUL
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.beginPath();
+            ctx.arc(0, 0, 30, 0, Math.PI * 2);
+            ctx.fillStyle = "#0048aa";
+            ctx.fill();
+
+            // Dibujar rejilla simulada de panal
+            ctx.strokeStyle = "rgba(0, 210, 255, 0.4)";
+            ctx.lineWidth = 1;
             for (let x = -20; x <= 20; x += 8) {
-                ctx.beginPath(); ctx.moveTo(x, -20); ctx.lineTo(x, 20); ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(x, -20);
+                ctx.lineTo(x, 20);
+                ctx.stroke();
             }
             ctx.restore();
 
-            ctx.save(); ctx.translate(cx, cy); ctx.rotate(angleInner);
-            ctx.beginPath(); ctx.arc(0, 0, 23, 0, Math.PI * 2); ctx.strokeStyle = "#00d2ff"; ctx.shadowColor = "#00d2ff"; ctx.shadowBlur = 10; ctx.lineWidth = 2.5; ctx.stroke();
+            // 3. ANILLO CELDAS CONCÉNTRICAS LED
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(angleInner);
+            ctx.beginPath();
+            ctx.arc(0, 0, 23, 0, Math.PI * 2);
+            ctx.strokeStyle = "#00d2ff";
+            ctx.shadowColor = "#00d2ff";
+            ctx.shadowBlur = 10;
+            ctx.lineWidth = 2.5;
+            ctx.stroke();
+
             for (let i = 0; i < 8; i++) {
-                ctx.beginPath(); ctx.arc(0, 0, 23, (i / 8) * Math.PI * 2, (i / 8) * Math.PI * 2 + 0.3); ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 3; ctx.stroke();
+                ctx.save();
+                ctx.rotate((i / 8) * Math.PI * 2);
+                ctx.beginPath();
+                ctx.moveTo(-2, -23); ctx.lineTo(2, -23); ctx.lineTo(1, -21); ctx.lineTo(-1, -21); ctx.closePath();
+                ctx.fillStyle = "#ffffff";
+                ctx.fill();
+                ctx.restore();
             }
             ctx.restore();
 
-            ctx.save(); ctx.translate(cx, cy);
+            // 4. NÚCLEO CRISTALINO RESPLANDECIENTE PULSANTE
+            ctx.save();
+            ctx.translate(cx, cy);
+
             const radGrad = ctx.createRadialGradient(0, 0, 1, 0, 0, 15 + pulseRadius);
-            radGrad.addColorStop(0, "#ffffff"); radGrad.addColorStop(0.4, "#00d2ff"); radGrad.addColorStop(0.85, "rgba(0, 136, 255, 0.6)"); radGrad.addColorStop(1, "transparent");
-            ctx.fillStyle = radGrad; ctx.beginPath(); ctx.arc(0, 0, 15 + pulseRadius, 0, Math.PI * 2); ctx.fill();
-            ctx.fillStyle = "#ffffff"; ctx.shadowColor = "#00d2ff"; ctx.shadowBlur = 12; ctx.beginPath(); ctx.arc(0, 0, 5.5, 0, Math.PI * 2); ctx.fill();
+            radGrad.addColorStop(0, "#ffffff");
+            radGrad.addColorStop(0.4, "#00d2ff");
+            radGrad.addColorStop(0.85, "rgba(0, 136, 255, 0.6)");
+            radGrad.addColorStop(1, "transparent");
+
+            ctx.fillStyle = radGrad;
+            ctx.beginPath();
+            ctx.arc(0, 0, 15 + pulseRadius, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = "#ffffff";
+            ctx.shadowColor = "#00d2ff";
+            ctx.shadowBlur = 12;
+            ctx.beginPath();
+            ctx.arc(0, 0, 5.5, 0, Math.PI * 2);
+            ctx.fill();
+
             ctx.restore();
 
             requestAnimationFrame(drawArcReactor);
         }
+
         drawArcReactor();
 
         function obtenerSessionId() {
@@ -678,19 +665,8 @@
                 sid = "stark_user_" + Math.random().toString(36).substring(2, 9);
                 localStorage.setItem("jarvis_session_id", sid);
             }
-            document.getElementById("currentSessionDisplay").innerText = sid;
             return sid;
         }
-
-        obtenerSessionId();
-
-        function iniciarNuevoChat() {
-            localStorage.removeItem("jarvis_session_id");
-            location.reload();
-        }
-
-        function abrirModal(id) { document.getElementById(id).classList.add("active"); }
-        function cerrarModal(id) { document.getElementById(id).classList.remove("active"); }
 
         function procesarArchivoSeleccionado(event) {
             const file = event.target.files[0];
@@ -708,6 +684,12 @@
         function cancelarArchivos() {
             archivoBase64 = null; nombreArchivo = null; fileInput.value = ""; previewBar.classList.remove("active");
         }
+
+        // FUNCIÓN NUEVO CHAT
+        newChatBtn.addEventListener("click", () => {
+            localStorage.removeItem("jarvis_session_id");
+            location.reload(); // Reinicia la sesión por completo
+        });
 
         userInput.addEventListener("keypress", (e) => { if (e.key === "Enter") enviarMensaje(); });
 
@@ -728,8 +710,8 @@
             userInput.value = "";
             cancelarArchivos();
 
-            // Mostrar animación "Jarvis está escribiendo"
-            const typingIndicator = mostrarAnimacionTyping();
+            // Activar indicador de escritura
+            typingIndicator.classList.add("active");
 
             try {
                 const response = await fetch(API_URL, {
@@ -743,16 +725,21 @@
                 });
 
                 const data = await response.json();
-                typingIndicator.remove();
+                typingIndicator.classList.remove("active");
 
                 if (response.ok && data.reply) {
-                    agregarMensajeJarvisEfectoEscribiendo(data.reply);
+                    // Reemplazo de disculpa genérica si la búsqueda falla
+                    if (data.reply.includes("mi conocimiento se corta") || data.reply.includes("lamento informarle")) {
+                        agregarMensajeJarvisCaracter("A su servicio, señor. Estoy listo para procesar cualquier otra directiva en tiempo real. ✨");
+                    } else {
+                        agregarMensajeJarvisCaracter(data.reply);
+                    }
                 } else {
-                    agregarMensajeJarvisEfectoEscribiendo("A su servicio, señor. ¿En qué le puedo asistir hoy? ✨");
+                    agregarMensajeJarvisCaracter("A su servicio, señor. ¿En qué le puedo asistir? ✨");
                 }
             } catch (error) {
-                typingIndicator.remove();
-                agregarMensajeJarvisEfectoEscribiendo("Sistemas sincronizados con el núcleo central, señor. ¿Qué desea analizar? ⚡");
+                typingIndicator.classList.remove("active");
+                agregarMensajeJarvisCaracter("Sistemas sincronizados, señor. ¿Qué desea analizar? ⚡");
             }
         }
 
@@ -764,35 +751,28 @@
             chatBox.scrollTop = chatBox.scrollHeight;
         }
 
-        function mostrarAnimacionTyping() {
-            const typingDiv = document.createElement("div");
-            typingDiv.className = "typing-indicator";
-            typingDiv.innerHTML = '<div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>';
-            chatBox.appendChild(typingDiv);
-            chatBox.scrollTop = chatBox.scrollHeight;
-            return typingDiv;
-        }
-
-        function agregarMensajeJarvisEfectoEscribiendo(texto) {
+        /* ✍️ EFECTO TYPING CARACTER POR CARACTER CON TIPOGRAFÍA REFINADA (Claude/Gemini Style) */
+        function agregarMensajeJarvisCaracter(texto) {
             const msgDiv = document.createElement("div");
             msgDiv.className = "message jarvis-message";
             chatBox.appendChild(msgDiv);
 
-            let i = 0;
-            const velocidad = 12; // milisegundos por caracter
+            let index = 0;
+            const velocidadEscritura = 15; // milisegundos por caracter
 
-            function escribir() {
-                if (i < texto.length) {
-                    msgDiv.innerText += texto.charAt(i);
-                    i++;
+            function escribirCaracter() {
+                if (index < texto.length) {
+                    msgDiv.innerText += texto.charAt(index);
+                    index++;
                     chatBox.scrollTop = chatBox.scrollHeight;
-                    setTimeout(escribir, velocidad);
+                    setTimeout(escribirCaracter, velocidadEscritura);
                 } else {
+                    // Al terminar, renderizar LaTeX si hay
                     if (window.MathJax) window.MathJax.typesetPromise([msgDiv]);
                 }
             }
 
-            escribir();
+            escribirCaracter();
         }
     </script>
 </body>
