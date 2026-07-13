@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>J.A.R.V.I.S.</title>
+    <title>J.A.R.V.I.S. // STARK HUD MK-V</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
     
     <!-- Renderizadores MathJax, PDF.js, Chart.js y Mermaid -->
@@ -58,7 +58,7 @@
             position: relative;
         }
 
-        /* 🌀 LUZ RADIAL AZUL DE FONDO ANIMADA (PRESENCIA DE JARVIS COMO EN EL VIDEO) */
+        /* 🌀 LUZ RADIAL AZUL ANIMADA - PRESENCIA DE JARVIS */
         .jarvis-presence-glow {
             position: absolute;
             top: 50%;
@@ -77,7 +77,7 @@
             100% { transform: translate(-50%, -50%) scale(1.15); opacity: 1; }
         }
 
-        /* 📌 BARRA LATERAL IZQUIERDA (EXACTA A LOS VIDEOS) */
+        /* 📌 BARRA LATERAL IZQUIERDA */
         .sidebar {
             width: 60px;
             height: 100vh;
@@ -123,7 +123,7 @@
             fill: currentColor;
         }
 
-        /* ☢️ REACTOR ARC EN ESQUINA SUPERIOR IZQUIERDA */
+        /* ☢️ REACTOR ARC EN LUGAR DEL LOGO DE GEMINI */
         .arc-nav-container {
             width: 38px;
             height: 38px;
@@ -363,7 +363,7 @@
     <!-- 📌 BARRA LATERAL IZQUIERDA -->
     <aside class="sidebar">
         <div class="sidebar-top">
-            <!-- ☢️ REACTOR ARC EN REEMPLAZO DE LA ESTRELLA -->
+            <!-- ☢️ REACTOR ARC EN REEMPLAZO DEL LOGO DE GEMINI -->
             <div class="arc-nav-container">
                 <canvas id="arcReactorNav" title="Reactor Arc J.A.R.V.I.S."></canvas>
             </div>
@@ -373,7 +373,7 @@
             </button>
 
             <button class="side-btn" title="Buscar">
-                <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 14z"/></svg>
+                <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
             </button>
 
             <button class="side-btn" title="Historial">
@@ -540,7 +540,7 @@
             }
             ctx.restore();
 
-            // 3. NÚCLEO CENTRAL FASCINANTE BLANCO/AZUL
+            // 3. NÚCLEO CENTRAL BLANCO/AZUL
             ctx.save();
             ctx.translate(cx, cy);
 
@@ -662,7 +662,7 @@
 
             if (!texto && archivosEnviar.length === 0) return;
 
-            // ANIMACIÓN DESPLAZAMIENTO FLUIDO DE LA BARRA HACIA ABAJO (SEGUNDO 00:30 DEL VIDEO)
+            // ANIMACIÓN Y DESPLAZAMIENTO FLUIDO HACIA ABAJO (SEGUNDO 00:30 DEL VIDEO)
             welcomeTitle.classList.add("hidden");
             chatBox.classList.add("active");
             mainContent.classList.add("chat-mode");
@@ -690,7 +690,6 @@
                 if (response.ok && data.status === "success" && data.reply) {
                     setEstado("speaking", "RESPONDIENDO");
                     
-                    // ESCRIBIR RESPUESTA CON EFECTO Y FORMATO
                     agregarMensajeJarvis(data.reply);
                     
                     if (data.audio_b64) {
