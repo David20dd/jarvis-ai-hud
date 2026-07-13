@@ -44,10 +44,10 @@
             -webkit-tap-highlight-color: transparent;
         }
 
-        /* 🎨 1. PERSONALIZACIÓN MODERNA Y ELEGANTE DE LAS BARRAS DE DESPLAZAMIENTO (Scrollbars) */
+        /* 🎨 1. PERSONALIZACIÓN MODERNA DE BARRAS DE DESPLAZAMIENTO (SOLUCIÓN A image_4472c0.png) */
         ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
+            width: 5px;
+            height: 5px;
         }
 
         ::-webkit-scrollbar-track {
@@ -55,17 +55,16 @@
         }
 
         ::-webkit-scrollbar-thumb {
-            background: rgba(0, 210, 255, 0.18);
+            background: rgba(0, 210, 255, 0.2);
             border-radius: 10px;
-            transition: background 0.3s ease;
+            transition: all 0.3s ease;
         }
 
         ::-webkit-scrollbar-thumb:hover {
-            background: rgba(0, 210, 255, 0.45);
+            background: rgba(0, 210, 255, 0.5);
             box-shadow: 0 0 10px var(--stark-cyan);
         }
 
-        /* Firefox scrollbar */
         * {
             scrollbar-width: thin;
             scrollbar-color: rgba(0, 210, 255, 0.2) transparent;
@@ -312,7 +311,7 @@
 
         .sidebar.expanded .sidebar-search-input { display: block; }
 
-        /* 🎨 CORRECCIÓN DE DESBORDAMIENTO EN ESTADO COLAPSADO (image_446f05.jpg) */
+        /* 🎨 CORRECCIÓN DE DESBORDAMIENTOS EN ESTADO COLAPSADO (image_446f05.jpg) */
         .sidebar:not(.expanded) .sidebar-section-title,
         .sidebar:not(.expanded) .empty-chats-notice,
         .sidebar:not(.expanded) .menu-item-text,
@@ -614,7 +613,7 @@
             border-bottom-left-radius: 4px;
         }
 
-        /* 🔮 2. INDICADOR DE ESCRITURA GIRATORIO Y PULSANTE ESTILO GEMINI (image_446f7d.png) */
+        /* 🔮 2. INDICADOR DE ESCRITURA GIRATORIO Y PULSANTE ESTILO GEMINI (SOLUCIÓN A image_446f7d.png) */
         .typing-indicator {
             display: none;
             align-items: center;
