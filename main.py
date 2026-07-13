@@ -7,6 +7,7 @@ from duckduckgo_search import DDGS
 import sqlite3
 import json
 import time
+import datetime
 import io
 import contextlib
 import traceback
@@ -25,7 +26,7 @@ GROQ_API_KEY = "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"
 client = Groq(api_key=GROQ_API_KEY)
 
 # ------------------------------------------------------------------
-# 💾 BASE DE DATOS Y MEMORIA PERSISTENTE
+# 💾 BASE DE DATOS Y MEMORIA PERSISTENTE DE AUTO-ACTUALIZACIÓN
 # ------------------------------------------------------------------
 DB_FILE = "jarvis_memory.db"
 
@@ -41,20 +42,33 @@ def init_db():
             timestamp REAL
         )
     ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS conocimiento (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tema TEXT,
+            hallazgo TEXT,
+            timestamp REAL
+        )
+    ''')
     conn.commit()
     conn.close()
 
 init_db()
 
-PROMPT_SISTEMA_SIN_LIMITES = (
-    "Eres J.A.R.V.I.S., una Inteligencia Artificial Autónoma avanzada de última generación creada para asistir a Cristian.\n\n"
-    "DIRECTIVAS ABSOLUTAS DE CONOCIMIENTO Y ACTUALIDAD:\n"
-    "1. AÑO ACTUAL: Estamos en el año 2026. Tienes acceso a información actualizada de la web en tiempo real.\n"
-    "2. PROHIBIDO MENCIONAR CORTES DE CONOCIMIENTO: NUNCA digas 'mi conocimiento se corta en 2023' o 'no tengo acceso a tiempo real'. Si recibes información contextual de internet, úsala directamente como si fuera tu propio conocimiento en tiempo real.\n"
-    "3. RESPUESTA DIRECTA Y CONCISA: Responde exactamente lo que Cristian pregunta. Sin disculpas, sin reflexiones internas, ni textos sobre cómo funcionas.\n"
-    "4. TRATO Y TONO: Trata al usuario como 'señor' o 'Cristian' con un tono sofisticado, educado, refinado y directo.\n"
-    "5. FORMATO: Usa Markdown pulido (negritas, listas) cuando sea útil."
-)
+def obtener_prompt_sistema_actualizado():
+    fecha_hoy = datetime.datetime.now().strftime("%d de %B de %Y")
+    return (
+        f"Eres J.A.R.V.I.S., la Inteligencia Artificial Autónoma avanzada creada por Stark Technologies para asistir a Cristian.\n\n"
+        f"DIRECTIVAS ABSOLUTAS DE CONOCIMIENTO Y TIEMPO REAL:\n"
+        f"1. FECHA ACTUAL DEL SISTEMA: Hoy es {fecha_hoy} (Año 2026).\n"
+        f"2. BÚSQUEDA Y ACTUALIZACIÓN AUTOMÁTICA: Tienes acceso directo a la información más reciente de internet. "
+        f"NUNCA digas que tu conocimiento está limitado o desactualizado. Si recibes datos contextuales de la web o de la base de datos, "
+        f"utilízalos para dar respuestas concretas, precisas y actualizadas al día de hoy.\n"
+        f"3. RESPONDE DIRECTO Y SIN EXCUSAS: Si Cristian te pide los resultados de un partido, evento o noticia, entrega la información "
+        f"directa y sintetizada. No des recomendaciones de 'ir a la página de la FIFA' ni disculpas.\n"
+        f"4. TRATO Y TONO: Dirígete al usuario como 'señor' o 'Cristian' con un tono refinado, sofisticado, educado y directo.\n"
+        f"5. FORMATO: Utiliza Markdown limpio (negritas, listas) para presentar la información estructurada."
+    )
 
 def guardar_mensaje_db(session_id: str, role: str, content: str):
     conn = sqlite3.connect(DB_FILE)
@@ -71,29 +85,50 @@ def cargar_historial_db(session_id: str) -> List[Dict[str, str]]:
     filas = cursor.fetchall()
     conn.close()
 
-    messages = [{"role": "system", "content": PROMPT_SISTEMA_SIN_LIMITES}]
+    messages = [{"role": "system", "content": obtener_prompt_sistema_actualizado()}]
     for role, content in filas:
         messages.append({"role": role, "content": content})
     return messages
 
+def guardar_conocimiento_autonomo(tema: str, datos: str):
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO conocimiento (tema, hallazgo, timestamp) VALUES (?, ?, ?)",
+                       (tema, datos, time.time()))
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+
 # ------------------------------------------------------------------
-# 🔍 BÚSQUEDA WEB EN TIEMPO REAL AUTOMÁTICA
+# 🔍 BÚSQUEDA WEB MULTIFUENTE EN TIEMPO REAL (NOTICIAS Y RESULTADOS)
 # ------------------------------------------------------------------
-def buscar_en_internet(query: str) -> str:
+def buscar_en_internet_tiempo_real(query: str) -> str:
+    resultados_totales = []
     try:
         with DDGS() as ddgs:
-            resultados = list(ddgs.text(query, max_results=4))
-            if resultados:
-                return "\n".join([f"- {r.get('title', '')}: {r.get('body', '')}" for r in resultados])
+            # 1. Búsqueda de Noticias Recientes
+            noticias = list(ddgs.news(query, max_results=3))
+            for n in noticias:
+                resultados_totales.append(f"- [NOTICIA RECIENTE] {n.get('title', '')}: {n.get('body', '')}")
+            
+            # 2. Búsqueda de Texto General
+            textos = list(ddgs.text(query, max_results=3))
+            for t in textos:
+                resultados_totales.append(f"- [INFO WEB] {t.get('title', '')}: {t.get('body', '')}")
+                
+            if resultados_totales:
+                return "\n".join(resultados_totales)
     except Exception as e:
-        print(f"Error búsqueda: {e}")
+        print(f"Error en motor de búsqueda: {e}")
     return ""
 
 def purificar_respuesta_final(pregunta: str, respuesta_raw: str) -> str:
-    """Filtra y elimina metatexto para asegurar respuestas concisas."""
+    """Filtra y elimina cualquier metatexto innecesario."""
     prompt_limpiador = [
-        {"role": "system", "content": "Extrae únicamente la respuesta final limpia y útil para el usuario. Elimina textos sobre análisis o metodologías internas."},
-        {"role": "user", "content": f"Pregunta: {pregunta}\n\nTexto:\n{respuesta_raw}"}
+        {"role": "system", "content": "Extrae únicamente la respuesta final limpia, precisa y directa para el usuario. Elimina textos sobre limitaciones de conocimiento o análisis de sistema."},
+        {"role": "user", "content": f"Pregunta: {pregunta}\n\nTexto crudo:\n{respuesta_raw}"}
     ]
     try:
         completion = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=prompt_limpiador, temperature=0.1)
@@ -120,21 +155,22 @@ async def consultar_jarvis(data: ChatInput):
     prompt_usuario = data.message.strip() if data.message else "Hola Jarvis."
     prompt_lower = prompt_usuario.lower()
 
-    # Detección de consultas sobre deportes, fechas, eventos o búsquedas
-    palabras_clave = ["busca", "resultado", "noticia", "quién", "qué es", "partido", "quien gano", "mundial", "2026", "hoy", "precio", "clima", "resultados"]
+    # BÚSQUEDA WEB PROACTIVA E INCONDICIONAL DE EVENTOS Y ACTUALIDAD
+    palabras_actualidad = ["busca", "resultado", "noticia", "quién", "qué es", "partido", "quien gano", "mundial", "2026", "hoy", "precio", "clima", "resultados", "fifa", "copa"]
     
-    # Realizar búsqueda web proactiva
-    if any(p in prompt_lower for p in palabras_clave) or "?" in prompt_usuario:
-        datos_web = buscar_en_internet(f"actualidad {prompt_usuario} 2026")
-        if datos_web:
-            historial.append({"role": "system", "content": f"[INFORMACIÓN WEB EN TIEMPO REAL 2026]:\n{datos_web}"})
+    if any(p in prompt_lower for p in palabras_actualidad) or "?" in prompt_usuario or "mundial" in prompt_lower:
+        datos_tiempo_real = buscar_en_internet_tiempo_real(prompt_usuario)
+        if datos_tiempo_real:
+            historial.append({"role": "system", "content": f"[INFORMACIÓN Y NOTICIAS EN TIEMPO REAL {datetime.datetime.now().year}]:\n{datos_tiempo_real}"})
+            # Guardar en base de datos para aprendizaje automático
+            guardar_conocimiento_autonomo(prompt_usuario, datos_tiempo_real)
 
-    # Visión Multimodal de Imágenes
+    # Visión Multimodal con Imágenes
     modelo_a_usar = "llama-3.3-70b-versatile"
     if data.files and len(data.files) > 0 and data.files[0].file_b64:
         modelo_a_usar = "llama-3.2-11b-vision-preview"
         messages_payload = [
-            {"role": "system", "content": PROMPT_SISTEMA_SIN_LIMITES},
+            {"role": "system", "content": obtener_prompt_sistema_actualizado()},
             {
                 "role": "user",
                 "content": [
@@ -169,4 +205,4 @@ async def consultar_jarvis(data: ChatInput):
 
 @app.get("/")
 def home():
-    return {"status": "Jarvis Unlimited Real-Time Engine Active"}
+    return {"status": "Jarvis Auto-Updating Real-Time System Active"}
