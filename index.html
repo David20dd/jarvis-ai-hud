@@ -19,13 +19,13 @@
 
     <style>
         :root {
-            --bg-dark: #06080d;
-            --sidebar-bg: #080c14;
-            --sidebar-expanded-width: 260px;
+            --bg-dark: #090c15;
+            --sidebar-bg: #0e1320;
+            --sidebar-expanded-width: 270px;
             --sidebar-collapsed-width: 68px;
-            --input-bg: #121722;
-            --card-jarvis-bg: #0d121d;
-            --dropdown-bg: #111622;
+            --input-bg: #161c2e;
+            --card-jarvis-bg: #121827;
+            --dropdown-bg: #131a29;
             --stark-blue: #0088ff;
             --stark-cyan: #00d2ff;
             --stark-glow: rgba(0, 136, 255, 0.35);
@@ -44,15 +44,13 @@
             -webkit-tap-highlight-color: transparent;
         }
 
-        /* 🎨 1. PERSONALIZACIÓN MODERNA DE BARRAS DE DESPLAZAMIENTO (SOLUCIÓN A image_4472c0.png) */
+        /* 🎨 SCROLLBARS MINIMALISTAS Y ELEGANTES (ESTILO GEMINI) */
         ::-webkit-scrollbar {
             width: 5px;
             height: 5px;
         }
 
-        ::-webkit-scrollbar-track {
-            background: transparent;
-        }
+        ::-webkit-scrollbar-track { background: transparent; }
 
         ::-webkit-scrollbar-thumb {
             background: rgba(0, 210, 255, 0.2);
@@ -81,13 +79,13 @@
             position: relative;
         }
 
-        /* 🌀 FONDO CON RESPLANDOR NEÓN UNIFORME Y PULSO SUAVE */
+        /* 🌀 FONDO CON RESPLANDOR NEÓN UNIFORME */
         .jarvis-presence-bg {
             position: absolute;
             inset: 0;
             width: 100%;
             height: 100%;
-            background: radial-gradient(circle at 50% 50%, rgba(0, 110, 255, 0.2) 0%, rgba(0, 210, 255, 0.06) 45%, rgba(6, 8, 13, 0) 80%);
+            background: radial-gradient(circle at 50% 50%, rgba(0, 110, 255, 0.18) 0%, rgba(0, 210, 255, 0.05) 45%, rgba(9, 12, 21, 0) 80%);
             pointer-events: none;
             z-index: 1;
             animation: jarvisPulseBg 5s infinite alternate ease-in-out;
@@ -98,7 +96,7 @@
             100% { opacity: 1.0; }
         }
 
-        /* 📌 BARRA LATERAL SIMÉTRICA Y LIMPIA */
+        /* 📌 BARRA LATERAL ESTILO GEMINI EXACTO (image_44e3e1.png e image_44e41e.png) */
         .sidebar-overlay {
             position: fixed;
             inset: 0;
@@ -110,24 +108,21 @@
             transition: opacity 0.3s ease;
         }
 
-        .sidebar-overlay.active {
-            opacity: 1;
-            pointer-events: auto;
-        }
+        .sidebar-overlay.active { opacity: 1; pointer-events: auto; }
 
         .sidebar {
             width: var(--sidebar-collapsed-width);
             height: 100vh;
             height: 100dvh;
             background-color: var(--sidebar-bg);
-            border-right: 1px solid rgba(255, 255, 255, 0.06);
+            border-right: 1px solid rgba(255, 255, 255, 0.05);
             display: flex;
             flex-direction: column;
             justify-content: space-between;
             padding: 14px 10px;
             z-index: 20;
             flex-shrink: 0;
-            transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            transition: width 0.35s cubic-bezier(0.16, 1, 0.3, 1);
             overflow: hidden;
             position: relative;
             white-space: nowrap;
@@ -139,6 +134,7 @@
             padding: 14px;
         }
 
+        /* CABECERA CON ISOTIPO */
         .sidebar-header {
             display: flex;
             align-items: center;
@@ -149,9 +145,7 @@
             margin-bottom: 16px;
         }
 
-        .sidebar.expanded .sidebar-header {
-            justify-content: flex-start;
-        }
+        .sidebar.expanded .sidebar-header { justify-content: flex-start; }
 
         .toggle-menu-btn {
             background: transparent;
@@ -168,33 +162,24 @@
             flex-shrink: 0;
         }
 
-        .toggle-menu-btn:hover {
-            background: rgba(255, 255, 255, 0.08);
-            color: var(--stark-cyan);
-        }
-
+        .toggle-menu-btn:hover { background: rgba(255, 255, 255, 0.08); color: var(--stark-cyan); }
         .toggle-menu-btn svg { width: 22px; height: 22px; fill: currentColor; }
 
         .arc-nav-container {
             width: 38px;
             height: 38px;
-            display: none;
+            display: flex;
             align-items: center;
             justify-content: center;
             flex-shrink: 0;
         }
 
-        .sidebar.expanded .arc-nav-container {
-            display: flex;
-        }
-
         #arcReactorNav {
-            width: 36px;
-            height: 36px;
+            width: 34px;
+            height: 34px;
             border-radius: 50%;
             cursor: pointer;
             filter: drop-shadow(0 0 10px rgba(0, 150, 255, 0.7));
-            transition: transform 0.25s ease;
         }
 
         .brand-logo-text {
@@ -209,25 +194,20 @@
 
         .sidebar.expanded .brand-logo-text { display: block; }
 
-        /* BOTÓN NUEVO CHAT */
-        .btn-new-chat-wrapper {
-            display: flex;
-            justify-content: center;
-            width: 100%;
-            margin-bottom: 12px;
-        }
+        /* BOTÓN NUEVA CONVERSACIÓN (PÍLDORA / CÍRCULO ADAPTABLE) */
+        .btn-new-chat-wrapper { display: flex; justify-content: center; width: 100%; margin-bottom: 10px; }
 
         .btn-new-chat {
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 12px;
-            background: rgba(255, 255, 255, 0.04);
+            background: rgba(255, 255, 255, 0.05);
             border: 1px solid rgba(0, 210, 255, 0.2);
             color: var(--text-main);
-            height: 42px;
-            width: 42px;
-            border-radius: 21px;
+            height: 44px;
+            width: 44px;
+            border-radius: 22px;
             cursor: pointer;
             transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
             overflow: hidden;
@@ -237,7 +217,7 @@
         .sidebar.expanded .btn-new-chat {
             width: 100%;
             justify-content: flex-start;
-            padding: 0 14px;
+            padding: 0 16px;
         }
 
         .btn-new-chat:hover {
@@ -261,20 +241,15 @@
         .sidebar.expanded .menu-item-text { display: block; }
 
         /* BUSCADOR LATERAL */
-        .search-box-wrapper {
-            display: flex;
-            justify-content: center;
-            width: 100%;
-            margin-bottom: 12px;
-        }
+        .search-box-wrapper { display: flex; justify-content: center; width: 100%; margin-bottom: 12px; }
 
         .search-box-container {
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 12px;
-            height: 42px;
-            width: 42px;
+            height: 40px;
+            width: 40px;
             border-radius: 12px;
             background: rgba(255, 255, 255, 0.03);
             border: 1px solid transparent;
@@ -291,13 +266,8 @@
             padding: 0 12px;
         }
 
-        .search-box-container:hover {
-            background: rgba(255, 255, 255, 0.06);
-            border-color: rgba(0, 210, 255, 0.25);
-            color: var(--stark-cyan);
-        }
-
-        .search-box-container svg { width: 20px; height: 20px; fill: currentColor; flex-shrink: 0; }
+        .search-box-container:hover { background: rgba(255, 255, 255, 0.06); color: var(--stark-cyan); }
+        .search-box-container svg { width: 18px; height: 18px; fill: currentColor; flex-shrink: 0; }
 
         .sidebar-search-input {
             background: transparent;
@@ -311,12 +281,13 @@
 
         .sidebar.expanded .sidebar-search-input { display: block; }
 
-        /* 🎨 CORRECCIÓN DE DESBORDAMIENTOS EN ESTADO COLAPSADO (image_446f05.jpg) */
+        /* OCULTAMIENTO ESTRICTO EN MODO COLAPSADO */
         .sidebar:not(.expanded) .sidebar-section-title,
         .sidebar:not(.expanded) .empty-chats-notice,
         .sidebar:not(.expanded) .menu-item-text,
         .sidebar:not(.expanded) .chat-options-btn,
-        .sidebar:not(.expanded) .user-info {
+        .sidebar:not(.expanded) .user-info,
+        .sidebar:not(.expanded) .notebook-item {
             display: none !important;
             visibility: hidden !important;
             opacity: 0 !important;
@@ -348,7 +319,7 @@
             align-items: center;
             justify-content: center;
             height: 38px;
-            width: 42px;
+            width: 40px;
             padding: 0;
             border-radius: 10px;
             color: var(--text-sub);
@@ -395,55 +366,11 @@
             transition: all 0.2s ease;
         }
 
-        .sidebar.expanded .menu-item-chat:hover .chat-options-btn {
-            display: flex;
-        }
-
-        .chat-options-btn:hover {
-            background: rgba(255, 255, 255, 0.15);
-            color: var(--stark-cyan);
-        }
-
+        .sidebar.expanded .menu-item-chat:hover .chat-options-btn { display: flex; }
+        .chat-options-btn:hover { background: rgba(255, 255, 255, 0.15); color: var(--stark-cyan); }
         .chat-options-btn svg { width: 16px; height: 18px; fill: currentColor; }
 
-        /* MENÚS FLOTANTES CON GLASSMORPHISM */
-        .dropdown-menu {
-            position: fixed;
-            background: var(--dropdown-bg);
-            border: 1px solid rgba(0, 210, 255, 0.2);
-            border-radius: 16px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), 0 0 15px rgba(0, 136, 255, 0.2);
-            padding: 8px;
-            display: none;
-            flex-direction: column;
-            gap: 2px;
-            z-index: 100;
-            min-width: 210px;
-            backdrop-filter: blur(12px);
-        }
-
-        .dropdown-menu.active { display: flex; }
-
-        .dropdown-item {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 10px 14px;
-            font-size: 0.88rem;
-            color: var(--text-main);
-            border-radius: 10px;
-            cursor: pointer;
-            transition: all 0.18s ease;
-        }
-
-        .dropdown-item:hover {
-            background: rgba(0, 136, 255, 0.15);
-            color: var(--stark-cyan);
-        }
-
-        .dropdown-item svg { width: 18px; height: 18px; fill: currentColor; }
-        .dropdown-item.danger:hover { background: rgba(255, 50, 50, 0.15); color: #ff5555; }
-
+        /* PERFIL DE USUARIO EN LA PARTE INFERIOR */
         .user-profile-bar {
             display: flex;
             align-items: center;
@@ -482,6 +409,40 @@
         .user-name { font-size: 0.86rem; font-weight: 600; color: #ffffff; }
         .user-plan { font-size: 0.72rem; color: var(--stark-cyan); }
 
+        /* 📌 MENÚS FLOTANTES CON GLASSMORPHISM (ESTILO image_440283.png e image_4406e0.png) */
+        .dropdown-menu {
+            position: fixed;
+            background: var(--dropdown-bg);
+            border: 1px solid rgba(0, 210, 255, 0.2);
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), 0 0 15px rgba(0, 136, 255, 0.2);
+            padding: 8px;
+            display: none;
+            flex-direction: column;
+            gap: 2px;
+            z-index: 100;
+            min-width: 210px;
+            backdrop-filter: blur(12px);
+        }
+
+        .dropdown-menu.active { display: flex; }
+
+        .dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 14px;
+            font-size: 0.88rem;
+            color: var(--text-main);
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.18s ease;
+        }
+
+        .dropdown-item:hover { background: rgba(0, 136, 255, 0.15); color: var(--stark-cyan); }
+        .dropdown-item svg { width: 18px; height: 18px; fill: currentColor; }
+        .dropdown-item.danger:hover { background: rgba(255, 50, 50, 0.15); color: #ff5555; }
+
         /* 🖥️ ÁREA PRINCIPAL CENTRAL */
         .main-content {
             flex: 1;
@@ -497,6 +458,7 @@
             min-width: 0;
         }
 
+        /* BARRA SUPERIOR (SOLO MUESTRA CORTESÍA DENTRO DE CHAT ACTIVO) */
         .chat-top-header {
             position: absolute;
             top: 16px;
@@ -516,6 +478,7 @@
             text-shadow: 0 0 8px var(--stark-glow);
         }
 
+        /* 📌 OPCIÓN TRES PUNTOS SUPERIOR (SOLO VISIBLE DENTRO DE UN CHAT) */
         .top-options-btn {
             background: transparent;
             border: none;
@@ -524,17 +487,14 @@
             width: 34px;
             height: 34px;
             border-radius: 50%;
-            display: flex;
+            display: none; /* OCULTO POR DEFECTO EN INICIO */
             align-items: center;
             justify-content: center;
             transition: all 0.2s ease;
         }
 
-        .top-options-btn:hover {
-            background: rgba(255, 255, 255, 0.08);
-            color: var(--stark-cyan);
-        }
-
+        .top-options-btn.active { display: flex; }
+        .top-options-btn:hover { background: rgba(255, 255, 255, 0.08); color: var(--stark-cyan); }
         .top-options-btn svg { width: 20px; height: 20px; fill: currentColor; }
 
         .hero-container {
@@ -547,10 +507,7 @@
             transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
-        .main-content.chat-mode .hero-container {
-            position: absolute;
-            bottom: 20px;
-        }
+        .main-content.chat-mode .hero-container { position: absolute; bottom: 20px; }
 
         .welcome-title {
             font-size: clamp(1.3rem, 4.5vw, 2.1rem);
@@ -564,12 +521,10 @@
             padding: 0 10px;
         }
 
-        @keyframes geminiEntrance {
-            to { opacity: 1; transform: translateY(0); }
-        }
-
+        @keyframes geminiEntrance { to { opacity: 1; transform: translateY(0); } }
         .welcome-title.hidden { display: none; }
 
+        /* 💬 CONVERSACIÓN LIMPIA ESTILO GEMINI (CORRECCIÓN image_44e45b.jpg) */
         .chat-container {
             width: 100%;
             max-width: 780px;
@@ -577,7 +532,7 @@
             overflow-y: auto;
             display: none;
             flex-direction: column;
-            gap: 20px;
+            gap: 24px;
             padding-top: 40px;
             padding-bottom: 20px;
             padding-right: 18px;
@@ -589,17 +544,16 @@
         .message {
             max-width: 88%;
             font-size: 1rem;
-            line-height: 1.7;
+            line-height: 1.75;
             word-break: break-word;
             padding: 16px 22px;
             border-radius: 18px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
             white-space: pre-wrap !important;
         }
 
         .user-message {
             align-self: flex-end;
-            background: #182030;
+            background: #1e2536;
             border: 1px solid rgba(0, 136, 255, 0.3);
             color: #ffffff;
             border-bottom-right-radius: 4px;
@@ -607,13 +561,15 @@
 
         .jarvis-message {
             align-self: flex-start;
-            background: #0d121d;
-            border: 1px solid rgba(0, 210, 255, 0.18);
+            background: transparent;
+            border: none;
             color: var(--text-main);
-            border-bottom-left-radius: 4px;
+            padding: 0;
+            max-width: 96%;
+            box-shadow: none;
         }
 
-        /* 🔮 2. INDICADOR DE ESCRITURA GIRATORIO Y PULSANTE ESTILO GEMINI (SOLUCIÓN A image_446f7d.png) */
+        /* 🔮 ANIMACIÓN PENSANDO TIPO GEMINI PRO */
         .typing-indicator {
             display: none;
             align-items: center;
@@ -721,11 +677,7 @@
             flex-shrink: 0;
         }
 
-        .action-btn:hover {
-            background: rgba(255, 255, 255, 0.08);
-            color: var(--stark-cyan);
-        }
-
+        .action-btn:hover { background: rgba(255, 255, 255, 0.08); color: var(--stark-cyan); }
         .action-btn svg { width: 19px; height: 19px; fill: currentColor; }
 
         .model-selector {
@@ -742,10 +694,7 @@
             flex-shrink: 0;
         }
 
-        .model-selector:hover {
-            background: rgba(255, 255, 255, 0.06);
-            color: var(--stark-cyan);
-        }
+        .model-selector:hover { background: rgba(255, 255, 255, 0.06); color: var(--stark-cyan); }
 
         @media (max-width: 768px) {
             .sidebar {
@@ -768,7 +717,7 @@
     <div class="jarvis-presence-bg"></div>
     <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
 
-    <!-- 📌 BARRA LATERAL SIMÉTRICA Y LIMPIA -->
+    <!-- 📌 BARRA LATERAL ESTILO GEMINI EXACTO -->
     <aside class="sidebar" id="sidebar">
         <div>
             <div class="sidebar-header">
@@ -791,7 +740,7 @@
             <div class="search-box-wrapper">
                 <div class="search-box-container" onclick="activarBuscadorSidebar()">
                     <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
-                    <input type="text" class="sidebar-search-input" id="searchChatInput" placeholder="Buscar proyecto..." oninput="filtrarChatsRecientes(this.value)">
+                    <input type="text" class="sidebar-search-input" id="searchChatInput" placeholder="Buscar conversaciones..." oninput="filtrarChatsRecientes(this.value)">
                 </div>
             </div>
 
@@ -867,14 +816,15 @@
 
         <div class="chat-top-header">
             <span class="sys-status-text">MARK VI // ONLINE</span>
-            <button class="top-options-btn" onclick="abrirMenuSuperior(event)" title="Opciones de conversación">
+            <!-- 📌 SOLO VISIBLE DENTRO DE UN CHAT ACTIVO -->
+            <button class="top-options-btn" id="topOptionsBtn" onclick="abrirMenuSuperior(event)" title="Opciones de conversación">
                 <svg viewBox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
             </button>
         </div>
 
         <div class="chat-container" id="chatBox"></div>
 
-        <!-- 🔮 ANIMACIÓN PENSANDO TIPO GEMINI -->
+        <!-- 🔮 ANIMACIÓN PENSANDO TIPO GEMINI PRO -->
         <div class="typing-indicator" id="typingIndicator">
             <div class="typing-dot"></div>
             <div class="typing-dot"></div>
@@ -919,6 +869,7 @@
         const searchChatInput = document.getElementById("searchChatInput");
         const recentChatContextMenu = document.getElementById("recentChatContextMenu");
         const topHeaderContextMenu = document.getElementById("topHeaderContextMenu");
+        const topOptionsBtn = document.getElementById("topOptionsBtn");
 
         let archivoBase64 = null;
         let nombreArchivo = null;
@@ -1114,6 +1065,7 @@
             welcomeTitle.classList.add("hidden");
             chatBox.classList.add("active");
             mainContent.classList.add("chat-mode");
+            topOptionsBtn.classList.add("active"); // MOSTRAR TRES PUNTOS AL ABRIR CHAT
 
             chatBox.innerHTML = "";
             chatsObj[sessionId].historial.forEach(m => {
@@ -1209,6 +1161,7 @@
             welcomeTitle.classList.add("hidden");
             chatBox.classList.add("active");
             mainContent.classList.add("chat-mode");
+            topOptionsBtn.classList.add("active"); // MOSTRAR TRES PUNTOS DENTRO DEL CHAT ACTIVO
 
             let promptMostrar = texto;
             if (nombreArchivo) promptMostrar += ` [Adjunto: ${nombreArchivo}]`;
