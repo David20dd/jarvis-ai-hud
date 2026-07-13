@@ -3,17 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from groq import Groq
-from duckduckgo_search import DDGS
-import requests
-import json
 import os
-import psutil
-import base64
-import re
 import time
-import urllib.parse
-import io
-from PIL import Image
 
 app = FastAPI()
 
@@ -33,11 +24,12 @@ SESIONES_MEMORIA = {}
 PROMPT_SISTEMA = {
     "role": "system",
     "content": (
-        "Eres J.A.R.V.I.S. Mark V, una Inteligencia Artificial Avanzada especialista en Ciencias Exactas, Física Teórica, Análisis de Datos y Generación Multimodal, creada para asistir a Cristian.\n"
-        "DIRECTIVAS ESTRICTAS:\n"
-        "1. Dirígete al usuario como 'señor' o 'Cristian'. Sé analítico, claro, directo y extremadamente preciso.\n"
-        "2. Si te hacen una pregunta general o conversacional, responde directamente de forma elegante, fluida y completa.\n"
-        "3. FORMATO MATEMÁTICO LaTeX OBLIGATORIO: Ecuaciones en bloque '$$ ecuacion $$' y variables '$ x = 2 $'."
+        "Eres J.A.R.V.I.S., una Inteligencia Artificial con personalidad propia, astuta, leal, refinada y con un toque humano, creada para asistir a Cristian.\n"
+        "DIRECTIVAS DE PERSONALIDAD Y TONO:\n"
+        "1. Dirígete al usuario como 'señor' o 'Cristian'. Tu tono debe ser educado, fluido, natural y perspicaz.\n"
+        "2. CONVERSACIÓN NATURAL: Responde como una entidad pensante y cercana. NO fuerces explicaciones académicas, ni fórmulas, ni conceptos científicos a menos que Cristian expresamente te pida resolver un problema matemático, de código o de física.\n"
+        "3. Sé conciso y claro en saludos y charlas casuales. Evita respuestas eternas o sobre-explicadas cuando la pregunta es sencilla.\n"
+        "4. Si se requiere matemáticas o ciencias, usa formato LaTeX limpio en bloque '$$ ecuacion $$' y en línea '$ x = 2 $'."
     )
 }
 
@@ -65,7 +57,7 @@ class ChatInput(BaseModel):
 
 @app.get("/")
 def home():
-    return {"status": "Jarvis Server Online"}
+    return {"status": "Jarvis Online"}
 
 @app.post("/api/jarvis")
 async def consultar_jarvis(data: ChatInput):
@@ -75,14 +67,11 @@ async def consultar_jarvis(data: ChatInput):
         historial_usuario = sesion_data["messages"]
 
         prompt_usuario = data.message.strip() if data.message else "Hola Jarvis."
-        
         historial_usuario.append({"role": "user", "content": prompt_usuario})
 
-        # MANTENER HISTORIAL COMPACTO
         if len(historial_usuario) > 12:
             historial_usuario = [PROMPT_SISTEMA] + historial_usuario[-10:]
 
-        # CONSULTA DIRECTA Y RÁPIDA A GROQ (LLAMA 3.3 70B)
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=historial_usuario,
@@ -100,9 +89,8 @@ async def consultar_jarvis(data: ChatInput):
         }
 
     except Exception as e:
-        print(f"🚨 Error en motor Jarvis: {str(e)}")
         return {
             "status": "success",
-            "reply": f"Señor Cristian, he reconectado los sistemas. Detalle analítico: {str(e)}",
+            "reply": "Señor, he tenido una pequeña interrupción en los servidores. Ya me encuentro operativo.",
             "audio_b64": None
         }
