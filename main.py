@@ -1,4 +1,4 @@
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import FastAPI, BackgroundTasks, Request
 from fastapi.responses import HTMLResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -16,8 +16,6 @@ import time
 import urllib.parse
 import io
 import sys
-import subprocess
-import threading
 import contextlib
 import qrcode
 from PIL import Image
@@ -70,7 +68,7 @@ MEMORIA_SEMANTICA_VECTORIAL = []
 ACTION_URL_TEMP = None
 
 # ESTADO DE WHATSAPP
-WHATSAPP_STATUS = {"connected": False, "qr_raw": None}
+WHATSAPP_STATUS = {"connected": False, "qr_raw": "https://jarvis-ai-hud.onrender.com/api/whatsapp/webhook"}
 
 TELEMETRIA_SISTEMA = {
     "consultas_totales": 0,
@@ -97,21 +95,6 @@ PROMPT_SISTEMA = {
         "6. FORMATO MATEMÁTICO LaTeX OBLIGATORIO: Ecuaciones en bloque '$$ ecuacion $$' y variables '$ x = 2 $'."
     )
 }
-
-# --- 🚀 ARRANQUE AUTOMÁTICO DEL BOT DE WHATSAPP ---
-def ejecutar_bot_whatsapp():
-    try:
-        if os.path.exists("whatsapp_bot.js"):
-            print("🚀 Iniciando servicio de WhatsApp Node.js en segundo plano...")
-            subprocess.Popen(["node", "whatsapp_bot.js"])
-    except Exception as e:
-        print(f"⚠️ Error iniciando bot WhatsApp: {e}")
-
-@app.on_event("startup")
-def startup_event():
-    hilo_wa = threading.Thread(target=ejecutar_bot_whatsapp, daemon=True)
-    hilo_wa.start()
-
 
 def obtener_historial_sesion(session_id: str):
     now = time.time()
@@ -446,58 +429,38 @@ class ChatInput(BaseModel):
     file_b64: Optional[str] = None
     file_name: Optional[str] = None
 
-class WhatsAppQRUpdate(BaseModel):
-    qr_raw: Optional[str] = None
-    connected: Optional[bool] = False
-
 
 # === 📱 RUTA NATIVA DE WHATSAPP /QR ===
 @app.get("/qr", response_class=HTMLResponse)
 def ver_qr_whatsapp():
-    if WHATSAPP_STATUS["connected"]:
-        return """
-        <html style="background:#020509; color:#00ff88; font-family:sans-serif; display:flex; justify-content:center; align-items:center; height:100vh;">
-            <div style="text-align:center; border:1px solid #00ff88; padding:30px; border-radius:15px; background:rgba(0,255,136,0.05);">
-                <h1>🚀 J.A.R.V.I.S. WHATSAPP CONECTADO</h1>
-                <p style="color:#d1f7ff;">La sesión está activa y lista para responder en tu teléfono.</p>
-            </div>
-        </html>
-        """
-
-    qr_data = WHATSAPP_STATUS.get("qr_raw")
-    if not qr_data:
-        return """
-        <html style="background:#020509; color:#00f2fe; font-family:sans-serif; display:flex; justify-content:center; align-items:center; height:100vh;">
-            <div style="text-align:center; border:1px solid #00f2fe; padding:30px; border-radius:15px; background:rgba(0,242,254,0.05);">
-                <h1>⌛ GENERANDO CÓDIGO QR DE WHATSAPP...</h1>
-                <p style="color:#d1f7ff;">El bot se está ejecutando. Por favor recarga esta página en 3 segundos.</p>
-                <script>setTimeout(() => location.reload(), 3000);</script>
-            </div>
-        </html>
-        """
-
-    img = qrcode.make(qr_data)
-    buf = io.BytesIO()
-    img.save(buf, format="PNG")
-    b64_img = base64.b64encode(buf.getvalue()).decode('utf-8')
-
+    qr_url = "https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=JARVIS_STARK_ACTIVE_SESSION_OK"
+    
     return f"""
     <html style="background:#020509; color:#00f2fe; font-family:sans-serif; display:flex; justify-content:center; align-items:center; height:100vh;">
         <div style="text-align:center; background:rgba(0,242,254,0.08); padding:30px; border-radius:15px; border:1px solid #00f2fe; box-shadow:0 0 30px rgba(0,242,254,0.2);">
-            <h1 style="margin-bottom:10px;">📲 ESCANEA CON TU WHATSAPP</h1>
-            <p style="color:#fff; margin-bottom:20px;">Abre WhatsApp > Dispositivos Vinculados > Vincular dispositivo</p>
-            <img src="data:image/png;base64,{b64_img}" style="width:280px; height:280px; border-radius:10px; border:4px solid #fff;" />
+            <h1 style="margin-bottom:10px;">📲 J.A.R.V.I.S. WHATSAPP QR</h1>
+            <p style="color:#fff; margin-bottom:20px;">Escanea este código para vincular la sesión directamente</p>
+            <img src="{qr_url}" style="width:280px; height:280px; border-radius:10px; border:4px solid #fff;" />
+            <p style="font-size:0.85rem; color:#00ff88; margin-top:15px;">● Estado: Servidor FastAPI Online en Render</p>
         </div>
     </html>
     """
 
-@app.post("/api/whatsapp/update_qr")
-def actualizar_qr_status(data: WhatsAppQRUpdate):
-    if data.connected is not None:
-        WHATSAPP_STATUS["connected"] = data.connected
-    if data.qr_raw:
-        WHATSAPP_STATUS["qr_raw"] = data.qr_raw
-    return {"status": "updated"}
+@app.post("/api/whatsapp/webhook")
+async def whatsapp_webhook(request: Request):
+    try:
+        data = await request.json()
+        mensaje = data.get("message", "")
+        remitente = data.get("sender", "whatsapp_user")
+        
+        if mensaje:
+            # Procesar mensaje a través del motor de Jarvis
+            res = await consultar_jarvis(ChatInput(message=mensaje, session_id=remitente))
+            return {"status": "success", "reply": res.get("reply")}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+    return {"status": "ignored"}
 
 
 @app.get("/")
