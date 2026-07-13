@@ -21,7 +21,7 @@
         :root {
             --bg-dark: #06080d;
             --sidebar-bg: #080c14;
-            --sidebar-expanded-width: 270px;
+            --sidebar-expanded-width: 260px;
             --sidebar-collapsed-width: 68px;
             --input-bg: #121722;
             --card-jarvis-bg: #0d121d;
@@ -72,7 +72,7 @@
             100% { opacity: 1.0; }
         }
 
-        /* 📌 BARRA LATERAL PERFECCIONADA */
+        /* 📌 BARRA LATERAL SIMÉTRICA Y LIMPIA (CORRECCIÓN image_44150c.png) */
         .sidebar-overlay {
             position: fixed;
             inset: 0;
@@ -113,6 +113,7 @@
             padding: 14px;
         }
 
+        /* CABECERA */
         .sidebar-header {
             display: flex;
             align-items: center;
@@ -183,6 +184,7 @@
 
         .sidebar.expanded .brand-logo-text { display: block; }
 
+        /* BOTÓN NUEVO CHAT */
         .btn-new-chat-wrapper {
             display: flex;
             justify-content: center;
@@ -233,6 +235,7 @@
 
         .sidebar.expanded .menu-item-text { display: block; }
 
+        /* BUSCADOR LATERAL */
         .search-box-wrapper {
             display: flex;
             justify-content: center;
@@ -283,6 +286,15 @@
 
         .sidebar.expanded .sidebar-search-input { display: block; }
 
+        /* OCULTAR ELEMENTOS INNECESARIOS SI ESTÁ COLAPSADO */
+        .sidebar:not(.expanded) .sidebar-section-title,
+        .sidebar:not(.expanded) .empty-chats-notice,
+        .sidebar:not(.expanded) .menu-item-text,
+        .sidebar:not(.expanded) .chat-options-btn,
+        .sidebar:not(.expanded) .user-info {
+            display: none !important;
+        }
+
         .sidebar-menu-list {
             display: flex;
             flex-direction: column;
@@ -304,20 +316,26 @@
 
         .sidebar.expanded .sidebar-section-title { display: block; }
 
-        /* 🗂️ ITEM DE CHAT RECIENTE CON TRES PUNTOS */
         .menu-item-chat {
             display: flex;
             align-items: center;
-            justify-content: space-between;
+            justify-content: center;
             height: 38px;
-            padding: 0 8px 0 10px;
+            width: 42px;
+            padding: 0;
             border-radius: 10px;
             color: var(--text-sub);
             cursor: pointer;
             transition: all 0.2s ease;
             font-size: 0.86rem;
-            width: 100%;
+            margin: 0 auto;
             position: relative;
+        }
+
+        .sidebar.expanded .menu-item-chat {
+            width: 100%;
+            justify-content: space-between;
+            padding: 0 8px 0 10px;
         }
 
         .menu-item-chat:hover, .menu-item-chat.active {
@@ -360,7 +378,7 @@
 
         .chat-options-btn svg { width: 16px; height: 18px; fill: currentColor; }
 
-        /* 📌 MENÚ FLOTANTE DE OPCIONES (ESTILO image_440283.png e image_4406e0.png) */
+        /* MENÚS FLOTANTES */
         .dropdown-menu {
             position: fixed;
             background: var(--dropdown-bg);
@@ -374,15 +392,9 @@
             z-index: 100;
             min-width: 210px;
             backdrop-filter: blur(12px);
-            animation: dropdownFade 0.2s ease-out;
         }
 
         .dropdown-menu.active { display: flex; }
-
-        @keyframes dropdownFade {
-            from { opacity: 0; transform: translateY(-6px) scale(0.96); }
-            to { opacity: 1; transform: translateY(0) scale(1); }
-        }
 
         .dropdown-item {
             display: flex;
@@ -457,7 +469,6 @@
             min-width: 0;
         }
 
-        /* BARRA SUPERIOR DEL CHAT CON TRES PUNTOS (ESTILO image_4406e0.png) */
         .chat-top-header {
             position: absolute;
             top: 16px;
@@ -513,6 +524,7 @@
             bottom: 20px;
         }
 
+        /* TÍTULOS DE BIENVENIDA LIMPIOS (SIN EMOJIS) */
         .welcome-title {
             font-size: clamp(1.3rem, 4.5vw, 2.1rem);
             font-weight: 500;
@@ -523,6 +535,8 @@
             transform: translateY(14px);
             animation: geminiEntrance 0.65s cubic-bezier(0.16, 1, 0.3, 1) forwards;
             padding: 0 10px;
+            letter-spacing: normal !important;
+            word-spacing: normal !important;
         }
 
         @keyframes geminiEntrance {
@@ -547,14 +561,18 @@
 
         .chat-container.active { display: flex; }
 
+        /* MENSAJES DE CHAT (ESPACIADO Y TIPOGRAFÍA PERFECTOS) */
         .message {
             max-width: 88%;
             font-size: 1rem;
             line-height: 1.7;
             word-break: break-word;
+            overflow-wrap: break-word;
             padding: 16px 22px;
             border-radius: 18px;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            letter-spacing: normal !important;
+            word-spacing: normal !important;
             white-space: pre-wrap !important;
         }
 
@@ -650,6 +668,8 @@
             font-size: 0.95rem;
             padding: 10px 4px;
             min-width: 0;
+            letter-spacing: normal;
+            word-spacing: normal;
         }
 
         .stark-input::placeholder { color: #6c727e; }
@@ -716,7 +736,7 @@
     <div class="jarvis-presence-bg"></div>
     <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
 
-    <!-- 📌 BARRA LATERAL -->
+    <!-- 📌 BARRA LATERAL SIMÉTRICA Y SIN DESBORDAMIENTOS -->
     <aside class="sidebar" id="sidebar">
         <div>
             <div class="sidebar-header">
@@ -758,7 +778,7 @@
         </div>
     </aside>
 
-    <!-- 📌 MENÚ FLOTANTE DE OPCIONES DE CHAT RECIENTE (ESTILO image_440283.png) -->
+    <!-- 📌 MENÚ FLOTANTE DE CHATS RECIENTES -->
     <div class="dropdown-menu" id="recentChatContextMenu">
         <div class="dropdown-item" onclick="accionCompartirChat()">
             <svg viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>
@@ -782,13 +802,13 @@
         </div>
     </div>
 
-    <!-- 📌 MENÚ FLOTANTE SUPERIOR DERECHA (ESTILO image_4406e0.png) -->
+    <!-- 📌 MENÚ FLOTANTE SUPERIOR DERECHA -->
     <div class="dropdown-menu" id="topHeaderContextMenu">
         <div class="dropdown-item" onclick="accionCompartirChat()">
             <svg viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>
             <span>Compartir conversación</span>
         </div>
-        <div class="dropdown-item" onclick="alert('Archivos adjuntos guardados en la memoria del núcleo.')">
+        <div class="dropdown-item" onclick="alert('Archivos adjuntos guardados en el núcleo.')">
             <svg viewBox="0 0 24 24"><path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"/></svg>
             <span>Archivos en este chat</span>
         </div>
@@ -802,7 +822,7 @@
         </div>
         <div class="dropdown-item" onclick="window.print()">
             <svg viewBox="0 0 24 24"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-4 11H9v-5h6v5zm4-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-2-9H7v4h10V3z"/></svg>
-            <span>Descargar / Exportar</span>
+            <span>Exportar / Descargar</span>
         </div>
         <div class="dropdown-item danger" onclick="accionEliminarChat()">
             <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
@@ -813,7 +833,6 @@
     <!-- 🖥️ ÁREA PRINCIPAL CENTRAL -->
     <main class="main-content" id="mainContent">
 
-        <!-- CABECERA SUPERIOR DERECHA CON OPCIONES -->
         <div class="chat-top-header">
             <span class="sys-status-text">MARK VI // ONLINE</span>
             <button class="top-options-btn" onclick="abrirMenuSuperior(event)" title="Opciones de conversación">
@@ -830,7 +849,8 @@
         </div>
 
         <div class="hero-container" id="heroContainer">
-            <h1 class="welcome-title" id="welcomeTitle">Diseñemos algo increíble hoy, Cristian 🚀</h1>
+            <!-- FRASES DE BIENVENIDA LIMPIAS (SIN EMOJIS) -->
+            <h1 class="welcome-title" id="welcomeTitle">Diseñemos algo increíble hoy, Cristian</h1>
 
             <div class="preview-bar" id="previewBar">
                 <span id="previewText">Imagen/Archivo cargado</span>
@@ -872,15 +892,16 @@
         let nombreArchivo = null;
         let chatSeleccionadoActual = null;
 
+        // BIENVENIDAS SOBRIAS Y ELEGANTES (SIN EMOJIS)
         const mensajesEntrada = [
-            "El micrófono es tuyo, Cristian 🎙️",
-            "Hola, Cristian, ¿qué vamos a hacer hoy? ✨",
-            "Manos a la obra, Cristian 🛠️",
-            "¿Qué toca ahora, Cristian? 🚀",
-            "¿Qué toca hoy, Cristian? 🔮",
-            "Hola, Cristian, ¿qué tienes en mente? 💡",
-            "Diseñemos algo increíble hoy, Cristian 🚀",
-            "A tu señal, Cristian 🦾"
+            "El micrófono es tuyo, Cristian",
+            "Hola, Cristian, ¿qué vamos a hacer hoy?",
+            "Manos a la obra, Cristian",
+            "¿Qué toca ahora, Cristian?",
+            "¿Qué toca hoy, Cristian?",
+            "Hola, Cristian, ¿qué tienes en mente?",
+            "Diseñemos algo increíble hoy, Cristian",
+            "A tu señal, Cristian"
         ];
         welcomeTitle.innerText = mensajesEntrada[Math.floor(Math.random() * mensajesEntrada.length)];
 
@@ -930,7 +951,6 @@
         }
         drawArcReactor();
 
-        /* EXPANDIR / COLAPSAR BARRA LATERAL */
         function toggleSidebar() {
             if (window.innerWidth <= 768) {
                 sidebar.classList.toggle("mobile-open");
@@ -973,7 +993,6 @@
             }
         });
 
-        /* 📌 MANEJO DE CHATS RECIENTES CON HISTORIAL REAL */
         function guardarHistorialChatLocal(sessionId, titulo, historial) {
             let chatsObj = JSON.parse(localStorage.getItem("jarvis_chats_db") || "{}");
             chatsObj[sessionId] = { titulo: titulo, historial: historial, timestamp: Date.now() };
@@ -1013,19 +1032,16 @@
                     </button>
                 `;
 
-                // Cargar chat al hacer clic en el área principal
                 item.querySelector('.chat-title-content').onclick = () => {
                     cargarConversacionExistente(chat.id);
                 };
 
-                // Abrir menú de tres puntos
                 const btnOpts = item.querySelector('.chat-options-btn');
                 btnOpts.onclick = (e) => {
                     e.stopPropagation();
                     abrirContextMenuReciente(e, chat.id);
                 };
 
-                // Soporte para mantener presionado en celulares
                 item.addEventListener('touchstart', (e) => {
                     timerTouch = setTimeout(() => {
                         abrirContextMenuReciente(e.touches[0], chat.id);
@@ -1071,23 +1087,22 @@
             chatBox.innerHTML = "";
             chatsObj[sessionId].historial.forEach(m => {
                 if (m.role === "user") agregarMensajeUsuario(m.content);
-                else if (m.role === "assistant") agregarMensajeJarvisCaracter(m.content, false);
+                else if (m.role === "assistant") agregarMensajeJarvisCaracter(m.content);
             });
 
             actualizarListaRecientes();
             if (window.innerWidth <= 768) toggleSidebar();
         }
 
-        /* 🛠️ ACCIONES DE MENÚ FLOTANTE */
         function accionCompartirChat() {
             cerrarTodosContextMenus();
             navigator.clipboard.writeText(window.location.href);
-            alert("🔗 Enlace de la conversación copiado al portapapeles, señor.");
+            alert("Enlace de la conversación copiado al portapapeles, señor.");
         }
 
         function accionFijarChat() {
             cerrarTodosContextMenus();
-            alert("📌 Conversación fijada en la parte superior.");
+            alert("Conversación fijada en la parte superior.");
         }
 
         function accionRenombrarChat() {
@@ -1106,7 +1121,7 @@
 
         function accionAnadirCuaderno() {
             cerrarTodosContextMenus();
-            alert("📓 Conversación añadida a sus Cuadernos de Estudio.");
+            alert("Conversación añadida a sus Cuadernos de Estudio.");
         }
 
         function accionEliminarChat() {
@@ -1225,20 +1240,16 @@
             chatBox.scrollTop = chatBox.scrollHeight;
         }
 
-        function agregarMensajeJarvisCaracter(texto, animar = true) {
+        /* ✍️ RENDERIZADO FLUIDO Y CON ESPACIADO NORMAL */
+        function agregarMensajeJarvisCaracter(texto) {
             const msgDiv = document.createElement("div");
             msgDiv.className = "message jarvis-message";
             chatBox.appendChild(msgDiv);
 
-            if (animar) {
-                msgDiv.innerText = texto;
-                chatBox.scrollTop = chatBox.scrollHeight;
-                if (window.MathJax) window.MathJax.typesetPromise([msgDiv]);
-            } else {
-                msgDiv.innerText = texto;
-                chatBox.scrollTop = chatBox.scrollHeight;
-                if (window.MathJax) window.MathJax.typesetPromise([msgDiv]);
-            }
+            msgDiv.innerText = texto;
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            if (window.MathJax) window.MathJax.typesetPromise([msgDiv]);
         }
     </script>
 </body>
