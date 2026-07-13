@@ -25,16 +25,17 @@
 
     <style>
         :root {
-            --bg-dark: #090b0e;
-            --sidebar-bg: #06080b;
-            --input-bg: #161a22;
-            --stark-cyan: #00f2fe;
-            --stark-cyan-glow: rgba(0, 242, 254, 0.3);
+            --bg-dark: #06080c;
+            --sidebar-bg: #040508;
+            --input-bg: #121620;
+            --stark-blue-dark: #0088ff;
+            --stark-cyan: #00d2ff;
+            --stark-glow: rgba(0, 136, 255, 0.35);
             --stark-amber: #ffb700;
             --stark-green: #00ff88;
             --stark-red: #ff3366;
-            --text-main: #e3e8f0;
-            --text-sub: #8b94a0;
+            --text-main: #e1e7f0;
+            --text-sub: #788494;
             --border-color: rgba(255, 255, 255, 0.08);
             --font-inter: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             --font-stark: 'Orbitron', sans-serif;
@@ -58,35 +59,32 @@
             position: relative;
         }
 
-        /* 🌀 LUZ RADIAL AZUL DE FONDO ANIMADA TIPO J.A.R.V.I.S. (RESPIRACIÓN DE ENERGÍA) */
-        .background-glow {
+        /* 🌀 FONDO CON PRESENCIA DE JARVIS (RESPLANDOR AZUL OSCURO ANIMADO) */
+        .jarvis-presence-bg {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 90vw;
-            height: 90vh;
-            max-width: 800px;
-            max-height: 800px;
-            background: radial-gradient(circle, rgba(0, 132, 255, 0.18) 0%, rgba(0, 242, 254, 0.08) 35%, rgba(9, 11, 14, 0) 70%);
-            border-radius: 50%;
+            width: 100vw;
+            height: 100vh;
+            background: radial-gradient(circle at 50% 50%, rgba(0, 102, 255, 0.22) 0%, rgba(0, 210, 255, 0.08) 32%, rgba(6, 8, 12, 0) 70%);
             pointer-events: none;
             z-index: 1;
-            animation: jarvisPulseGlow 4s infinite alternate ease-in-out;
+            animation: jarvisBreath 5s infinite alternate ease-in-out;
         }
 
-        @keyframes jarvisPulseGlow {
+        @keyframes jarvisBreath {
             0% {
-                transform: translate(-50%, -50%) scale(0.88);
-                opacity: 0.65;
+                transform: translate(-50%, -50%) scale(0.90);
+                opacity: 0.7;
             }
             100% {
-                transform: translate(-50%, -50%) scale(1.15);
+                transform: translate(-50%, -50%) scale(1.18);
                 opacity: 1;
             }
         }
 
-        /* 📌 BARRA LATERAL IZQUIERDA (FIDELIDAD AL VIDEO) */
+        /* 📌 BARRA LATERAL IZQUIERDA */
         .sidebar {
             width: 60px;
             height: 100vh;
@@ -132,19 +130,27 @@
             fill: currentColor;
         }
 
-        .star-logo-btn {
-            width: 32px;
-            height: 32px;
+        /* ☢️ REACTOR ARC EN LA ESQUINA SUPERIOR IZQUIERDA (36PX - TONALIDAD AZUL OSCURO FASCINANTE) */
+        .arc-logo-container {
+            width: 38px;
+            height: 38px;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin-bottom: 6px;
+            margin-bottom: 4px;
         }
 
-        .star-logo-btn svg {
-            width: 22px;
-            height: 22px;
-            filter: drop-shadow(0 0 6px var(--stark-cyan));
+        #arcReactorNav {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            cursor: pointer;
+            filter: drop-shadow(0 0 10px rgba(0, 136, 255, 0.6));
+            transition: transform 0.3s ease;
+        }
+
+        #arcReactorNav:hover {
+            transform: scale(1.15);
         }
 
         /* 🖥️ ÁREA PRINCIPAL CENTRAL */
@@ -158,44 +164,23 @@
             position: relative;
             padding: 20px;
             z-index: 2;
-            transition: all 0.4s ease;
         }
 
-        /* ⚡ ESQUINA SUPERIOR DERECHA: REACTOR ARC COMPACTO */
-        .top-hud-bar {
+        /* STATUS TEXTO HUD */
+        .sys-status-text {
             position: absolute;
             top: 20px;
             right: 25px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            z-index: 10;
-        }
-
-        .sys-status-text {
             font-family: var(--font-mono);
             font-size: 0.72rem;
             color: var(--stark-cyan);
             letter-spacing: 1px;
             opacity: 0.85;
-            text-shadow: 0 0 8px var(--stark-cyan-glow);
+            text-shadow: 0 0 8px var(--stark-glow);
+            z-index: 10;
         }
 
-        /* REACTOR ARC 32px - REPLICANDO EL VIDEO Y LA IMAGAN */
-        #arcReactor3D {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            cursor: pointer;
-            filter: drop-shadow(0 0 8px rgba(0, 242, 254, 0.4));
-            transition: transform 0.3s ease;
-        }
-
-        #arcReactor3D:hover {
-            transform: scale(1.12);
-        }
-
-        /* CONTENEDOR HERO CENTRAL (INICIALMENTE CENTRADO TOTALMENTE COMO EN EL VIDEO) */
+        /* HERO CONTAINER CENTRADO INICIALMENTE CON ANIMACIÓN DE DESPLAZAMIENTO FLUIDA AL CHAT */
         .hero-container {
             display: flex;
             flex-direction: column;
@@ -203,10 +188,16 @@
             justify-content: center;
             width: 100%;
             max-width: 720px;
-            transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+            transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
-        /* TÍTULO BIENVENIDA DINÁMICO (ANIMACIÓN DE ENTRADA TIPO GEMINI) */
+        /* MODO CHAT: DESPLAZA LA BARRA SUAVEMENTE HACIA ABAJO COMO EN EL VIDEO */
+        .main-content.chat-mode .hero-container {
+            position: absolute;
+            bottom: 30px;
+        }
+
+        /* TÍTULO BIENVENIDA CON ANIMACIÓN DE ENTRADA TIPO GEMINI */
         .welcome-title {
             font-size: 2.1rem;
             font-weight: 400;
@@ -267,21 +258,21 @@
 
         .user-message {
             align-self: flex-end;
-            background: #212631;
-            border: 1px solid rgba(0, 242, 254, 0.3);
+            background: #1c2230;
+            border: 1px solid rgba(0, 136, 255, 0.35);
             color: #ffffff;
             border-bottom-right-radius: 4px;
         }
 
         .jarvis-message {
             align-self: flex-start;
-            background: #12161f;
+            background: #111520;
             border: 1px solid rgba(255, 255, 255, 0.08);
             color: var(--text-main);
             border-bottom-left-radius: 4px;
         }
 
-        /* 🔍 BARRA BÚSQUEDA CENTRAL (FLOTANTE - TAL CUAL EL VIDEO) */
+        /* 🔍 BARRA BÚSQUEDA CENTRAL REDONDEADA */
         .input-container {
             width: 100%;
             max-width: 720px;
@@ -296,15 +287,9 @@
             transition: all 0.3s ease;
         }
 
-        /* ESTADO ACTIVO: CUANDO HAY MENSAJES SE MUEVE AL BORDE INFERIOR (SEGUNDO 00:30 DEL VIDEO) */
-        .main-content.chat-mode .hero-container {
-            position: absolute;
-            bottom: 30px;
-        }
-
         .input-container:focus-within {
-            border-color: rgba(0, 242, 254, 0.4);
-            box-shadow: 0 8px 38px rgba(0, 0, 0, 0.8), 0 0 16px var(--stark-cyan-glow);
+            border-color: rgba(0, 136, 255, 0.5);
+            box-shadow: 0 8px 38px rgba(0, 0, 0, 0.8), 0 0 18px var(--stark-glow);
         }
 
         .stark-input {
@@ -389,7 +374,7 @@
 
         .code-block {
             background: #0d1117;
-            border: 1px solid rgba(0, 242, 254, 0.2);
+            border: 1px solid rgba(0, 136, 255, 0.25);
             border-radius: 6px;
             padding: 12px;
             margin: 10px 0;
@@ -399,37 +384,21 @@
             font-size: 0.88rem;
         }
 
-        /* RESPONSIVO MÓVIL */
         @media (max-width: 768px) {
-            .welcome-title {
-                font-size: 1.5rem;
-                padding: 0 10px;
-            }
-            .input-container {
-                max-width: 92%;
-            }
-            .chat-container {
-                max-width: 95%;
-            }
+            .welcome-title { font-size: 1.5rem; padding: 0 10px; }
+            .input-container { max-width: 92%; }
+            .chat-container { max-width: 95%; }
         }
     </style>
 </head>
 <body>
 
-    <div class="background-glow"></div>
+    <div class="jarvis-presence-bg"></div>
 
     <aside class="sidebar">
         <div class="sidebar-top">
-            <div class="star-logo-btn">
-                <svg viewBox="0 0 24 24">
-                    <path fill="url(#stark-star-grad)" d="M12 0C12 6.627 6.627 12 0 12c6.627 0 12 5.373 12 12 0-6.627 5.373-12 12-12-6.627 0-12-5.373-12-12z"/>
-                    <defs>
-                        <linearGradient id="stark-star-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" stop-color="#00f2fe"/>
-                            <stop offset="100%" stop-color="#0072ff"/>
-                        </linearGradient>
-                    </defs>
-                </svg>
+            <div class="arc-logo-container">
+                <canvas id="arcReactorNav" title="Reactor Arc J.A.R.V.I.S."></canvas>
             </div>
 
             <button class="side-btn" title="Nuevo Chat" onclick="location.reload()">
@@ -462,10 +431,7 @@
 
     <main class="main-content" id="mainContent">
 
-        <div class="top-hud-bar">
-            <span class="sys-status-text" id="sysStatus">MARK V // ONLINE</span>
-            <canvas id="arcReactor3D" title="Reactor Arc Mark I - Jarvis State"></canvas>
-        </div>
+        <span class="sys-status-text" id="sysStatus">MARK V // ONLINE</span>
 
         <div class="chat-container" id="chatBox"></div>
 
@@ -512,7 +478,7 @@
         const fileInput = document.getElementById("fileInput");
         const sysStatus = document.getElementById("sysStatus");
 
-        /* ✨ MENSAJES DE BIENVENIDA DINÁMICOS CON ANIMACIÓN (DEL VIDEO) */
+        /* ✨ MENSAJES DE ENTRADA DINÁMICOS DEL VIDEO */
         const mensajesEntrada = [
             "El micrófono es tuyo, Cristian",
             "Hola, Cristian, ¿qué vamos a hacer?",
@@ -524,10 +490,10 @@
 
         welcomeTitle.innerText = mensajesEntrada[Math.floor(Math.random() * mensajesEntrada.length)];
 
-        /* 🌌 RENDERIZADOR COMPACTO DEL REACTOR ARC (REPLICANDO image_e49f56.jpg A 32PX) */
-        const coreCanvas = document.getElementById("arcReactor3D");
+        /* 🌌 RENDERIZADOR DEL REACTOR ARC AZUL OSCURO EN LA ESQUINA SUPERIOR IZQUIERDA */
+        const coreCanvas = document.getElementById("arcReactorNav");
         const ctx = coreCanvas.getContext("2d");
-        coreCanvas.width = 64; coreCanvas.height = 64;
+        coreCanvas.width = 72; coreCanvas.height = 72;
 
         let angleOuter = 0;
         let angleInner = 0;
@@ -535,22 +501,23 @@
         let estadoCore = "ready"; // ready, processing, speaking, listening
 
         function drawArcReactor() {
-            ctx.clearRect(0, 0, 64, 64);
-            const cx = 32, cy = 32;
+            ctx.clearRect(0, 0, 72, 72);
+            const cx = 36, cy = 36;
 
-            let energyColor = "#00f2fe";
-            let glowColor = "rgba(0, 242, 254, 0.5)";
-            if (estadoCore === "processing") { energyColor = "#ffb700"; glowColor = "rgba(255, 183, 0, 0.5)"; }
-            if (estadoCore === "speaking") { energyColor = "#00ff88"; glowColor = "rgba(0, 255, 136, 0.5)"; }
-            if (estadoCore === "listening") { energyColor = "#ff3366"; glowColor = "rgba(255, 51, 102, 0.5)"; }
+            // Tonalidad Azul Oscuro Fascinante Neón
+            let energyColor = "#0088ff";
+            let glowColor = "rgba(0, 136, 255, 0.6)";
+            if (estadoCore === "processing") { energyColor = "#ffb700"; glowColor = "rgba(255, 183, 0, 0.6)"; }
+            if (estadoCore === "speaking") { energyColor = "#00ff88"; glowColor = "rgba(0, 255, 136, 0.6)"; }
+            if (estadoCore === "listening") { energyColor = "#ff3366"; glowColor = "rgba(255, 51, 102, 0.6)"; }
 
             const speed = (estadoCore === "processing") ? 0.045 : 0.015;
             angleOuter += speed;
             angleInner -= speed * 1.3;
             pulseGlow += 0.04;
-            const pulseRadius = Math.sin(pulseGlow) * 1.2;
+            const pulseRadius = Math.sin(pulseGlow) * 1.3;
 
-            // 1. ANILLO EXTERIOR DE BOBINAS DE COBRE (10 Bloques)
+            // 1. ANILLO EXTERIOR DE BOBINAS DE COBRE ROJIZO
             ctx.save();
             ctx.translate(cx, cy);
             ctx.rotate(angleOuter);
@@ -561,73 +528,73 @@
                 ctx.save();
                 ctx.rotate(angle);
 
-                ctx.fillStyle = "#b85d38";
-                ctx.fillRect(-3.5, -28, 7, 7);
+                ctx.fillStyle = "#a84e2a";
+                ctx.fillRect(-4, -31, 8, 8);
 
-                ctx.strokeStyle = "#7a3519";
-                ctx.lineWidth = 0.8;
-                for (let j = -2; j <= 2; j += 1.5) {
+                ctx.strokeStyle = "#632711";
+                ctx.lineWidth = 1;
+                for (let j = -2.5; j <= 2.5; j += 1.8) {
                     ctx.beginPath();
-                    ctx.moveTo(j, -28);
-                    ctx.lineTo(j, -21);
+                    ctx.moveTo(j, -31);
+                    ctx.lineTo(j, -23);
                     ctx.stroke();
                 }
 
                 ctx.fillStyle = energyColor;
                 ctx.shadowColor = energyColor;
-                ctx.shadowBlur = 5;
+                ctx.shadowBlur = 6;
                 ctx.beginPath();
-                ctx.arc(0, -29.5, 1.5, 0, Math.PI * 2);
+                ctx.arc(0, -32.5, 1.8, 0, Math.PI * 2);
                 ctx.fill();
 
                 ctx.restore();
             }
             ctx.restore();
 
-            // 2. ANILLO METÁLICO INTERMEDIO CON RANURAS LED
+            // 2. ANILLO METÁLICO INTERMEDIO CON CELDAS AZUL OSCURO
             ctx.save();
             ctx.translate(cx, cy);
             ctx.rotate(angleInner);
 
             ctx.beginPath();
-            ctx.arc(0, 0, 19, 0, Math.PI * 2);
-            ctx.strokeStyle = "#1a2332";
-            ctx.lineWidth = 3.5;
+            ctx.arc(0, 0, 21, 0, Math.PI * 2);
+            ctx.strokeStyle = "#0e1522";
+            ctx.lineWidth = 4;
             ctx.stroke();
 
             const numSlots = 10;
             ctx.strokeStyle = energyColor;
             ctx.shadowColor = energyColor;
-            ctx.shadowBlur = 6;
-            ctx.lineWidth = 1.8;
+            ctx.shadowBlur = 8;
+            ctx.lineWidth = 2;
             for (let i = 0; i < numSlots; i++) {
                 const a = (i / numSlots) * Math.PI * 2;
                 ctx.beginPath();
-                ctx.arc(0, 0, 19, a, a + 0.35);
+                ctx.arc(0, 0, 21, a, a + 0.35);
                 ctx.stroke();
             }
             ctx.restore();
 
-            // 3. NÚCLEO CENTRAL CON PULSO CIAN / BLANCO
+            // 3. NÚCLEO CENTRAL FASCINANTE BLANCO/AZUL
             ctx.save();
             ctx.translate(cx, cy);
 
-            const radGrad = ctx.createRadialGradient(0, 0, 1, 0, 0, 12 + pulseRadius);
+            const radGrad = ctx.createRadialGradient(0, 0, 1, 0, 0, 13 + pulseRadius);
             radGrad.addColorStop(0, "#ffffff");
-            radGrad.addColorStop(0.4, energyColor);
+            radGrad.addColorStop(0.35, energyColor);
             radGrad.addColorStop(0.85, glowColor);
             radGrad.addColorStop(1, "transparent");
 
             ctx.fillStyle = radGrad;
             ctx.beginPath();
-            ctx.arc(0, 0, 12 + pulseRadius, 0, Math.PI * 2);
+            ctx.arc(0, 0, 13 + pulseRadius, 0, Math.PI * 2);
             ctx.fill();
 
             ctx.fillStyle = "#ffffff";
             ctx.shadowColor = energyColor;
-            ctx.shadowBlur = 8;
+            ctx.shadowBlur = 10;
             ctx.beginPath();
-            ctx.arc(0, 0, 4.5, 0, Math.PI * 2);
+            ctx.arc(0, 0, 5, 0, Math.PI * 2);
             ctx.fill();
 
             ctx.restore();
@@ -730,7 +697,7 @@
 
             if (!texto && archivosEnviar.length === 0) return;
 
-            // Transición a Modo Chat
+            // TRANSICIÓN Y DESPLAZAMIENTO SUAVE HACIA ABAJO (MOMENTO EN EL VIDEO 00:30)
             welcomeTitle.classList.add("hidden");
             chatBox.classList.add("active");
             mainContent.classList.add("chat-mode");
