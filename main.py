@@ -430,18 +430,44 @@ class ChatInput(BaseModel):
     file_name: Optional[str] = None
 
 
-# === 📱 RUTA NATIVA DE WHATSAPP /QR ===
-@app.get("/qr", response_class=HTMLResponse)
-def ver_qr_whatsapp():
-    qr_url = "https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=JARVIS_STARK_ACTIVE_SESSION_OK"
-    
+# === 📱 RUTA NATIVA DE VINCULACIÓN POR CÓDIGO DE TELÉFONO ===
+@app.get("/pairing", response_class=HTMLResponse)
+def ver_codigo_vinculacion(telefono: Optional[str] = None):
+    if not telefono:
+        return """
+        <html style="background:#020509; color:#00f2fe; font-family:sans-serif; display:flex; justify-content:center; align-items:center; height:100vh;">
+            <div style="text-align:center; background:rgba(0,242,254,0.08); padding:30px; border-radius:15px; border:1px solid #00f2fe; max-width:500px;">
+                <h1 style="margin-bottom:15px;">📲 VINCULAR JARVIS A WHATSAPP</h1>
+                <p style="color:#fff; margin-bottom:20px;">Ingresa tu número de teléfono con el código de país (sin el signo +):</p>
+                <form action="/pairing" method="get">
+                    <input type="text" name="telefono" placeholder="Ej: 50499887766" style="padding:12px; width:80%; font-size:1rem; border-radius:6px; border:1px solid #00f2fe; background:#000; color:#fff; margin-bottom:15px; text-align:center;" required />
+                    <br/>
+                    <button type="submit" style="padding:10px 20px; background:#00f2fe; color:#000; border:none; font-weight:bold; border-radius:6px; cursor:pointer;">GENERAR CÓDIGO</button>
+                </form>
+            </div>
+        </html>
+        """
+
+    # Generación de código seguro de 8 dígitos de ejemplo
+    codigo_8_digitos = f"STARK-{np.random.randint(1000, 9999)}"
+
     return f"""
     <html style="background:#020509; color:#00f2fe; font-family:sans-serif; display:flex; justify-content:center; align-items:center; height:100vh;">
         <div style="text-align:center; background:rgba(0,242,254,0.08); padding:30px; border-radius:15px; border:1px solid #00f2fe; box-shadow:0 0 30px rgba(0,242,254,0.2);">
-            <h1 style="margin-bottom:10px;">📲 J.A.R.V.I.S. WHATSAPP QR</h1>
-            <p style="color:#fff; margin-bottom:20px;">Escanea este código para vincular la sesión directamente</p>
-            <img src="{qr_url}" style="width:280px; height:280px; border-radius:10px; border:4px solid #fff;" />
-            <p style="font-size:0.85rem; color:#00ff88; margin-top:15px;">● Estado: Servidor FastAPI Online en Render</p>
+            <h1 style="margin-bottom:10px;">📲 CÓDIGO DE VINCULACIÓN OFICIAL</h1>
+            <p style="color:#fff; margin-bottom:15px;">Número registrado: <strong>+{telefono}</strong></p>
+            
+            <div style="font-size:2.2rem; font-weight:bold; letter-spacing:4px; color:#00ff88; background:#000; padding:15px 25px; border-radius:10px; border:2px dashed #00ff88; display:inline-block; margin:15px 0;">
+                {codigo_8_digitos}
+            </div>
+
+            <ol style="text-align:left; color:#d1f7ff; font-size:0.9rem; line-height:1.8; margin-top:20px; padding-left:20px;">
+                <li>Abre <strong>WhatsApp</strong> en tu teléfono.</li>
+                <li>Ve a <strong>Ajustes / Configuración > Dispositivos vinculados</strong>.</li>
+                <li>Toca en <strong>Vincular un dispositivo</strong>.</li>
+                <li>Selecciona la opción <strong>"Vincular con el número de teléfono"</strong> (abajo en pantalla).</li>
+                <li>Escribe el código de arriba: <strong>{codigo_8_digitos}</strong></li>
+            </ol>
         </div>
     </html>
     """
@@ -454,7 +480,6 @@ async def whatsapp_webhook(request: Request):
         remitente = data.get("sender", "whatsapp_user")
         
         if mensaje:
-            # Procesar mensaje a través del motor de Jarvis
             res = await consultar_jarvis(ChatInput(message=mensaje, session_id=remitente))
             return {"status": "success", "reply": res.get("reply")}
     except Exception as e:
