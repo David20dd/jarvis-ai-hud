@@ -70,7 +70,7 @@
             position: relative;
         }
 
-        /* 🌊 2. FONDO DEGRADADO EN MOVIMIENTO NEURAL EXPRESSIVE Y AMBIENT GLOW */
+        /* 🌊 FONDO DEGRADADO EN MOVIMIENTO NEURAL EXPRESSIVE */
         .jarvis-presence-bg {
             position: absolute;
             inset: 0;
@@ -93,7 +93,7 @@
             100% { opacity: 1.0; transform: scale(1.02); filter: brightness(1.25); }
         }
 
-        /* 📌 10. BARRA LATERAL ESTILO GEMINI EXACTO */
+        /* 📌 BARRA LATERAL ESTILO GEMINI EXACTO */
         .sidebar-overlay {
             position: fixed;
             inset: 0;
@@ -277,12 +277,13 @@
 
         .sidebar.expanded .sidebar-search-input { display: block; }
 
-        /* OCULTAMIENTO ESTRICTO EN MODO COLAPSADO */
+        /* 🎨 OCULTAMIENTO ESTRICTO EN MODO COLAPSADO (SOLUCIÓN image_45dbde.png) */
         .sidebar:not(.expanded) .sidebar-section-title,
         .sidebar:not(.expanded) .empty-chats-notice,
         .sidebar:not(.expanded) .menu-item-text,
         .sidebar:not(.expanded) .chat-options-btn,
-        .sidebar:not(.expanded) .user-info {
+        .sidebar:not(.expanded) .user-info,
+        .sidebar:not(.expanded) .sidebar-menu-list {
             display: none !important;
             visibility: hidden !important;
             opacity: 0 !important;
@@ -312,24 +313,17 @@
         .menu-item-chat {
             display: flex;
             align-items: center;
-            justify-content: center;
+            justify-content: space-between;
             height: 38px;
-            width: 40px;
-            padding: 0;
+            width: 100%;
+            padding: 0 8px 0 10px;
             border-radius: 10px;
             color: var(--text-sub);
             cursor: pointer;
             transition: all 0.2s ease;
             font-size: 0.86rem;
-            margin: 0 auto;
             position: relative;
             overflow: hidden;
-        }
-
-        .sidebar.expanded .menu-item-chat {
-            width: 100%;
-            justify-content: space-between;
-            padding: 0 8px 0 10px;
         }
 
         .menu-item-chat:hover, .menu-item-chat.active {
@@ -434,9 +428,8 @@
 
         .dropdown-item:hover { background: rgba(0, 136, 255, 0.15); color: var(--stark-cyan); }
         .dropdown-item svg { width: 18px; height: 18px; fill: currentColor; }
-        .dropdown-item.danger:hover { background: rgba(255, 50, 50, 0.15); color: #ff5555; }
 
-        /* 🪟 4. BOTTOM SHEET DEL BOTÓN "+" (HERRAMIENTAS Y ARCHIVOS) */
+        /* 🪟 BOTTOM SHEET DEL BOTÓN "+" */
         .bottom-sheet-overlay {
             position: fixed;
             inset: 0;
@@ -540,7 +533,7 @@
             text-shadow: 0 0 8px var(--stark-glow);
         }
 
-        /* 📌 12. OPCIÓN TRES PUNTOS SUPERIOR (SOLO EN CHAT ACTIVO) */
+        /* 📌 BOTÓN TRES PUNTOS SUPERIOR CONDICIONAL (SOLO EN CHAT ACTIVO) */
         .top-options-btn {
             background: transparent;
             border: none;
@@ -586,7 +579,7 @@
         @keyframes geminiEntrance { to { opacity: 1; transform: translateY(0); } }
         .welcome-title.hidden { display: none; }
 
-        /* 💬 8. CONVERSACIÓN LIMPIA SOBRE EL LIENZO PRINCIPAL */
+        /* 💬 CONVERSACIÓN LIMPIA EDITORIAL DE GEMINI */
         .chat-container {
             width: 100%;
             max-width: 780px;
@@ -631,7 +624,7 @@
             box-shadow: none;
         }
 
-        /* 🔮 6. ANIMACIÓN PENSANDO TIPO GEMINI PRO NEURAL EXPRESSIVE */
+        /* 🔮 ANIMACIÓN PENSANDO TIPO GEMINI PRO */
         .typing-indicator {
             display: none;
             align-items: center;
@@ -691,7 +684,7 @@
         }
         .preview-bar.active { display: flex; }
 
-        /* 💊 3. PÍLDORA "ASK J.A.R.V.I.S." CON BOTÓN "+" */
+        /* PÍLDORA CENTRAL "ASK J.A.R.V.I.S." CON BOTÓN "+" */
         .input-container {
             width: 100%;
             max-width: 720px;
@@ -855,7 +848,7 @@
         </div>
     </div>
 
-    <!-- 🪟 4. BOTTOM SHEET DEL BOTÓN "+" -->
+    <!-- 🪟 BOTTOM SHEET DEL BOTÓN "+" -->
     <div class="bottom-sheet-overlay" id="bottomSheetOverlay" onclick="cerrarBottomSheet(event)">
         <div class="bottom-sheet-content">
             <div class="sheet-handle"></div>
@@ -866,14 +859,13 @@
                 </div>
                 <div class="sheet-card" onclick="alert('Drive sincronizado.')">
                     <svg viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg>
-
                     <span>Google Drive</span>
                 </div>
-                <div class="sheet-card" onclick="alert('Módulo Deep Research Activo.')">
+                <div class="sheet-card" onclick="alert('Deep Research Activo.')">
                     <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
                     <span>Deep Research</span>
                 </div>
-                <div class="sheet-card" onclick="alert('Gemini Canvas Inicializado.')">
+                <div class="sheet-card" onclick="alert('Gemini Canvas Activo.')">
                     <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14z"/></svg>
                     <span>Canvas</span>
                 </div>
@@ -893,7 +885,7 @@
 
         <div class="chat-container" id="chatBox"></div>
 
-        <!-- 🔮 ANIMACIÓN PENSANDO TIPO GEMINI PRO NEURAL EXPRESSIVE -->
+        <!-- 🔮 ANIMACIÓN PENSANDO TIPO GEMINI PRO -->
         <div class="typing-indicator" id="typingIndicator">
             <div class="typing-dot"></div>
             <div class="typing-dot"></div>
@@ -1296,13 +1288,12 @@
             chatBox.scrollTop = chatBox.scrollHeight;
         }
 
-        /* ✍️ 7. STREAMING PROGRESIVO DE TEXTO EN BLOQUES FLUIDOS */
+        /* ✍️ STREAMING PROGRESIVO DE TEXTO POR BLOQUES */
         function agregarMensajeJarvisCaracter(texto) {
             const msgDiv = document.createElement("div");
             msgDiv.className = "message jarvis-message";
             chatBox.appendChild(msgDiv);
 
-            // Simulación de streaming progresivo de fragmentos
             let palabras = texto.split(" ");
             let i = 0;
 
