@@ -3,103 +3,98 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>J.A.R.V.I.S.</title>
+    <title>J.A.R.V.I.S. // MK-V</title>
     <style>
-        :root {
-            --bg-deep: #05070a;
-            --stark-arc-blue: #0088ff;
-            --stark-glow: rgba(0, 136, 255, 0.4);
-            --text-col: #d1d9e6;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+        :root { --bg: #050608; --cyan: #00d2ff; --input: #121620; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
         body { 
-            background: var(--bg-deep); 
-            background: radial-gradient(circle at 50% 50%, #0a1220 0%, var(--bg-deep) 80%);
-            color: var(--text-col); font-family: 'Inter', sans-serif; height: 100vh; overflow: hidden;
+            background: var(--bg); color: white; height: 100vh; overflow: hidden;
+            display: flex; /* Eliminamos espacios negros con diseño flex completo */
         }
-        
-        /* Contenedor principal */
-        .app-container { display: flex; height: 100vh; }
-        
-        /* Barra lateral estilizada */
-        .sidebar { width: 60px; background: #07080a; display: flex; flex-direction: column; align-items: center; padding: 20px 0; border-right: 1px solid #1a1e26; }
-        
-        /* REACTOR ARC DISEÑADO SEGÚN TU IMAGEN */
-        .arc-container { width: 36px; height: 36px; margin-bottom: 20px; }
-        #arcReactor { width: 36px; height: 36px; filter: drop-shadow(0 0 8px var(--stark-arc-blue)); cursor: pointer; }
 
-        /* Área de Chat */
-        .main-chat { flex: 1; display: flex; flex-direction: column; position: relative; }
-        .chat-view { flex: 1; overflow-y: auto; padding: 40px; padding-right: 20px; }
-        
-        /* Scrollbar estilizada */
-        .chat-view::-webkit-scrollbar { width: 6px; }
-        .chat-view::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
-        
-        .chat-message { max-width: 700px; margin: 0 auto 20px auto; line-height: 1.6; padding: 10px; }
-        .user-msg { color: #fff; font-weight: 500; text-align: right; }
-        
-        /* Barra de entrada */
-        .input-zone { padding: 20px; display: flex; justify-content: center; }
-        .input-bar { 
-            width: 100%; max-width: 700px; background: #11141a; border-radius: 25px; 
-            padding: 12px 20px; display: flex; align-items: center; border: 1px solid #2a2e36;
+        /* 🌀 FONDO NEÓN PROFUNDO Y SIN ESPACIOS */
+        .full-bg {
+            position: absolute; inset: 0; z-index: 0;
+            background: radial-gradient(circle at 50% 50%, rgba(0, 100, 255, 0.15) 0%, #050608 70%);
+            animation: pulseBg 6s infinite alternate;
         }
-        .input-bar input { flex: 1; background: none; border: none; color: #fff; outline: none; padding-left: 10px; }
+        @keyframes pulseBg { 0% { opacity: 0.6; } 100% { opacity: 1; } }
+
+        /* Sidebar Ajustada */
+        .sidebar { width: 60px; z-index: 10; display: flex; flex-direction: column; align-items: center; padding: 20px 0; border-right: 1px solid rgba(255,255,255,0.05); }
+        
+        /* REACTOR ARC FIDELIDAD A TU IMAGEN */
+        .arc-container { width: 36px; height: 36px; margin-bottom: 30px; cursor: pointer; }
+        #arcCanvas { width: 100%; height: 100%; filter: drop-shadow(0 0 10px var(--cyan)); }
+
+        .main-chat { flex: 1; display: flex; flex-direction: column; align-items: center; position: relative; z-index: 2; }
+        
+        /* CHAT Y SCROLLBAR MEJORADO */
+        .chat-view { 
+            width: 100%; max-width: 800px; flex: 1; overflow-y: auto; padding: 40px;
+            padding-right: 40px; /* Separación de la barra de scroll */
+        }
+        .chat-view::-webkit-scrollbar { width: 8px; }
+        .chat-view::-webkit-scrollbar-thumb { background: #1a1e26; border-radius: 4px; border: 1px solid #333; }
+        
+        .chat-msg { max-width: 700px; margin: 0 auto 25px auto; line-height: 1.6; }
+
+        /* INPUT BAR */
+        .input-zone { width: 100%; max-width: 700px; margin-bottom: 30px; }
+        .bar { 
+            background: var(--input-bg); border-radius: 30px; padding: 15px 25px;
+            display: flex; align-items: center; border: 1px solid #2a2e36;
+        }
+        .bar input { flex: 1; background: none; border: none; color: white; outline: none; margin: 0 15px; }
     </style>
 </head>
 <body>
-    <div class="app-container">
-        <aside class="sidebar">
-            <div class="arc-container"><canvas id="arcReactor"></canvas></div>
-            <div style="flex:1"></div>
-            <button class="side-btn">⚙️</button>
-        </aside>
-        <main class="main-chat">
-            <div class="chat-view" id="chatBox"></div>
-            <div class="input-zone">
-                <div class="input-bar">
-                    <button>+</button>
-                    <input type="text" id="userInput" placeholder="Pregunta a Jarvis...">
-                    <span>Mark V</span>
-                </div>
+    <div class="full-bg"></div>
+    <aside class="sidebar">
+        <div class="arc-container"><canvas id="arcCanvas"></canvas></div>
+    </aside>
+    <main class="main-chat">
+        <div class="chat-view" id="chatBox"></div>
+        <div class="input-zone">
+            <div class="bar">
+                <span>+</span>
+                <input type="text" id="userInput" placeholder="Pregunta a Jarvis...">
+                <span>Mark V</span>
             </div>
-        </main>
-    </div>
+        </div>
+    </main>
 
     <script>
-        const canvas = document.getElementById('arcReactor');
-        const ctx = canvas.getContext('2d');
-        let t = 0;
-        function draw() {
-            ctx.clearRect(0, 0, 100, 100);
-            t += 0.02;
-            ctx.beginPath();
-            ctx.arc(50, 50, 40, 0, Math.PI*2);
-            ctx.strokeStyle = "#0088ff"; ctx.lineWidth = 4; ctx.stroke();
-            // Animación de pulso
-            ctx.beginPath();
-            ctx.arc(50, 50, 20 + Math.sin(t)*5, 0, Math.PI*2);
-            ctx.fillStyle = "rgba(0, 136, 255, " + (0.5 + Math.sin(t)*0.2) + ")";
-            ctx.fill();
-            requestAnimationFrame(draw);
+        // REACTOR ARC ANIMADO (Efecto panal/rotación)
+        const c = document.getElementById('arcCanvas');
+        const ctx = c.getContext('2d');
+        let r = 0;
+        function renderArc() {
+            ctx.clearRect(0,0,100,100);
+            ctx.strokeStyle = "#00d2ff"; ctx.lineWidth = 4;
+            ctx.beginPath(); ctx.arc(50,50,40,0,Math.PI*2); ctx.stroke();
+            // Animación rotación interna
+            ctx.save(); ctx.translate(50,50); ctx.rotate(r+=0.02);
+            ctx.beginPath(); ctx.moveTo(0,-30); ctx.lineTo(0,-40); ctx.stroke();
+            ctx.restore();
+            requestAnimationFrame(renderArc);
         }
-        draw();
-        
-        // Lógica de mensaje
+        renderArc();
+
+        // Lógica de búsqueda optimizada
         document.getElementById('userInput').addEventListener('keypress', async (e) => {
             if (e.key === 'Enter') {
                 const txt = e.target.value;
-                document.getElementById('chatBox').innerHTML += `<div class="chat-message user-msg">${txt}</div>`;
+                document.getElementById('chatBox').innerHTML += `<div class="chat-msg user-msg">${txt}</div>`;
                 e.target.value = '';
                 
+                // Fetch directo a tu backend
                 const res = await fetch('https://jarvis-ai-hud.onrender.com/api/jarvis', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({message: txt})
                 });
                 const data = await res.json();
-                document.getElementById('chatBox').innerHTML += `<div class="chat-message">${data.reply}</div>`;
+                document.getElementById('chatBox').innerHTML += `<div class="chat-msg">${data.reply}</div>`;
             }
         });
     </script>
