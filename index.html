@@ -6,7 +6,7 @@
     <title>J.A.R.V.I.S.</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
     
-    <!-- Renderizadores MathJax, PDF.js y Chart.js -->
+    <!-- Renderizadores MathJax, PDF.js, Chart.js y Mermaid -->
     <script>
         window.MathJax = {
             tex: {
@@ -30,14 +30,14 @@
             --sidebar-bg: #07090d;
             --input-bg: #161a22;
             --stark-cyan: #00f2fe;
-            --stark-cyan-glow: rgba(0, 242, 254, 0.3);
+            --stark-cyan-glow: rgba(0, 242, 254, 0.25);
             --stark-amber: #ffb700;
             --stark-green: #00ff88;
             --stark-red: #ff3366;
             --text-main: #e3e8f0;
             --text-sub: #8b94a0;
             --border-color: rgba(255, 255, 255, 0.08);
-            --font-inter: 'Inter', sans-serif;
+            --font-inter: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             --font-stark: 'Orbitron', sans-serif;
             --font-mono: 'Share Tech Mono', monospace;
         }
@@ -52,14 +52,15 @@
 
         body {
             background-color: var(--bg-dark);
-            background-image: radial-gradient(circle at 50% 52%, rgba(0, 150, 255, 0.12) 0%, rgba(10, 12, 16, 0) 60%);
+            /* Destello radial exacto al de image_e4fcf1.png */
+            background-image: radial-gradient(circle at 50% 50%, rgba(0, 140, 255, 0.14) 0%, rgba(10, 12, 16, 0) 58%);
             color: var(--text-main);
             height: 100vh;
             display: flex;
             overflow: hidden;
         }
 
-        /* 📌 BARRA LATERAL IZQUIERDA */
+        /* 📌 BARRA LATERAL IZQUIERDA (FIDELIDAD EXACTA A image_e4fcf1.png) */
         .sidebar {
             width: 60px;
             height: 100vh;
@@ -105,6 +106,7 @@
             fill: currentColor;
         }
 
+        /* LOGO ESTRELLA DE 4 PUNTAS CIAN EN LA ESQUINA SUPERIOR IZQUIERDA */
         .star-logo-btn {
             width: 32px;
             height: 32px;
@@ -132,41 +134,41 @@
             padding: 20px;
         }
 
-        /* ⚡ ESQUINA SUPERIOR DERECHA: REACTOR ARC FIDELIDAD image_e49f56.jpg */
+        /* ⚡ ESQUINA SUPERIOR DERECHA: REACTOR ARC COMPACTO Y ELEGANTE */
         .top-hud-bar {
             position: absolute;
             top: 20px;
             right: 25px;
             display: flex;
             align-items: center;
-            gap: 14px;
+            gap: 12px;
             z-index: 10;
         }
 
         .sys-status-text {
             font-family: var(--font-mono);
-            font-size: 0.75rem;
+            font-size: 0.72rem;
             color: var(--stark-cyan);
             letter-spacing: 1px;
             opacity: 0.85;
             text-shadow: 0 0 8px var(--stark-cyan-glow);
         }
 
-        /* CANVAS DEL REACTOR ARC CON EFECTO NEÓN */
+        /* REACTOR ARC 32px - PROPORCIONADO Y FIEL A image_e49f56.jpg */
         #arcReactor3D {
-            width: 46px;
-            height: 46px;
+            width: 32px;
+            height: 32px;
             border-radius: 50%;
             cursor: pointer;
-            filter: drop-shadow(0 0 10px rgba(0, 242, 254, 0.4));
+            filter: drop-shadow(0 0 8px rgba(0, 242, 254, 0.4));
             transition: transform 0.3s ease;
         }
 
         #arcReactor3D:hover {
-            transform: scale(1.1);
+            transform: scale(1.12);
         }
 
-        /* TÍTULO BIENVENIDA */
+        /* TÍTULO BIENVENIDA DINÁMICO (ANIMACIÓN ESTILO GEMINI) */
         .welcome-title {
             font-size: 2.1rem;
             font-weight: 400;
@@ -174,14 +176,23 @@
             margin-bottom: 28px;
             letter-spacing: -0.4px;
             text-align: center;
-            transition: opacity 0.3s ease;
+            opacity: 0;
+            transform: translateY(12px);
+            animation: geminiEntrance 0.7s ease forwards;
+        }
+
+        @keyframes geminiEntrance {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .welcome-title.hidden {
             display: none;
         }
 
-        /* ZONA DE CONVERSACIÓN */
+        /* ZONA DE CONVERSACIÓN / MESSAGES */
         .chat-container {
             width: 100%;
             max-width: 760px;
@@ -227,7 +238,7 @@
             border-bottom-left-radius: 4px;
         }
 
-        /* 🔍 BARRA BÚSQUEDA CENTRAL */
+        /* 🔍 BARRA BÚSQUEDA CENTRAL (FLOTANTE - FIDELIDAD TOTAL A image_e4fcf1.png) */
         .input-container {
             position: absolute;
             bottom: 35px;
@@ -343,7 +354,7 @@
 </head>
 <body>
 
-    <!-- 📌 BARRA LATERAL IZQUIERDA -->
+    <!-- 📌 BARRA LATERAL IZQUIERDA (FIDELIDAD A image_e4fcf1.png) -->
     <aside class="sidebar">
         <div class="sidebar-top">
             <div class="star-logo-btn">
@@ -389,13 +400,14 @@
     <!-- 🖥️ ÁREA CENTRADA PRINCIPAL -->
     <main class="main-content">
 
-        <!-- ⚡ HEADER SUPERIOR DERECHA CON REACTOR ARC 3D FIDELIDAD image_e49f56.jpg -->
+        <!-- ⚡ HEADER SUPERIOR DERECHA CON REACTOR ARC COMPACTO DE 32PX -->
         <div class="top-hud-bar">
             <span class="sys-status-text" id="sysStatus">MARK V // ONLINE</span>
             <canvas id="arcReactor3D" title="Reactor Arc Mark I - Jarvis State"></canvas>
         </div>
 
-        <h1 class="welcome-title" id="welcomeTitle">Pregunta lo que quieras, Cristian</h1>
+        <!-- TÍTULO CENTRAL CON ANIMACIÓN ESTILO GEMINI -->
+        <h1 class="welcome-title" id="welcomeTitle">Hola, Cristian, empecemos</h1>
 
         <div class="chat-container" id="chatBox"></div>
 
@@ -437,10 +449,22 @@
         const fileInput = document.getElementById("fileInput");
         const sysStatus = document.getElementById("sysStatus");
 
-        /* 🌌 RENDERIZADOR AVANZADO DEL REACTOR ARC (REPLICANDO image_e49f56.jpg) */
+        /* ✨ SISTEMA DE MENSAJES DE ENTRADA DINÁMICOS ESTILO GEMINI */
+        const mensajesEntrada = [
+            "Hola, Cristian, empecemos",
+            "Pregunta lo que quieras, Cristian",
+            "¿En qué trabajamos hoy, Cristian?",
+            "Sistemas listos. ¿Cuál es el plan, Cristian?",
+            "Hola, Cristian, ¿qué deseas analizar hoy?"
+        ];
+
+        // Selecciona un saludo dinámico al cargar o recargar
+        welcomeTitle.innerText = mensajesEntrada[Math.floor(Math.random() * mensajesEntrada.length)];
+
+        /* 🌌 RENDERIZADOR COMPACTO DEL REACTOR ARC (REPLICANDO image_e49f56.jpg A 32PX) */
         const coreCanvas = document.getElementById("arcReactor3D");
         const ctx = coreCanvas.getContext("2d");
-        coreCanvas.width = 120; coreCanvas.height = 120;
+        coreCanvas.width = 64; coreCanvas.height = 64; // Renderizado HD escalado a 32px CSS
 
         let angleOuter = 0;
         let angleInner = 0;
@@ -448,24 +472,23 @@
         let estadoCore = "ready"; // ready, processing, speaking, listening
 
         function drawArcReactor() {
-            ctx.clearRect(0, 0, 120, 120);
-            const cx = 60, cy = 60;
+            ctx.clearRect(0, 0, 64, 64);
+            const cx = 32, cy = 32;
 
             // Determinar color de energía según estado
             let energyColor = "#00f2fe";
-            let glowColor = "rgba(0, 242, 254, 0.6)";
-            if (estadoCore === "processing") { energyColor = "#ffb700"; glowColor = "rgba(255, 183, 0, 0.6)"; }
-            if (estadoCore === "speaking") { energyColor = "#00ff88"; glowColor = "rgba(0, 255, 136, 0.6)"; }
-            if (estadoCore === "listening") { energyColor = "#ff3366"; glowColor = "rgba(255, 51, 102, 0.6)"; }
+            let glowColor = "rgba(0, 242, 254, 0.5)";
+            if (estadoCore === "processing") { energyColor = "#ffb700"; glowColor = "rgba(255, 183, 0, 0.5)"; }
+            if (estadoCore === "speaking") { energyColor = "#00ff88"; glowColor = "rgba(0, 255, 136, 0.5)"; }
+            if (estadoCore === "listening") { energyColor = "#ff3366"; glowColor = "rgba(255, 51, 102, 0.5)"; }
 
-            // Velocidades de rotación animadas
-            const speed = (estadoCore === "processing") ? 0.04 : 0.012;
+            const speed = (estadoCore === "processing") ? 0.045 : 0.015;
             angleOuter += speed;
             angleInner -= speed * 1.3;
             pulseGlow += 0.04;
-            const pulseRadius = Math.sin(pulseGlow) * 1.5;
+            const pulseRadius = Math.sin(pulseGlow) * 1.2;
 
-            // 1. ANILLO EXTERIOR DE BOBINAS DE COBRE (10 Bloques de Bobinado como en image_e49f56.jpg)
+            // 1. ANILLO EXTERIOR DE BOBINAS DE COBRE (10 Bloques)
             ctx.save();
             ctx.translate(cx, cy);
             ctx.rotate(angleOuter);
@@ -477,78 +500,77 @@
                 ctx.rotate(angle);
 
                 // Bloque de Cobre (Bobinado)
-                ctx.fillStyle = "#b85d38"; // Color Cobre Rojizo
-                ctx.fillRect(-6, -52, 12, 12);
+                ctx.fillStyle = "#b85d38";
+                ctx.fillRect(-3.5, -28, 7, 7);
 
-                // Hilos de Bobina
+                // Hilos de Cobre
                 ctx.strokeStyle = "#7a3519";
-                ctx.lineWidth = 1;
-                for (let j = -4; j <= 4; j += 2) {
+                ctx.lineWidth = 0.8;
+                for (let j = -2; j <= 2; j += 1.5) {
                     ctx.beginPath();
-                    ctx.moveTo(j, -52);
-                    ctx.lineTo(j, -40);
+                    ctx.moveTo(j, -28);
+                    ctx.lineTo(j, -21);
                     ctx.stroke();
                 }
 
                 // Luz Cian en los intermedios del anillo exterior
                 ctx.fillStyle = energyColor;
                 ctx.shadowColor = energyColor;
-                ctx.shadowBlur = 8;
+                ctx.shadowBlur = 5;
                 ctx.beginPath();
-                ctx.arc(0, -55, 2.5, 0, Math.PI * 2);
+                ctx.arc(0, -29.5, 1.5, 0, Math.PI * 2);
                 ctx.fill();
 
                 ctx.restore();
             }
             ctx.restore();
 
-            // 2. ANILLO METÁLICO INTERMEDIO CON RANURAS
+            // 2. ANILLO METÁLICO INTERMEDIO CON RANURAS LED
             ctx.save();
             ctx.translate(cx, cy);
             ctx.rotate(angleInner);
 
             ctx.beginPath();
-            ctx.arc(0, 0, 36, 0, Math.PI * 2);
+            ctx.arc(0, 0, 19, 0, Math.PI * 2);
             ctx.strokeStyle = "#1a2332";
-            ctx.lineWidth = 6;
+            ctx.lineWidth = 3.5;
             ctx.stroke();
 
             // Ranuras LED Interiores Brillantes
-            const numSlots = 12;
+            const numSlots = 10;
             ctx.strokeStyle = energyColor;
             ctx.shadowColor = energyColor;
-            ctx.shadowBlur = 10;
-            ctx.lineWidth = 2.5;
+            ctx.shadowBlur = 6;
+            ctx.lineWidth = 1.8;
             for (let i = 0; i < numSlots; i++) {
                 const a = (i / numSlots) * Math.PI * 2;
                 ctx.beginPath();
-                ctx.arc(0, 0, 36, a, a + 0.3);
+                ctx.arc(0, 0, 19, a, a + 0.35);
                 ctx.stroke();
             }
             ctx.restore();
 
-            // 3. NÚCLEO CENTRAL CON PULSO CIAN / BLANCO (image_e49f56.jpg)
+            // 3. NÚCLEO CENTRAL CON PULSO CIAN / BLANCO
             ctx.save();
             ctx.translate(cx, cy);
 
-            // Resplandor externo del núcleo
-            const radGrad = ctx.createRadialGradient(0, 0, 2, 0, 0, 22 + pulseRadius);
+            const radGrad = ctx.createRadialGradient(0, 0, 1, 0, 0, 12 + pulseRadius);
             radGrad.addColorStop(0, "#ffffff");
             radGrad.addColorStop(0.4, energyColor);
-            radGrad.addColorStop(0.8, glowColor);
+            radGrad.addColorStop(0.85, glowColor);
             radGrad.addColorStop(1, "transparent");
 
             ctx.fillStyle = radGrad;
             ctx.beginPath();
-            ctx.arc(0, 0, 22 + pulseRadius, 0, Math.PI * 2);
+            ctx.arc(0, 0, 12 + pulseRadius, 0, Math.PI * 2);
             ctx.fill();
 
             // Centro cristalino blanco brillante
             ctx.fillStyle = "#ffffff";
             ctx.shadowColor = energyColor;
-            ctx.shadowBlur = 15;
+            ctx.shadowBlur = 8;
             ctx.beginPath();
-            ctx.arc(0, 0, 8, 0, Math.PI * 2);
+            ctx.arc(0, 0, 4.5, 0, Math.PI * 2);
             ctx.fill();
 
             ctx.restore();
