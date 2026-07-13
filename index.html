@@ -30,7 +30,7 @@
             --stark-glow: rgba(0, 136, 255, 0.35);
             --text-main: #e1e7f0;
             --text-sub: #8c97a6;
-            --font-inter: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            --font-inter: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             --font-mono: 'Share Tech Mono', monospace;
             --font-orbitron: 'Orbitron', sans-serif;
         }
@@ -71,7 +71,7 @@
             100% { opacity: 1.0; }
         }
 
-        /* 📌 BARRA LATERAL PERFECCIONADA (CORRECCIÓN image_3a153d.png) */
+        /* 📌 BARRA LATERAL PERFECCIONADA Y ALINEADA */
         .sidebar-overlay {
             position: fixed;
             inset: 0;
@@ -183,7 +183,7 @@
 
         .sidebar.expanded .brand-logo-text { display: block; }
 
-        /* BOTÓN NUEVO CHAT (SINCRO DE CENTRADO) */
+        /* BOTÓN NUEVO CHAT */
         .btn-new-chat-wrapper {
             display: flex;
             justify-content: center;
@@ -230,6 +230,8 @@
             white-space: nowrap;
             font-size: 0.88rem;
             font-weight: 500;
+            letter-spacing: normal;
+            word-spacing: normal;
         }
 
         .sidebar.expanded .menu-item-text { display: block; }
@@ -281,12 +283,14 @@
             font-size: 0.85rem;
             width: 100%;
             display: none;
+            letter-spacing: normal;
+            word-spacing: normal;
         }
 
         .sidebar.expanded .sidebar-search-input { display: block; }
         .sidebar-search-input::placeholder { color: #6c727e; }
 
-        /* SECCIONES Y CHATS RECIENTES (OCULTAR TEXTOS SI COLAPSADO) */
+        /* SECCIONES Y CHATS RECIENTES */
         .sidebar-menu-list {
             display: flex;
             flex-direction: column;
@@ -394,8 +398,8 @@
 
         .sidebar.expanded .user-info { display: flex; }
 
-        .user-name { font-size: 0.86rem; font-weight: 600; color: #ffffff; }
-        .user-plan { font-size: 0.72rem; color: var(--stark-cyan); }
+        .user-name { font-size: 0.86rem; font-weight: 600; color: #ffffff; letter-spacing: normal; word-spacing: normal; }
+        .user-plan { font-size: 0.72rem; color: var(--stark-cyan); letter-spacing: normal; word-spacing: normal; }
 
         /* 🖥️ ÁREA PRINCIPAL CENTRAL */
         .main-content {
@@ -446,12 +450,14 @@
             font-weight: 500;
             color: #e3e8f0;
             margin-bottom: 28px;
-            letter-spacing: -0.4px;
+            letter-spacing: normal;
+            word-spacing: normal;
             text-align: center;
             opacity: 0;
             transform: translateY(14px);
             animation: geminiEntrance 0.65s cubic-bezier(0.16, 1, 0.3, 1) forwards;
             padding: 0 10px;
+            white-space: normal;
         }
 
         @keyframes geminiEntrance {
@@ -460,6 +466,7 @@
 
         .welcome-title.hidden { display: none; }
 
+        /* 💬 ZONA DE CONVERSACIÓN CON TIPOGRAFÍA Y ESPACIADO CORREGIDOS (FIN image_43f6c9.png) */
         .chat-container {
             width: 100%;
             max-width: 780px;
@@ -488,10 +495,14 @@
             font-size: 1rem;
             line-height: 1.7;
             word-break: break-word;
+            overflow-wrap: break-word;
             padding: 16px 22px;
             border-radius: 18px;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-            letter-spacing: -0.1px;
+            letter-spacing: normal !important;
+            word-spacing: normal !important;
+            white-space: pre-wrap !important;
+            font-family: var(--font-inter) !important;
         }
 
         .user-message {
@@ -586,6 +597,8 @@
             font-size: 0.95rem;
             padding: 10px 4px;
             min-width: 0;
+            letter-spacing: normal;
+            word-spacing: normal;
         }
 
         .stark-input::placeholder { color: #6c727e; }
@@ -958,26 +971,17 @@
             chatBox.scrollTop = chatBox.scrollHeight;
         }
 
+        /* ✍️ RENDERIZADO FLUIDO Y CON ESPACIADO NORMAL */
         function agregarMensajeJarvisCaracter(texto) {
             const msgDiv = document.createElement("div");
             msgDiv.className = "message jarvis-message";
             chatBox.appendChild(msgDiv);
 
-            let index = 0;
-            const velocidadEscritura = 12;
+            // Inserción directa de texto fluido respetando saltos de línea y palabras
+            msgDiv.innerText = texto;
+            chatBox.scrollTop = chatBox.scrollHeight;
 
-            function escribirCaracter() {
-                if (index < texto.length) {
-                    msgDiv.innerText += texto.charAt(index);
-                    index++;
-                    chatBox.scrollTop = chatBox.scrollHeight;
-                    setTimeout(escribirCaracter, velocidadEscritura);
-                } else {
-                    if (window.MathJax) window.MathJax.typesetPromise([msgDiv]);
-                }
-            }
-
-            escribirCaracter();
+            if (window.MathJax) window.MathJax.typesetPromise([msgDiv]);
         }
     </script>
 </body>
