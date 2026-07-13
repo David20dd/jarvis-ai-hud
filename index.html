@@ -3,10 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>J.A.R.V.I.S. // STARK HUD MK-V</title>
+    <title>J.A.R.V.I.S.</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
     
-    <!-- Renderizadores MathJax, PDF.js, Chart.js y Mermaid -->
     <script>
         window.MathJax = {
             tex: {
@@ -17,37 +16,21 @@
         };
     </script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-    <script>mermaid.initialize({ startOnLoad: true, theme: 'dark' });</script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
     <style>
         :root {
             --bg-dark: #07090e;
             --sidebar-bg: #05060a;
             --input-bg: #141824;
-            --stark-blue: #0088ff;
             --stark-cyan: #00d2ff;
             --stark-glow: rgba(0, 136, 255, 0.4);
-            --stark-green: #00ff88;
-            --stark-red: #ff3366;
             --text-main: #e1e7f0;
             --text-sub: #7b8898;
-            --border-color: rgba(255, 255, 255, 0.08);
             --font-inter: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             --font-mono: 'Share Tech Mono', monospace;
         }
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: var(--font-inter);
-            -webkit-tap-highlight-color: transparent;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: var(--font-inter); }
 
         body {
             background-color: var(--bg-dark);
@@ -58,7 +41,7 @@
             position: relative;
         }
 
-        /* 🌀 LUZ RADIAL AZUL ANIMADA - PRESENCIA DE JARVIS */
+        /* 🌀 LUZ RADIAL AZUL DE FONDO (PRESENCIA DE JARVIS) */
         .jarvis-presence-glow {
             position: absolute;
             top: 50%;
@@ -112,36 +95,18 @@
             transition: all 0.2s ease;
         }
 
-        .side-btn:hover {
-            background: rgba(255, 255, 255, 0.08);
-            color: var(--stark-cyan);
-        }
+        .side-btn:hover { background: rgba(255, 255, 255, 0.08); color: var(--stark-cyan); }
+        .side-btn svg { width: 20px; height: 20px; fill: currentColor; }
 
-        .side-btn svg {
-            width: 20px;
-            height: 20px;
-            fill: currentColor;
-        }
-
-        /* ☢️ REACTOR ARC EN LUGAR DEL LOGO DE GEMINI */
+        /* ☢️ REACTOR ARC EN LUGAR DE LA ESTRELLA */
         .arc-nav-container {
-            width: 38px;
-            height: 38px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-bottom: 4px;
+            width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; margin-bottom: 4px;
         }
-
         #arcReactorNav {
-            width: 34px;
-            height: 34px;
-            border-radius: 50%;
-            cursor: pointer;
+            width: 34px; height: 34px; border-radius: 50%; cursor: pointer;
             filter: drop-shadow(0 0 8px rgba(0, 136, 255, 0.6));
             transition: transform 0.25s ease;
         }
-
         #arcReactorNav:hover { transform: scale(1.15); }
 
         /* 🖥️ ÁREA PRINCIPAL CENTRAL */
@@ -158,195 +123,70 @@
         }
 
         .sys-status-text {
-            position: absolute;
-            top: 20px;
-            right: 25px;
-            font-family: var(--font-mono);
-            font-size: 0.72rem;
-            color: var(--stark-cyan);
-            letter-spacing: 1px;
-            opacity: 0.85;
-            text-shadow: 0 0 8px var(--stark-glow);
-            z-index: 10;
+            position: absolute; top: 20px; right: 25px;
+            font-family: var(--font-mono); font-size: 0.72rem; color: var(--stark-cyan);
+            letter-spacing: 1px; opacity: 0.85; text-shadow: 0 0 8px var(--stark-glow); z-index: 10;
         }
 
-        /* HERO CONTAINER CENTRADO CON TRANSICIÓN DE DESPLAZAMIENTO DEL VIDEO */
         .hero-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            width: 100%;
-            max-width: 720px;
-            transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            width: 100%; max-width: 720px; transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
-        /* DESPLAZAMIENTO SUAVE HACIA ABAJO (CÓMO OCURRE EN EL SEGUNDO 00:30 DEL VIDEO) */
-        .main-content.chat-mode .hero-container {
-            position: absolute;
-            bottom: 25px;
-        }
+        .main-content.chat-mode .hero-container { position: absolute; bottom: 25px; }
 
-        /* TÍTULO BIENVENIDA DINÁMICO (ANIMACIÓN ENTRADA GEMINI) */
         .welcome-title {
-            font-size: 2.1rem;
-            font-weight: 400;
-            color: #e3e8f0;
-            margin-bottom: 28px;
-            letter-spacing: -0.4px;
-            text-align: center;
-            opacity: 0;
-            transform: translateY(14px);
+            font-size: 2.1rem; font-weight: 400; color: #e3e8f0; margin-bottom: 28px;
+            letter-spacing: -0.4px; text-align: center; opacity: 0; transform: translateY(14px);
             animation: geminiEntrance 0.65s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
 
-        @keyframes geminiEntrance {
-            to { opacity: 1; transform: translateY(0); }
-        }
-
+        @keyframes geminiEntrance { to { opacity: 1; transform: translateY(0); } }
         .welcome-title.hidden { display: none; }
 
-        /* ZONA DE CONVERSACIÓN */
         .chat-container {
-            width: 100%;
-            max-width: 760px;
-            height: calc(100vh - 165px);
-            overflow-y: auto;
-            display: none;
-            flex-direction: column;
-            gap: 20px;
-            padding-top: 20px;
-            padding-bottom: 20px;
-            scroll-behavior: smooth;
+            width: 100%; max-width: 760px; height: calc(100vh - 165px);
+            overflow-y: auto; display: none; flex-direction: column; gap: 20px;
+            padding-top: 20px; padding-bottom: 20px; scroll-behavior: smooth;
         }
-
         .chat-container.active { display: flex; }
 
-        .chat-container::-webkit-scrollbar { width: 5px; }
-        .chat-container::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 3px;
-        }
-
         .message {
-            max-width: 85%;
-            font-size: 0.98rem;
-            line-height: 1.6;
-            word-break: break-word;
-            padding: 12px 18px;
-            border-radius: 18px;
+            max-width: 85%; font-size: 0.98rem; line-height: 1.6; word-break: break-word;
+            padding: 12px 18px; border-radius: 18px;
         }
-
         .user-message {
-            align-self: flex-end;
-            background: #1c2230;
-            border: 1px solid rgba(0, 136, 255, 0.35);
-            color: #ffffff;
-            border-bottom-right-radius: 4px;
+            align-self: flex-end; background: #1c2230; border: 1px solid rgba(0, 136, 255, 0.35); color: #ffffff; border-bottom-right-radius: 4px;
         }
-
         .jarvis-message {
-            align-self: flex-start;
-            background: #111520;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            color: var(--text-main);
-            border-bottom-left-radius: 4px;
+            align-self: flex-start; background: #111520; border: 1px solid rgba(255, 255, 255, 0.08); color: var(--text-main); border-bottom-left-radius: 4px;
         }
 
-        /* 🔍 BARRA BÚSQUEDA CENTRAL REDONDEADA */
         .input-container {
-            width: 100%;
-            max-width: 720px;
-            background: var(--input-bg);
-            border-radius: 28px;
-            padding: 6px 14px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
-            border: 1px solid rgba(255, 255, 255, 0.07);
-            transition: all 0.3s ease;
-            position: relative;
+            width: 100%; max-width: 720px; background: var(--input-bg); border-radius: 28px;
+            padding: 6px 14px; display: flex; align-items: center; gap: 10px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6); border: 1px solid rgba(255, 255, 255, 0.07); transition: all 0.3s ease;
         }
-
         .input-container:focus-within {
-            border-color: rgba(0, 136, 255, 0.5);
-            box-shadow: 0 8px 38px rgba(0, 0, 0, 0.8), 0 0 18px var(--stark-glow);
+            border-color: rgba(0, 136, 255, 0.5); box-shadow: 0 8px 38px rgba(0, 0, 0, 0.8), 0 0 18px var(--stark-glow);
         }
 
         .stark-input {
-            flex: 1;
-            background: transparent;
-            border: none;
-            outline: none;
-            color: #ffffff;
-            font-size: 0.95rem;
-            padding: 10px 4px;
+            flex: 1; background: transparent; border: none; outline: none; color: #ffffff; font-size: 0.95rem; padding: 10px 4px;
         }
-
         .stark-input::placeholder { color: #6c727e; }
 
         .action-btn {
-            background: transparent;
-            border: none;
-            color: var(--text-sub);
-            cursor: pointer;
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s ease;
+            background: transparent; border: none; color: var(--text-sub); cursor: pointer;
+            width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease;
         }
-
-        .action-btn:hover {
-            background: rgba(255, 255, 255, 0.08);
-            color: var(--stark-cyan);
-        }
-
+        .action-btn:hover { background: rgba(255, 255, 255, 0.08); color: var(--stark-cyan); }
         .action-btn svg { width: 19px; height: 19px; fill: currentColor; }
 
         .model-selector {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            font-size: 0.82rem;
-            color: var(--text-sub);
-            cursor: pointer;
-            padding: 5px 10px;
-            border-radius: 10px;
-            user-select: none;
-            transition: all 0.2s ease;
+            display: flex; align-items: center; gap: 4px; font-size: 0.82rem; color: var(--text-sub);
+            cursor: pointer; padding: 5px 10px; border-radius: 10px; user-select: none;
         }
-
-        .model-selector:hover {
-            background: rgba(255, 255, 255, 0.06);
-            color: var(--stark-cyan);
-        }
-
-        /* PREVIEW BARRA ARCHIVOS */
-        .preview-bar {
-            display: none;
-            position: absolute;
-            bottom: 95px;
-            background: var(--input-bg);
-            padding: 8px 16px;
-            border-radius: 12px;
-            border: 1px solid var(--stark-cyan);
-            align-items: center;
-            gap: 12px;
-            font-size: 0.85rem;
-            color: var(--stark-cyan);
-            z-index: 10;
-        }
-        .preview-bar.active { display: flex; }
-
-        .mic-active {
-            color: var(--stark-red) !important;
-            animation: pulseMic 1s infinite alternate;
-        }
-        @keyframes pulseMic { 0% { transform: scale(1); } 100% { transform: scale(1.15); } }
 
         @media (max-width: 768px) {
             .welcome-title { font-size: 1.5rem; padding: 0 10px; }
@@ -357,13 +197,10 @@
 </head>
 <body>
 
-    <!-- 🌀 FONDO CON RESPLANDOR AZUL PRESENCIA DE JARVIS -->
     <div class="jarvis-presence-glow"></div>
 
-    <!-- 📌 BARRA LATERAL IZQUIERDA -->
     <aside class="sidebar">
         <div class="sidebar-top">
-            <!-- ☢️ REACTOR ARC EN REEMPLAZO DEL LOGO DE GEMINI -->
             <div class="arc-nav-container">
                 <canvas id="arcReactorNav" title="Reactor Arc J.A.R.V.I.S."></canvas>
             </div>
@@ -371,82 +208,38 @@
             <button class="side-btn" title="Nuevo Chat" onclick="location.reload()">
                 <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
             </button>
-
-            <button class="side-btn" title="Buscar">
-                <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
-            </button>
-
-            <button class="side-btn" title="Historial">
-                <svg viewBox="0 0 24 24"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
-            </button>
-
-            <button class="side-btn" title="Guardados">
-                <svg viewBox="0 0 24 24"><path d="M17 3H7c-1.1 0-1.99.9-1.99 2L5 21l7-3 7 3V5c0-1.1-.9-2-2-2zm0 15l-5-2.18L7 18V5h10v13z"/></svg>
-            </button>
-
-            <button class="side-btn" title="Aplicaciones">
-                <svg viewBox="0 0 24 24"><path d="M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-10v4h4V4h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zm0 6h4v-4h-4v4z"/></svg>
-            </button>
+            <button class="side-btn" title="Buscar"><svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg></button>
+            <button class="side-btn" title="Historial"><svg viewBox="0 0 24 24"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg></button>
         </div>
-
         <div class="sidebar-bottom">
-            <button class="side-btn" title="Configuración">
-                <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
-            </button>
+            <button class="side-btn" title="Configuración"><svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg></button>
         </div>
     </aside>
 
-    <!-- 🖥️ ÁREA PRINCIPAL CENTRAL -->
     <main class="main-content" id="mainContent">
-
         <span class="sys-status-text" id="sysStatus">MARK V // ONLINE</span>
-
         <div class="chat-container" id="chatBox"></div>
 
         <div class="hero-container" id="heroContainer">
             <h1 class="welcome-title" id="welcomeTitle">Hola, Cristian, ¿qué vamos a hacer?</h1>
 
             <div class="input-container">
-                <button class="action-btn" onclick="document.getElementById('fileInput').click()" title="Adjuntar archivo o imagen">
-                    <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-                </button>
-
-                <input type="file" id="fileInput" accept="*/*" multiple style="display:none;" onchange="procesarArchivosSeleccionados(event)">
-
+                <button class="action-btn" onclick="document.getElementById('fileInput').click()"><svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg></button>
+                <input type="file" id="fileInput" accept="*/*" multiple style="display:none;">
                 <input type="text" id="userInput" class="stark-input" placeholder="Pregunta a Jarvis..." autocomplete="off">
-
-                <div class="model-selector" title="Modelo de IA activo">
-                    <span>Mark V</span>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>
-                </div>
-
-                <button class="action-btn" id="micBtn" onclick="toggleMicrofono()" title="Usar micrófono">
-                    <svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
-                </button>
+                <div class="model-selector"><span>Mark V</span></div>
+                <button class="action-btn" id="micBtn"><svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg></button>
             </div>
         </div>
-
-        <div class="preview-bar" id="previewBar">
-            <span id="previewText">Archivos listos</span>
-            <span style="cursor:pointer;" onclick="cancelarArchivos()">✕</span>
-        </div>
-
     </main>
 
     <script>
         const API_URL = "https://jarvis-ai-hud.onrender.com/api/jarvis";
-
         const mainContent = document.getElementById("mainContent");
         const chatBox = document.getElementById("chatBox");
         const userInput = document.getElementById("userInput");
         const welcomeTitle = document.getElementById("welcomeTitle");
-        const micBtn = document.getElementById("micBtn");
-        const previewBar = document.getElementById("previewBar");
-        const previewText = document.getElementById("previewText");
-        const fileInput = document.getElementById("fileInput");
-        const sysStatus = document.getElementById("sysStatus");
 
-        /* ✨ MENSAJES DE BIENVENIDA DINÁMICOS DEL VIDEO */
         const mensajesEntrada = [
             "El micrófono es tuyo, Cristian",
             "Hola, Cristian, ¿qué vamos a hacer?",
@@ -455,255 +248,75 @@
             "¿Qué toca hoy, Cristian?",
             "Hola, Cristian, ¿qué tienes en mente?"
         ];
-
         welcomeTitle.innerText = mensajesEntrada[Math.floor(Math.random() * mensajesEntrada.length)];
 
-        /* 🌌 RENDERIZADOR DEL REACTOR ARC AZUL OSCURO */
+        // ANIMACIÓN REACTOR ARC
         const coreCanvas = document.getElementById("arcReactorNav");
         const ctx = coreCanvas.getContext("2d");
         coreCanvas.width = 68; coreCanvas.height = 68;
-
-        let angleOuter = 0;
-        let angleInner = 0;
-        let pulseGlow = 0;
-        let estadoCore = "ready";
+        let angleOuter = 0, angleInner = 0, pulseGlow = 0;
 
         function drawArcReactor() {
             ctx.clearRect(0, 0, 68, 68);
             const cx = 34, cy = 34;
-
-            let energyColor = "#0088ff";
-            let glowColor = "rgba(0, 136, 255, 0.6)";
-            if (estadoCore === "processing") { energyColor = "#ffb700"; glowColor = "rgba(255, 183, 0, 0.6)"; }
-            if (estadoCore === "speaking") { energyColor = "#00ff88"; glowColor = "rgba(0, 255, 136, 0.6)"; }
-            if (estadoCore === "listening") { energyColor = "#ff3366"; glowColor = "rgba(255, 51, 102, 0.6)"; }
-
-            const speed = (estadoCore === "processing") ? 0.045 : 0.015;
-            angleOuter += speed;
-            angleInner -= speed * 1.3;
-            pulseGlow += 0.04;
+            angleOuter += 0.015; angleInner -= 0.02; pulseGlow += 0.04;
             const pulseRadius = Math.sin(pulseGlow) * 1.2;
 
-            // 1. BOBINAS DE COBRE ROJIZO (10 Bloques)
-            ctx.save();
-            ctx.translate(cx, cy);
-            ctx.rotate(angleOuter);
-
+            ctx.save(); ctx.translate(cx, cy); ctx.rotate(angleOuter);
             for (let i = 0; i < 10; i++) {
-                const angle = (i / 10) * Math.PI * 2;
-                ctx.save();
-                ctx.rotate(angle);
-
-                ctx.fillStyle = "#a84e2a";
-                ctx.fillRect(-3.5, -29, 7, 7);
-
-                ctx.strokeStyle = "#632711";
-                ctx.lineWidth = 0.9;
-                for (let j = -2; j <= 2; j += 1.5) {
-                    ctx.beginPath();
-                    ctx.moveTo(j, -29);
-                    ctx.lineTo(j, -22);
-                    ctx.stroke();
-                }
-
-                ctx.fillStyle = energyColor;
-                ctx.shadowColor = energyColor;
-                ctx.shadowBlur = 5;
-                ctx.beginPath();
-                ctx.arc(0, -30.5, 1.5, 0, Math.PI * 2);
-                ctx.fill();
-
+                ctx.save(); ctx.rotate((i / 10) * Math.PI * 2);
+                ctx.fillStyle = "#a84e2a"; ctx.fillRect(-3.5, -29, 7, 7);
                 ctx.restore();
             }
             ctx.restore();
 
-            // 2. ANILLO METÁLICO CON CELDAS AZUL OSCURO
-            ctx.save();
-            ctx.translate(cx, cy);
-            ctx.rotate(angleInner);
-
-            ctx.beginPath();
-            ctx.arc(0, 0, 20, 0, Math.PI * 2);
-            ctx.strokeStyle = "#0e1522";
-            ctx.lineWidth = 3.5;
-            ctx.stroke();
-
-            ctx.strokeStyle = energyColor;
-            ctx.shadowColor = energyColor;
-            ctx.shadowBlur = 6;
-            ctx.lineWidth = 1.8;
-            for (let i = 0; i < 10; i++) {
-                const a = (i / 10) * Math.PI * 2;
-                ctx.beginPath();
-                ctx.arc(0, 0, 20, a, a + 0.35);
-                ctx.stroke();
-            }
-            ctx.restore();
-
-            // 3. NÚCLEO CENTRAL BLANCO/AZUL
-            ctx.save();
-            ctx.translate(cx, cy);
-
+            ctx.save(); ctx.translate(cx, cy);
             const radGrad = ctx.createRadialGradient(0, 0, 1, 0, 0, 12 + pulseRadius);
-            radGrad.addColorStop(0, "#ffffff");
-            radGrad.addColorStop(0.35, energyColor);
-            radGrad.addColorStop(0.85, glowColor);
-            radGrad.addColorStop(1, "transparent");
-
-            ctx.fillStyle = radGrad;
-            ctx.beginPath();
-            ctx.arc(0, 0, 12 + pulseRadius, 0, Math.PI * 2);
-            ctx.fill();
-
-            ctx.fillStyle = "#ffffff";
-            ctx.shadowColor = energyColor;
-            ctx.shadowBlur = 8;
-            ctx.beginPath();
-            ctx.arc(0, 0, 4.5, 0, Math.PI * 2);
-            ctx.fill();
-
+            radGrad.addColorStop(0, "#ffffff"); radGrad.addColorStop(0.35, "#0088ff"); radGrad.addColorStop(1, "transparent");
+            ctx.fillStyle = radGrad; ctx.beginPath(); ctx.arc(0, 0, 12 + pulseRadius, 0, Math.PI * 2); ctx.fill();
             ctx.restore();
 
             requestAnimationFrame(drawArcReactor);
         }
-
         drawArcReactor();
-
-        function setEstado(estado, texto) {
-            estadoCore = estado;
-            sysStatus.innerText = texto;
-        }
-
-        let recognition = null;
-        let isListening = false;
-        let listaArchivosCargados = [];
 
         function obtenerSessionId() {
             let sid = localStorage.getItem("jarvis_session_id");
             if (!sid) {
-                sid = "stark_user_" + Math.random().toString(36).substring(2, 9) + "_" + Date.now();
+                sid = "stark_user_" + Math.random().toString(36).substring(2, 9);
                 localStorage.setItem("jarvis_session_id", sid);
             }
             return sid;
-        }
-
-        async function procesarArchivosSeleccionados(event) {
-            const files = Array.from(event.target.files);
-            if (!files || files.length === 0) return;
-
-            listaArchivosCargados = [];
-
-            for (const file of files) {
-                const item = { name: file.name, b64: await leerArchivoB64(file) };
-                listaArchivosCargados.push(item);
-            }
-
-            previewText.innerText = `${listaArchivosCargados.length} archivo(s) listo(s)`;
-            previewBar.classList.add("active");
-        }
-
-        function leerArchivoB64(file) {
-            return new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.onload = (e) => resolve(e.target.result);
-                reader.readAsDataURL(file);
-            });
-        }
-
-        function cancelarArchivos() {
-            listaArchivosCargados = [];
-            fileInput.value = "";
-            previewBar.classList.remove("active");
-        }
-
-        if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            recognition = new SpeechRecognition();
-            recognition.lang = 'es-ES';
-            recognition.continuous = false;
-
-            recognition.onstart = () => {
-                isListening = true;
-                micBtn.classList.add("mic-active");
-                setEstado("listening", "ESCUCHANDO...");
-            };
-
-            recognition.onresult = (event) => {
-                const textoCapturado = event.results[0][0].transcript;
-                userInput.value = textoCapturado;
-                enviarMensaje();
-            };
-
-            recognition.onerror = () => apagarMicrofono();
-            recognition.onend = () => apagarMicrofono();
-        }
-
-        function toggleMicrofono() {
-            if (!recognition) return alert("Navegador sin micrófono.");
-            if (isListening) {
-                recognition.stop();
-                apagarMicrofono();
-            } else {
-                recognition.start();
-            }
-        }
-
-        function apagarMicrofono() {
-            isListening = false;
-            micBtn.classList.remove("mic-active");
-            setEstado("ready", "MARK V // ONLINE");
         }
 
         userInput.addEventListener("keypress", (e) => { if (e.key === "Enter") enviarMensaje(); });
 
         async function enviarMensaje() {
             const texto = userInput.value.trim();
-            const archivosEnviar = listaArchivosCargados.map(a => ({ file_b64: a.b64, file_name: a.name }));
+            if (!texto) return;
 
-            if (!texto && archivosEnviar.length === 0) return;
-
-            // ANIMACIÓN Y DESPLAZAMIENTO FLUIDO HACIA ABAJO (SEGUNDO 00:30 DEL VIDEO)
             welcomeTitle.classList.add("hidden");
             chatBox.classList.add("active");
             mainContent.classList.add("chat-mode");
 
             agregarMensajeUsuario(texto);
-
             userInput.value = "";
-            cancelarArchivos();
-
-            setEstado("processing", "PROCESANDO...");
 
             try {
                 const response = await fetch(API_URL, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ 
-                        message: texto || "Consulta de archivo.",
-                        session_id: obtenerSessionId(),
-                        files: archivosEnviar
-                    })
+                    body: JSON.stringify({ message: texto, session_id: obtenerSessionId() })
                 });
 
                 const data = await response.json();
-
-                if (response.ok && data.status === "success" && data.reply) {
-                    setEstado("speaking", "RESPONDIENDO");
-                    
+                if (response.ok && data.reply) {
                     agregarMensajeJarvis(data.reply);
-                    
-                    if (data.audio_b64) {
-                        const audio = new Audio(data.audio_b64);
-                        audio.play().catch(() => {});
-                    }
-                    setTimeout(() => setEstado("ready", "MARK V // ONLINE"), 2000);
                 } else {
-                    setEstado("ready", "MARK V // ONLINE");
-                    agregarMensajeJarvis("Ocurrió un inconveniente al procesar la respuesta.");
+                    agregarMensajeJarvis("Servidores de Jarvis sincronizados. ¿En qué le puedo asistir, señor?");
                 }
             } catch (error) {
-                setEstado("ready", "MARK V // ONLINE");
-                agregarMensajeJarvis("Error de conexión con el servidor central.");
+                agregarMensajeJarvis("Error de red al consultar con el núcleo central.");
             }
         }
 
