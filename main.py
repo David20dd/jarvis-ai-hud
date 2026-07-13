@@ -56,6 +56,7 @@ def init_db():
 init_db()
 
 def obtener_prompt_sistema_actualizado():
+    """Genera el prompt del sistema inyectando la fecha actual dinámica."""
     fecha_hoy = datetime.datetime.now().strftime("%d de %B de %Y")
     return (
         f"Eres J.A.R.V.I.S., la Inteligencia Artificial Autónoma avanzada creada por Stark Technologies para asistir a Cristian.\n\n"
@@ -158,9 +159,11 @@ async def consultar_jarvis(data: ChatInput):
     # BÚSQUEDA WEB PROACTIVA E INCONDICIONAL DE EVENTOS Y ACTUALIDAD
     palabras_actualidad = ["busca", "resultado", "noticia", "quién", "qué es", "partido", "quien gano", "mundial", "2026", "hoy", "precio", "clima", "resultados", "fifa", "copa"]
     
+    # Realizar búsqueda web incondicional
     if any(p in prompt_lower for p in palabras_actualidad) or "?" in prompt_usuario or "mundial" in prompt_lower:
         datos_tiempo_real = buscar_en_internet_tiempo_real(prompt_usuario)
         if datos_tiempo_real:
+            # Inyectar datos actualizados directamente como contexto del sistema
             historial.append({"role": "system", "content": f"[INFORMACIÓN Y NOTICIAS EN TIEMPO REAL {datetime.datetime.now().year}]:\n{datos_tiempo_real}"})
             # Guardar en base de datos para aprendizaje automático
             guardar_conocimiento_autonomo(prompt_usuario, datos_tiempo_real)
