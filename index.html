@@ -20,10 +20,11 @@
     <style>
         :root {
             --bg-dark: #06080d;
-            --sidebar-bg: #090d16;
-            --sidebar-expanded-width: 270px;
+            --sidebar-bg: #080c14;
+            --sidebar-expanded-width: 260px;
             --sidebar-collapsed-width: 68px;
-            --input-bg: #141824;
+            --input-bg: #121722;
+            --card-jarvis-bg: #0d121d;
             --stark-blue: #0088ff;
             --stark-cyan: #00d2ff;
             --stark-glow: rgba(0, 136, 255, 0.35);
@@ -69,7 +70,7 @@
             100% { opacity: 1.0; }
         }
 
-        /* 📌 BARRA LATERAL IZQUIERDA DESPLEGABLE ESTILO GEMINI / CHATGPT */
+        /* 📌 BARRA LATERAL ESTABILIZADA (Estilo Gemini / Stark HUD) */
         .sidebar-overlay {
             position: fixed;
             inset: 0;
@@ -95,10 +96,10 @@
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-            padding: 16px 10px;
+            padding: 14px 12px;
             z-index: 20;
             flex-shrink: 0;
-            transition: width 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+            transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
             overflow: hidden;
             position: relative;
             white-space: nowrap;
@@ -112,9 +113,9 @@
         .sidebar-top-bar {
             display: flex;
             align-items: center;
-            justify-content: space-between;
+            gap: 12px;
             width: 100%;
-            margin-bottom: 20px;
+            margin-bottom: 24px;
         }
 
         .toggle-menu-btn {
@@ -139,7 +140,7 @@
 
         .toggle-menu-btn svg { width: 22px; height: 22px; fill: currentColor; }
 
-        /* ☢️ NAV CONTAINER REACTOR ARC MARK I HD */
+        /* ☢️ NAV CONTAINER REACTOR ARC MARK VI HD */
         .arc-nav-container {
             width: 40px;
             height: 40px;
@@ -150,8 +151,8 @@
         }
 
         #arcReactorNav {
-            width: 38px;
-            height: 38px;
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
             cursor: pointer;
             filter: drop-shadow(0 0 10px rgba(0, 150, 255, 0.7));
@@ -165,7 +166,7 @@
             display: flex;
             align-items: center;
             gap: 12px;
-            background: rgba(255, 255, 255, 0.05);
+            background: rgba(255, 255, 255, 0.04);
             border: 1px solid rgba(0, 210, 255, 0.2);
             color: var(--text-main);
             padding: 10px 14px;
@@ -173,21 +174,30 @@
             cursor: pointer;
             width: 100%;
             transition: all 0.25s ease;
-            margin-bottom: 20px;
-            font-size: 0.9rem;
+            margin-bottom: 18px;
+            font-size: 0.88rem;
             font-weight: 500;
         }
 
         .btn-new-chat:hover {
-            background: rgba(0, 136, 255, 0.2);
+            background: rgba(0, 136, 255, 0.18);
             border-color: var(--stark-cyan);
             color: #ffffff;
             box-shadow: 0 0 14px var(--stark-glow);
         }
 
-        .btn-new-chat svg { width: 20px; height: 20px; fill: currentColor; flex-shrink: 0; }
+        .btn-new-chat svg { width: 18px; height: 18px; fill: currentColor; flex-shrink: 0; }
 
-        /* SECCIONES Y LISTAS DE LA BARRA LATERAL */
+        .menu-item-text {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .sidebar.expanded .menu-item-text { opacity: 1; }
+
         .sidebar-menu-list {
             display: flex;
             flex-direction: column;
@@ -195,7 +205,6 @@
             width: 100%;
             overflow-y: auto;
             flex: 1;
-            padding-right: 4px;
         }
 
         .sidebar-menu-list::-webkit-scrollbar { width: 4px; }
@@ -205,12 +214,12 @@
         }
 
         .sidebar-section-title {
-            font-size: 0.75rem;
+            font-size: 0.72rem;
             font-weight: 600;
             color: var(--text-sub);
             text-transform: uppercase;
             letter-spacing: 0.8px;
-            margin: 14px 0 6px 12px;
+            margin: 14px 0 6px 10px;
             opacity: 0;
             transition: opacity 0.2s ease;
         }
@@ -224,13 +233,10 @@
             padding: 10px 12px;
             border-radius: 12px;
             color: var(--text-sub);
-            text-decoration: none;
             cursor: pointer;
             transition: all 0.2s ease;
-            font-size: 0.9rem;
+            font-size: 0.88rem;
             width: 100%;
-            overflow: hidden;
-            text-overflow: ellipsis;
         }
 
         .menu-item:hover {
@@ -240,26 +246,15 @@
 
         .menu-item svg { width: 20px; height: 20px; fill: currentColor; flex-shrink: 0; }
 
-        .menu-item-text {
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            opacity: 0;
-            transition: opacity 0.2s ease;
-        }
-
-        .sidebar.expanded .menu-item-text { opacity: 1; }
-
         /* PERFIL DE USUARIO EN LA PARTE INFERIOR */
         .user-profile-bar {
             display: flex;
             align-items: center;
             gap: 12px;
-            padding: 10px 6px;
+            padding: 10px 4px;
             border-top: 1px solid rgba(255, 255, 255, 0.06);
             margin-top: 10px;
             width: 100%;
-            cursor: pointer;
         }
 
         .user-avatar {
@@ -272,7 +267,7 @@
             align-items: center;
             justify-content: center;
             font-weight: 700;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             flex-shrink: 0;
             box-shadow: 0 0 10px var(--stark-glow);
         }
@@ -287,7 +282,7 @@
 
         .sidebar.expanded .user-info { opacity: 1; }
 
-        .user-name { font-size: 0.88rem; font-weight: 600; color: #ffffff; }
+        .user-name { font-size: 0.86rem; font-weight: 600; color: #ffffff; }
         .user-plan { font-size: 0.72rem; color: var(--stark-cyan); }
 
         /* 🖥️ ÁREA PRINCIPAL CENTRAL */
@@ -404,7 +399,6 @@
             border-bottom-left-radius: 4px;
         }
 
-        /* ✍️ INDICADOR ANIMADO DE ESCRITURA */
         .typing-indicator {
             display: none;
             align-items: center;
@@ -551,10 +545,10 @@
     <div class="jarvis-presence-bg"></div>
     <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
 
-    <!-- 📌 BARRA LATERAL DESPLEGABLE ESTILO GEMINI / CHATGPT -->
+    <!-- 📌 BARRA LATERAL DESPLEGABLE ESTILO GEMINI / STARK HUD -->
     <aside class="sidebar" id="sidebar">
         <div>
-            <!-- CABECERA BARRA LATERAL -->
+            <!-- CABECERA BARRA LATERAL UNIFICADA -->
             <div class="sidebar-top-bar">
                 <button class="toggle-menu-btn" onclick="toggleSidebar()" title="Expandir/Colapsar Menú">
                     <svg viewBox="0 0 24 24"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
@@ -599,14 +593,8 @@
 
         <span class="sys-status-text" id="sysStatus">MARK VI // ONLINE</span>
 
-        <!-- INDICADOR MÓVIL PARA ABRIR MENÚ -->
-        <button class="toggle-menu-btn" style="position: absolute; top: 12px; left: 12px; z-index: 10;" onclick="toggleSidebar()">
-            <svg viewBox="0 0 24 24"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
-        </button>
-
         <div class="chat-container" id="chatBox"></div>
 
-        <!-- INDICADOR DE ESCRITURA -->
         <div class="typing-indicator" id="typingIndicator">
             <div class="typing-dot"></div>
             <div class="typing-dot"></div>
@@ -614,7 +602,7 @@
         </div>
 
         <div class="hero-container" id="heroContainer">
-            <h1 class="welcome-title" id="welcomeTitle">Hola, Cristian, ¿qué vamos a hacer hoy? ✨</h1>
+            <h1 class="welcome-title" id="welcomeTitle">Diseñemos algo increíble hoy, Cristian 🚀</h1>
 
             <div class="preview-bar" id="previewBar">
                 <span id="previewText">Imagen/Archivo cargado</span>
@@ -659,9 +647,7 @@
             "¿Qué toca ahora, Cristian? 🚀",
             "¿Qué toca hoy, Cristian? 🔮",
             "Hola, Cristian, ¿qué tienes en mente? 💡",
-            "Sistemas listos, Cristian 🤖",
-            "Diseñemos algo increíble hoy, Cristian 🌌",
-            "¿Qué desafío resolveremos hoy, Cristian? 🔮",
+            "Diseñemos algo increíble hoy, Cristian 🚀",
             "A tu señal, Cristian 🦾"
         ];
         welcomeTitle.innerText = mensajesEntrada[Math.floor(Math.random() * mensajesEntrada.length)];
@@ -712,7 +698,7 @@
         }
         drawArcReactor();
 
-        /* TOGGLE EXPANDIR / COLAPSAR BARRA LATERAL ESTILO GEMINI */
+        /* EXPANDIR / COLAPSAR BARRA LATERAL */
         function toggleSidebar() {
             if (window.innerWidth <= 768) {
                 sidebar.classList.toggle("mobile-open");
