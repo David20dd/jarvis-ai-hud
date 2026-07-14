@@ -22,6 +22,7 @@ import sympy as sp
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from groq import Groq
 from pydantic import BaseModel, Field
 
@@ -63,6 +64,7 @@ MAX_COMPLETION_TOKENS = max(256, min(int(os.getenv("JARVIS_MAX_COMPLETION_TOKENS
 CACHE_TTL_SECONDS = max(60, min(int(os.getenv("JARVIS_CACHE_TTL_SECONDS", "3600")), 86400))
 DIRECT_ROUTES_ENABLED = os.getenv("JARVIS_DIRECT_ROUTES", "true").lower() not in {"0", "false", "no"}
 JARVIS_ACCESS_KEY = os.getenv("JARVIS_ACCESS_KEY", "").strip()
+PUBLIC_MODE = os.getenv("JARVIS_PUBLIC_MODE", "true").strip().lower() not in {"0", "false", "no", "off"}
 REQUESTS_PER_MINUTE = max(2, min(int(os.getenv("JARVIS_REQUESTS_PER_MINUTE", "20")), 120))
 MAX_MESSAGE_CHARS = max(500, min(int(os.getenv("JARVIS_MAX_MESSAGE_CHARS", "30000")), 120000))
 _rate_lock = threading.Lock()
@@ -233,14 +235,14 @@ def init_db() -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
-    logger.info("J.A.R.V.I.S. MAX Core v3 iniciado")
+    logger.info("J.A.R.V.I.S. Premium Nexus Core v6 iniciado | public_mode=%s", PUBLIC_MODE)
     yield
-    logger.info("J.A.R.V.I.S. MAX Core v3 detenido")
+    logger.info("J.A.R.V.I.S. Premium Nexus Core v6 detenido")
 
 
 app = FastAPI(
-    title="J.A.R.V.I.S. MAX Core",
-    version="3.0.0",
+    title="J.A.R.V.I.S. Premium Nexus Core",
+    version="6.0.0",
     lifespan=lifespan,
 )
 
@@ -251,6 +253,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Sirve la interfaz y sus recursos visuales desde el mismo dominio que la API.
+# Esto evita errores 404/405 y problemas de CORS entre frontend y backend.
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
 # -----------------------------------------------------------------------------
@@ -559,7 +566,10 @@ def record_usage(session_id: str, model: str, completion: Any, cached: bool = Fa
 
 
 def enforce_request_guard(request: Request) -> None:
-    if JARVIS_ACCESS_KEY:
+    # En modo público cualquier persona puede usar J.A.R.V.I.S. sin claves visibles.
+    # La protección se mantiene mediante el límite por IP. Para volver a modo privado,
+    # configura JARVIS_PUBLIC_MODE=false y define JARVIS_ACCESS_KEY en Render.
+    if not PUBLIC_MODE and JARVIS_ACCESS_KEY:
         supplied = request.headers.get("X-Jarvis-Access-Key", "")
         if supplied != JARVIS_ACCESS_KEY:
             raise HTTPException(status_code=401, detail="Se requiere una clave de acceso válida para J.A.R.V.I.S.")
@@ -1180,13 +1190,13 @@ def construir_prompt_sistema(session_id: str) -> str:
     ) or "- Sin recuerdos relevantes."
 
     return f"""
-Eres J.A.R.V.I.S., asistente personal y operativo de Cristian.
+Eres J.A.R.V.I.S., un asistente inteligente, operativo y accesible para cualquier persona.
 Hora local de Honduras: {now.strftime('%Y-%m-%d %H:%M')}.
 
 REGLAS OPERATIVAS
 - Responde en español claro, directo y verificable.
 - Usa herramientas cuando mejoren exactitud o actualidad; no afirmes que las usaste si no se ejecutaron.
-- No menciones nombres internos de funciones salvo que Cristian solicite detalles técnicos.
+- No menciones nombres internos de funciones salvo que el usuario solicite detalles técnicos.
 - No inventes datos, resultados, fuentes ni capacidades.
 - Las acciones externas sensibles requieren confirmación explícita.
 - No puedes eliminar límites físicos, económicos o de proveedores; explica esas restricciones con honestidad.
@@ -2055,7 +2065,7 @@ def dashboard(session_id: str):
             (sid, since),
         ).fetchone()
     return {
-        "version": "3.0.0",
+        "version": "6.0.0",
         "status": "online" if GROQ_API_KEY else "local_only",
         "counts": counts,
         "usage_24h": dict(usage),
@@ -2086,19 +2096,20 @@ def self_check():
     checks["static_ui"] = {"ok": INDEX_FILE.exists()}
     checks["groq_key"] = {"ok": bool(GROQ_API_KEY), "required_for": "conversación generativa"}
     overall = all(item.get("ok") for key, item in checks.items() if key != "groq_key")
-    return {"status": "ok" if overall else "degraded", "checks": checks, "version": "3.0.0"}
+    return {"status": "ok" if overall else "degraded", "checks": checks, "version": "6.0.0"}
 
 
 @app.get("/api/capabilities")
 def capabilities():
     return {
         "autonomous_core": True,
-        "version": "3.0.0",
+        "version": "6.0.0",
         "groq_configured": bool(GROQ_API_KEY),
         "model": GROQ_MODEL,
         "model_chain": MODEL_CHAIN,
         "model_status": provider_status(),
-        "access_key_required": bool(JARVIS_ACCESS_KEY),
+        "public_mode": PUBLIC_MODE,
+        "access_key_required": bool(JARVIS_ACCESS_KEY) and not PUBLIC_MODE,
         "requests_per_minute": REQUESTS_PER_MINUTE,
         "tools": list(TOOL_FUNCTIONS.keys()),
         "features": [
@@ -2120,7 +2131,8 @@ def capabilities():
             "improvement_report",
             "usage_tracking",
             "background_jobs",
-            "stark_command_center_ui",
+            "premium_nexus_ui",
+            "anonymous_public_access",
             "self_check",
             "whatsapp_bridge_status",
         ],
@@ -2146,17 +2158,19 @@ def health():
         "database_error": database_error,
         "model": GROQ_MODEL,
         "models": provider_status(),
+        "public_mode": PUBLIC_MODE,
     }
 
 
 @app.get("/api/system")
 def system_info():
     return {
-        "status": "JARVIS MAX Core Active",
-        "version": "3.0.0",
+        "status": "JARVIS Premium Nexus Core Active",
+        "version": "6.0.0",
         "groq_configured": bool(GROQ_API_KEY),
         "model": GROQ_MODEL,
         "model_chain": MODEL_CHAIN,
+        "public_mode": PUBLIC_MODE,
         "database": DB_FILE,
         "health_endpoint": "/api/health",
         "capabilities_endpoint": "/api/capabilities",
@@ -2169,6 +2183,6 @@ def home():
     if INDEX_FILE.exists():
         return FileResponse(INDEX_FILE)
     return HTMLResponse(
-        "<h1>J.A.R.V.I.S. MAX Core activo</h1><p>Falta static/index.html.</p>",
+        "<h1>J.A.R.V.I.S. Premium Nexus Core activo</h1><p>Falta static/index.html.</p>",
         status_code=200,
     )

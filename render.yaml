@@ -1,33 +1,32 @@
 services:
   - type: web
-    name: jarvis-max-core
+    name: jarvis-premium-nexus
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /api/health
+    autoDeploy: true
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.12.8
       - key: GROQ_API_KEY
         sync: false
       - key: GROQ_MODEL
         value: llama-3.3-70b-versatile
       - key: GROQ_FALLBACK_MODELS
-        value: llama-3.1-8b-instant,meta-llama/llama-4-scout-17b-16e-instruct
-      - key: JARVIS_DB_FILE
-        value: jarvis_memory.db
+        value: llama-3.1-8b-instant
+      - key: JARVIS_PUBLIC_MODE
+        value: "true"
       - key: JARVIS_ALLOWED_ORIGINS
         value: "*"
-      - key: JARVIS_ACCESS_KEY
-        sync: false
-      - key: JARVIS_MAX_COMPLETION_TOKENS
-        value: "1200"
-      - key: JARVIS_HISTORY_MESSAGES
-        value: "10"
-      - key: JARVIS_CACHE_TTL_SECONDS
-        value: "3600"
-      - key: JARVIS_DIRECT_ROUTES
-        value: "true"
       - key: JARVIS_REQUESTS_PER_MINUTE
         value: "20"
+      - key: JARVIS_DIRECT_ROUTES
+        value: "true"
+      - key: JARVIS_HISTORY_MESSAGES
+        value: "10"
+      - key: JARVIS_MAX_COMPLETION_TOKENS
+        value: "1200"
+      - key: JARVIS_CACHE_TTL_SECONDS
+        value: "3600"
+      - key: JARVIS_DB_FILE
+        value: jarvis_memory.db
