@@ -711,6 +711,7 @@
 
         let chatSeleccionadoActual = null;
         let isGenerating = false;
+        let currentRequestController = null;
 
         const SVG_MIC = `<path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>`;
         const SVG_SEND = `<path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>`;
@@ -896,16 +897,56 @@
         userInput.addEventListener("keypress", (e) => { if (e.key === "Enter") procesarBotonPrincipal(); });
 
         function procesarBotonPrincipal() {
-            if (isGenerating) return;
+            if (isGenerating) {
+                if (currentRequestController) currentRequestController.abort();
+                return;
+            }
             if (userInput.value.trim().length > 0) enviarMensaje();
             else alert("Modo Dictado de Voz activado.");
         }
 
+        function finalizarGeneracion() {
+            isGenerating = false;
+            currentRequestController = null;
+            presenceBg.classList.remove("pulsing");
+            typingIndicator.classList.remove("active");
+            sendOrMicBtn.innerHTML = `<svg viewBox="0 0 24 24">${SVG_MIC}</svg>`;
+            sendOrMicBtn.classList.remove("btn-stop");
+            userInput.dispatchEvent(new Event("input"));
+        }
+
+        async function leerJsonSeguro(response) {
+            const responseText = await response.text();
+            let data = {};
+
+            if (responseText.trim()) {
+                try {
+                    data = JSON.parse(responseText);
+                } catch {
+                    const preview = responseText.replace(/\s+/g, " ").slice(0, 240);
+                    throw new Error(
+                        `El backend respondió con contenido no válido. HTTP ${response.status}. Respuesta: ${preview}`
+                    );
+                }
+            }
+
+            if (!response.ok || data.status === "error") {
+                throw new Error(
+                    data.detail || data.reply || `El backend devolvió el error HTTP ${response.status}`
+                );
+            }
+
+            return data;
+        }
+
         async function enviarMensaje() {
             const texto = userInput.value.trim();
-            if (!texto) return;
+            if (!texto || isGenerating) return;
 
             isGenerating = true;
+            currentRequestController = new AbortController();
+            const timeoutId = setTimeout(() => currentRequestController?.abort(), 120000);
+
             sendOrMicBtn.innerHTML = `<svg viewBox="0 0 24 24">${SVG_STOP}</svg>`;
             sendOrMicBtn.classList.add("btn-stop");
 
@@ -917,17 +958,23 @@
             agregarMensajeUsuario(texto);
 
             const sid = obtenerSessionId();
-            let chatsObj = JSON.parse(localStorage.getItem("jarvis_chats_db") || "{}");
-            let historialPrevio = chatsObj[sid] ? chatsObj[sid].historial : [];
+            const chatsObj = JSON.parse(localStorage.getItem("jarvis_chats_db") || "{}");
+            const historialPrevio = chatsObj[sid] ? [...chatsObj[sid].historial] : [];
             historialPrevio.push({ role: "user", content: texto });
 
-            const tituloChat = chatsObj[sid] ? chatsObj[sid].titulo : (texto.substring(0, 24) + "...");
+            const tituloChat = chatsObj[sid]
+                ? chatsObj[sid].titulo
+                : (texto.length > 24 ? texto.substring(0, 24) + "..." : texto);
             guardarHistorialChatLocal(sid, tituloChat, historialPrevio);
 
             userInput.value = "";
             presenceBg.classList.add("pulsing");
-            
-            const estadosPensamiento = ["Planificando la solicitud...", "Seleccionando herramientas...", "Verificando resultados...", "Consultando memoria..."];
+            const estadosPensamiento = [
+                "Planificando la solicitud...",
+                "Seleccionando herramientas...",
+                "Verificando resultados...",
+                "Consultando memoria..."
+            ];
             thinkingText.innerText = estadosPensamiento[Math.floor(Math.random() * estadosPensamiento.length)];
             typingIndicator.classList.add("active");
 
@@ -935,32 +982,47 @@
                 const response = await fetch(API_URL, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ message: texto, session_id: sid })
+                    body: JSON.stringify({ message: texto, session_id: sid }),
+                    signal: currentRequestController.signal
                 });
 
-                const data = await response.json();
-                
-                setTimeout(() => {
-                    presenceBg.classList.remove("pulsing");
-                    typingIndicator.classList.remove("active");
-                    
-                    if (response.ok && data.reply) {
-                        if (Array.isArray(data.tools) && data.tools.length) agregarTrazaHerramientas(data.tools);
-                        agregarMensajeJarvisCaracter(data.reply);
-                        historialPrevio.push({ role: "assistant", content: data.reply });
-                        guardarHistorialChatLocal(sid, tituloChat, historialPrevio);
-                    }
-                }, 180);
+                const data = await leerJsonSeguro(response);
+                presenceBg.classList.remove("pulsing");
+                typingIndicator.classList.remove("active");
+
+                if (!data.reply) {
+                    throw new Error("El backend respondió correctamente, pero no incluyó el campo reply.");
+                }
+
+                if (Array.isArray(data.tools) && data.tools.length) {
+                    agregarTrazaHerramientas(data.tools);
+                }
+
+                await agregarMensajeJarvisCaracter(data.reply);
+                historialPrevio.push({ role: "assistant", content: data.reply });
+                guardarHistorialChatLocal(sid, tituloChat, historialPrevio);
 
             } catch (error) {
-                setTimeout(() => {
-                    presenceBg.classList.remove("pulsing");
-                    typingIndicator.classList.remove("active");
-                    const fallback = "Análisis completado directamente en el núcleo de memoria local. ¿En qué parámetro desea profundizar a continuación, señor?";
-                    agregarMensajeJarvisCaracter(fallback);
-                    historialPrevio.push({ role: "assistant", content: fallback });
-                    guardarHistorialChatLocal(sid, tituloChat, historialPrevio);
-                }, 180);
+                const cancelled = error?.name === "AbortError";
+                const detail = cancelled
+                    ? "La solicitud fue cancelada o superó el tiempo máximo de espera."
+                    : (error?.message || "Error desconocido");
+
+                console.error("Error comunicando con J.A.R.V.I.S.:", error);
+                presenceBg.classList.remove("pulsing");
+                typingIndicator.classList.remove("active");
+
+                const errorMessage =
+                    `⚠️ **No fue posible completar la solicitud.**\n\n` +
+                    `**Detalle técnico:** ${detail}\n\n` +
+                    `Comprueba en este orden: \`/api/health\`, \`/api/capabilities\` y los registros del backend en Render.`;
+
+                await agregarMensajeJarvisCaracter(errorMessage);
+                historialPrevio.push({ role: "assistant", content: errorMessage });
+                guardarHistorialChatLocal(sid, tituloChat, historialPrevio);
+            } finally {
+                clearTimeout(timeoutId);
+                finalizarGeneracion();
             }
         }
 
@@ -993,10 +1055,12 @@
         async function mostrarCapacidades() {
             try {
                 const res = await fetch(`${API_BASE}/api/capabilities`);
-                const data = await res.json();
+                const data = await leerJsonSeguro(res);
                 const lista = (data.features || []).join(", ");
-                mostrarToast(`JARVIS Autónomo v1: ${lista}`);
-            } catch { mostrarToast("No se pudieron consultar las capacidades."); }
+                mostrarToast(`JARVIS Autónomo ${data.version || ""}: ${lista}`);
+            } catch (error) {
+                mostrarToast(`No se pudieron consultar las capacidades: ${error.message}`);
+            }
             cerrarBottomSheet();
         }
 
@@ -1031,8 +1095,7 @@
                     method: "POST", headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ session_id: obtenerSessionId(), file_name: file.name, file_b64 })
                 });
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.detail || "No se pudo subir el archivo");
+                const data = await leerJsonSeguro(res);
                 uploadStatus.textContent = `✅ ${file.name} añadido a la biblioteca`;
                 mostrarToast(`Documento procesado: ${data.document.characters.toLocaleString()} caracteres.`);
             } catch (error) {
@@ -1043,7 +1106,7 @@
         async function revisarNotificaciones() {
             try {
                 const res = await fetch(`${API_BASE}/api/notifications?session_id=${encodeURIComponent(obtenerSessionId())}`);
-                const data = await res.json();
+                const data = await leerJsonSeguro(res);
                 if (data.notifications?.length) {
                     const r = data.notifications[0];
                     mostrarToast(`⏰ Recordatorio: ${r.title}`, 7000);
@@ -1095,9 +1158,6 @@
                 await new Promise(resolve => setTimeout(resolve, pausa));
             }
 
-            isGenerating = false;
-            sendOrMicBtn.innerHTML = `<svg viewBox="0 0 24 24">${SVG_MIC}</svg>`;
-            sendOrMicBtn.classList.remove("btn-stop");
             chatBox.scrollTop = chatBox.scrollHeight;
         }
     </script>
