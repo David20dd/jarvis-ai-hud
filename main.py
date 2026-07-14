@@ -8,6 +8,7 @@ import hashlib
 import logging
 import math
 import os
+import random
 import re
 import sqlite3
 import time
@@ -18,6 +19,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+import httpx
 import sympy as sp
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -67,6 +69,17 @@ JARVIS_ACCESS_KEY = os.getenv("JARVIS_ACCESS_KEY", "").strip()
 PUBLIC_MODE = os.getenv("JARVIS_PUBLIC_MODE", "true").strip().lower() not in {"0", "false", "no", "off"}
 REQUESTS_PER_MINUTE = max(2, min(int(os.getenv("JARVIS_REQUESTS_PER_MINUTE", "20")), 120))
 MAX_MESSAGE_CHARS = max(500, min(int(os.getenv("JARVIS_MAX_MESSAGE_CHARS", "30000")), 120000))
+MAX_RESOLUTION_ATTEMPTS = max(2, min(int(os.getenv("JARVIS_MAX_RESOLUTION_ATTEMPTS", "5")), 10))
+WEB_SEARCH_ATTEMPTS = max(1, min(int(os.getenv("JARVIS_WEB_SEARCH_ATTEMPTS", "3")), 6))
+WEB_SEARCH_RESULTS = max(4, min(int(os.getenv("JARVIS_WEB_SEARCH_RESULTS", "10")), 20))
+PROVIDER_TIMEOUT_SECONDS = max(10, min(int(os.getenv("JARVIS_PROVIDER_TIMEOUT_SECONDS", "45")), 180))
+VERIFY_RESULTS = os.getenv("JARVIS_VERIFY_RESULTS", "true").strip().lower() not in {"0", "false", "no", "off"}
+ALWAYS_RETURN_RESULT = os.getenv("JARVIS_ALWAYS_RETURN_RESULT", "true").strip().lower() not in {"0", "false", "no", "off"}
+OPENAI_COMPAT_BASE_URL = os.getenv("JARVIS_OPENAI_COMPAT_BASE_URL", "").strip().rstrip("/")
+OPENAI_COMPAT_API_KEY = os.getenv("JARVIS_OPENAI_COMPAT_API_KEY", "").strip()
+OPENAI_COMPAT_MODELS = [m.strip() for m in os.getenv("JARVIS_OPENAI_COMPAT_MODELS", "").split(",") if m.strip()]
+OLLAMA_BASE_URL = os.getenv("JARVIS_OLLAMA_BASE_URL", "").strip().rstrip("/")
+OLLAMA_MODELS = [m.strip() for m in os.getenv("JARVIS_OLLAMA_MODELS", "llama3.1:8b").split(",") if m.strip()]
 _rate_lock = threading.Lock()
 _rate_windows: Dict[str, List[float]] = {}
 
@@ -173,6 +186,15 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_response_cache_expiry
                 ON response_cache(expires_at);
 
+            CREATE TABLE IF NOT EXISTS request_results (
+                request_id TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL,
+                response_json TEXT NOT NULL,
+                created_at REAL NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_request_results_session
+                ON request_results(session_id, created_at);
+
             CREATE TABLE IF NOT EXISTS model_circuits (
                 model TEXT PRIMARY KEY,
                 blocked_until REAL NOT NULL DEFAULT 0,
@@ -220,6 +242,35 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_jobs_session
                 ON jobs(session_id, created_at);
 
+            CREATE TABLE IF NOT EXISTS resolution_runs (
+                id TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL,
+                prompt TEXT NOT NULL,
+                intent TEXT NOT NULL,
+                status TEXT NOT NULL,
+                route TEXT NOT NULL DEFAULT '',
+                attempts INTEGER NOT NULL DEFAULT 0,
+                verified INTEGER NOT NULL DEFAULT 0,
+                detail TEXT NOT NULL DEFAULT '',
+                created_at REAL NOT NULL,
+                completed_at REAL NOT NULL DEFAULT 0
+            );
+            CREATE INDEX IF NOT EXISTS idx_resolution_runs_session
+                ON resolution_runs(session_id, created_at);
+
+            CREATE TABLE IF NOT EXISTS resolution_steps (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id TEXT NOT NULL,
+                step_index INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                status TEXT NOT NULL,
+                detail TEXT NOT NULL DEFAULT '',
+                created_at REAL NOT NULL,
+                FOREIGN KEY(run_id) REFERENCES resolution_runs(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_resolution_steps_run
+                ON resolution_steps(run_id, step_index);
+
             CREATE TABLE IF NOT EXISTS whatsapp_state (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
                 connected INTEGER NOT NULL DEFAULT 0,
@@ -235,14 +286,14 @@ def init_db() -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
-    logger.info("J.A.R.V.I.S. Advanced Core v11 iniciado | public_mode=%s", PUBLIC_MODE)
+    logger.info("J.A.R.V.I.S. Execution Core v17 iniciado | public_mode=%s", PUBLIC_MODE)
     yield
-    logger.info("J.A.R.V.I.S. Advanced Core v11 detenido")
+    logger.info("J.A.R.V.I.S. Execution Core v17 detenido")
 
 
 app = FastAPI(
-    title="J.A.R.V.I.S. Advanced Core",
-    version="11.0.0",
+    title="J.A.R.V.I.S. Execution Core",
+    version="17.0.0",
     lifespan=lifespan,
 )
 
@@ -275,6 +326,7 @@ class ChatInput(BaseModel):
     files: List[ArchivoInput] = Field(default_factory=list)
     mode: str = "auto"
     project_name: str = "General"
+    request_id: Optional[str] = None
 
 
 class MemoryInput(BaseModel):
@@ -453,6 +505,39 @@ def cache_set(session_id: str, prompt: str, response: Dict[str, Any], ttl: int =
         )
 
 
+def request_result_get(request_id: str, session_id: str) -> Optional[Dict[str, Any]]:
+    if not request_id:
+        return None
+    with db_connection() as conn:
+        row = conn.execute(
+            "SELECT response_json FROM request_results WHERE request_id = ? AND session_id = ?",
+            (request_id, safe_session_id(session_id)),
+        ).fetchone()
+    if not row:
+        return None
+    try:
+        payload = json.loads(row["response_json"])
+        payload["idempotent_replay"] = True
+        return payload
+    except Exception:
+        return None
+
+
+def request_result_set(request_id: str, session_id: str, response: Dict[str, Any]) -> None:
+    if not request_id:
+        return
+    with db_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO request_results(request_id, session_id, response_json, created_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(request_id) DO UPDATE SET response_json = excluded.response_json
+            """,
+            (request_id, safe_session_id(session_id), json.dumps(response, ensure_ascii=False, default=str), time.time()),
+        )
+        conn.execute("DELETE FROM request_results WHERE created_at < ?", (time.time() - 86400,))
+
+
 def model_blocked_until(model: str) -> float:
     with db_connection() as conn:
         row = conn.execute(
@@ -567,6 +652,22 @@ def record_usage(session_id: str, model: str, completion: Any, cached: bool = Fa
     }
 
 
+def record_usage_dict(session_id: str, model: str, usage: Dict[str, Any], cached: bool = False) -> None:
+    prompt_tokens = int(usage.get("prompt_tokens", 0) or 0)
+    completion_tokens = int(usage.get("completion_tokens", 0) or 0)
+    total_tokens = int(usage.get("total_tokens", prompt_tokens + completion_tokens) or 0)
+    if total_tokens <= 0:
+        return
+    with db_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO usage_log(session_id, model, prompt_tokens, completion_tokens, total_tokens, cached, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (safe_session_id(session_id), model[:180], prompt_tokens, completion_tokens, total_tokens, int(cached), time.time()),
+        )
+
+
 def enforce_request_guard(request: Request) -> None:
     # En modo público cualquier persona puede usar J.A.R.V.I.S. sin claves visibles.
     # La protección se mantiene mediante el límite por IP. Para volver a modo privado,
@@ -614,6 +715,31 @@ def provider_status() -> List[Dict[str, Any]]:
             "reason": (row["reason"] if row and blocked_until > now else ""),
         })
     return result
+
+
+def resilience_provider_status() -> Dict[str, Any]:
+    return {
+        "groq": {"configured": bool(GROQ_API_KEY), "models": provider_status()},
+        "openai_compatible": {
+            "configured": bool(OPENAI_COMPAT_BASE_URL and OPENAI_COMPAT_MODELS),
+            "base_url": OPENAI_COMPAT_BASE_URL if OPENAI_COMPAT_BASE_URL else "",
+            "models": OPENAI_COMPAT_MODELS,
+        },
+        "ollama": {
+            "configured": bool(OLLAMA_BASE_URL and OLLAMA_MODELS),
+            "base_url": OLLAMA_BASE_URL if OLLAMA_BASE_URL else "",
+            "models": OLLAMA_MODELS if OLLAMA_BASE_URL else [],
+        },
+        "local_routes": {
+            "calculator": True,
+            "sympy": True,
+            "documents": True,
+            "memory": True,
+            "reminders": True,
+            "web_search": True,
+            "similar_cache": True,
+        },
+    }
 
 
 # -----------------------------------------------------------------------------
@@ -727,29 +853,147 @@ def memory_delete(session_id: str, memory_id: str) -> Dict[str, Any]:
 # HERRAMIENTAS
 # -----------------------------------------------------------------------------
 
-def web_search(session_id: str, query: str, max_results: int = 6) -> Dict[str, Any]:
+def _clean_search_query(query: str) -> str:
+    cleaned = re.sub(
+        r"^(?:por favor\s+)?(?:busca|investiga|averigua|consulta)(?:\s+en\s+(?:internet|la web))?\s*[:,-]?\s*",
+        "",
+        query.strip(),
+        flags=re.I,
+    )
+    return re.sub(r"\s+", " ", cleaned).strip() or query.strip()
+
+
+def _search_query_variants(query: str) -> List[str]:
+    base = _clean_search_query(query)
+    variants = [query.strip(), base]
+    words = [word for word in re.findall(r"[\wáéíóúñü-]+", base, flags=re.I) if len(word) > 2]
+    if len(words) > 8:
+        variants.append(" ".join(words[:8]))
+    if any(term in base.lower() for term in ["hoy", "actual", "reciente", "último", "ultimo", "noticias"]):
+        variants.append(f"{base} {datetime.now(LOCAL_TZ).year}")
+    unique: List[str] = []
+    for item in variants:
+        item = re.sub(r"\s+", " ", item).strip()
+        if item and item.lower() not in {value.lower() for value in unique}:
+            unique.append(item)
+    return unique[:4]
+
+
+def _normalize_result_url(url: str) -> str:
+    return re.sub(r"[#?].*$", "", str(url or "").strip()).rstrip("/").lower()
+
+
+def _dedupe_search_results(results: List[Dict[str, str]], limit: int) -> List[Dict[str, str]]:
+    seen_urls: set[str] = set()
+    seen_titles: set[str] = set()
+    output: List[Dict[str, str]] = []
+    for item in results:
+        title = re.sub(r"\s+", " ", str(item.get("title", "")).strip())
+        snippet = re.sub(r"\s+", " ", str(item.get("snippet", "")).strip())
+        url = str(item.get("url", "")).strip()
+        key_url = _normalize_result_url(url)
+        key_title = title.lower()
+        if not title and not snippet:
+            continue
+        if key_url and key_url in seen_urls:
+            continue
+        if key_title and key_title in seen_titles:
+            continue
+        if key_url:
+            seen_urls.add(key_url)
+        if key_title:
+            seen_titles.add(key_title)
+        output.append({"title": title or "Resultado", "snippet": snippet, "url": url})
+        if len(output) >= limit:
+            break
+    return output
+
+
+def _wikipedia_search(query: str, limit: int = 5) -> List[Dict[str, str]]:
+    endpoint = "https://es.wikipedia.org/w/api.php"
+    try:
+        with httpx.Client(timeout=PROVIDER_TIMEOUT_SECONDS, follow_redirects=True) as http:
+            response = http.get(
+                endpoint,
+                params={
+                    "action": "query",
+                    "list": "search",
+                    "srsearch": _clean_search_query(query),
+                    "utf8": 1,
+                    "format": "json",
+                    "srlimit": max(1, min(limit, 10)),
+                },
+                headers={"User-Agent": "JARVIS-Execution-Core/17.0"},
+            )
+            response.raise_for_status()
+            payload = response.json()
+        output: List[Dict[str, str]] = []
+        for item in payload.get("query", {}).get("search", []):
+            title = str(item.get("title", "")).strip()
+            snippet = re.sub(r"<[^>]+>", "", str(item.get("snippet", "")))
+            output.append({
+                "title": title,
+                "snippet": re.sub(r"\s+", " ", snippet).strip(),
+                "url": f"https://es.wikipedia.org/wiki/{title.replace(' ', '_')}",
+            })
+        return output
+    except Exception as exc:
+        logger.info("Wikipedia no estuvo disponible como respaldo: %s", safe_error_text(exc, 260))
+        return []
+
+
+def web_search(session_id: str, query: str, max_results: int = WEB_SEARCH_RESULTS) -> Dict[str, Any]:
+    """Búsqueda resistente con variaciones, reintentos y respaldo enciclopédico."""
+    limit = max(1, min(int(max_results), WEB_SEARCH_RESULTS))
+    variants = _search_query_variants(query)
+    collected: List[Dict[str, str]] = []
+    attempts: List[Dict[str, Any]] = []
+    last_error = ""
+
     try:
         try:
             from ddgs import DDGS
         except ImportError:
             from duckduckgo_search import DDGS  # type: ignore
 
-        results: List[Dict[str, str]] = []
-        with DDGS() as ddgs:
-            for item in ddgs.text(query, max_results=max(1, min(int(max_results), 10))):
-                results.append(
-                    {
-                        "title": str(item.get("title", "")),
-                        "snippet": str(item.get("body", "")),
-                        "url": str(item.get("href", item.get("url", ""))),
-                    }
-                )
-
-        log_activity(session_id, "tool", "Búsqueda web", query, "completed")
-        return {"query": query, "results": results}
+        for attempt_index in range(WEB_SEARCH_ATTEMPTS):
+            variant = variants[min(attempt_index, len(variants) - 1)]
+            try:
+                with DDGS() as ddgs:
+                    raw = ddgs.text(variant, max_results=min(limit * 2, 20))
+                    batch = [
+                        {
+                            "title": str(item.get("title", "")),
+                            "snippet": str(item.get("body", item.get("snippet", ""))),
+                            "url": str(item.get("href", item.get("url", ""))),
+                        }
+                        for item in raw
+                    ]
+                collected.extend(batch)
+                attempts.append({"provider": "ddgs", "query": variant, "status": "completed", "count": len(batch)})
+                deduped = _dedupe_search_results(collected, limit)
+                if len(deduped) >= min(4, limit):
+                    collected = deduped
+                    break
+            except Exception as exc:
+                last_error = safe_error_text(exc, 300)
+                attempts.append({"provider": "ddgs", "query": variant, "status": "failed", "detail": last_error})
+                time.sleep(min(0.4 * (2 ** attempt_index) + random.random() * 0.2, 2.0))
     except Exception as exc:
-        log_activity(session_id, "tool", "Búsqueda web", safe_error_text(exc), "failed")
-        raise RuntimeError(f"La búsqueda web falló: {safe_error_text(exc)}") from exc
+        last_error = safe_error_text(exc, 300)
+        attempts.append({"provider": "ddgs", "query": query, "status": "unavailable", "detail": last_error})
+
+    deduped = _dedupe_search_results(collected, limit)
+    if len(deduped) < min(3, limit):
+        wiki = _wikipedia_search(query, limit=min(5, limit))
+        attempts.append({"provider": "wikipedia", "query": _clean_search_query(query), "status": "completed" if wiki else "empty", "count": len(wiki)})
+        deduped = _dedupe_search_results([*deduped, *wiki], limit)
+
+    status = "completed" if deduped else "failed"
+    log_activity(session_id, "tool", "Búsqueda web resistente", json.dumps(attempts, ensure_ascii=False), status)
+    if not deduped:
+        raise RuntimeError(f"No se obtuvieron resultados web después de {len(attempts)} rutas. {last_error}".strip())
+    return {"query": query, "results": deduped, "attempts": attempts, "providers_used": sorted({item["provider"] for item in attempts if item.get("status") == "completed"})}
 
 
 ALLOWED_AST_NODES = (
@@ -1441,10 +1685,110 @@ def classify_intent(prompt: str) -> Dict[str, Any]:
     }
 
 
+def _format_memories(items: List[Dict[str, Any]]) -> str:
+    if not items:
+        return "Todavía no tengo recuerdos guardados para esta conversación o proyecto."
+    lines = ["## Memoria disponible", ""]
+    for item in items[:12]:
+        lines.append(f"- {item.get('content', '')}")
+    return "\n".join(lines)
+
+
+def _parse_simple_reminder(prompt: str) -> Optional[Tuple[str, str]]:
+    text = re.sub(r"\s+", " ", prompt.strip())
+    lower = text.lower()
+    if not any(word in lower for word in ["recuérdame", "recuerdame", "recordatorio", "avísame", "avisame"]):
+        return None
+    now = datetime.now(LOCAL_TZ)
+    target = now
+    if "mañana" in lower or "manana" in lower:
+        target = now + timedelta(days=1)
+    date_match = re.search(r"\b(20\d{2})-(\d{1,2})-(\d{1,2})\b", lower)
+    if date_match:
+        target = target.replace(year=int(date_match.group(1)), month=int(date_match.group(2)), day=int(date_match.group(3)))
+    time_match = re.search(r"(?:a\s+las?\s+)?(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)?", lower)
+    hour, minute = 9, 0
+    if time_match:
+        hour = int(time_match.group(1))
+        minute = int(time_match.group(2) or 0)
+        suffix = (time_match.group(3) or "").replace(".", "")
+        if suffix == "pm" and hour < 12:
+            hour += 12
+        if suffix == "am" and hour == 12:
+            hour = 0
+        hour = max(0, min(hour, 23))
+        minute = max(0, min(minute, 59))
+    target = target.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if target <= now and not ("mañana" in lower or "manana" in lower or date_match):
+        target += timedelta(days=1)
+    title = re.sub(r"^(?:recuérdame|recuerdame|avísame|avisame|crear?\s+recordatorio)\s*", "", text, flags=re.I)
+    title = re.sub(r"\b(?:hoy|mañana|manana)\b", "", title, flags=re.I)
+    title = re.sub(r"\b(?:a\s+las?\s+)?\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?)?\b", "", title, flags=re.I)
+    title = re.sub(r"\s+", " ", title).strip(" ,.-") or "Recordatorio de JARVIS"
+    return title[:240], target.isoformat()
+
+
+def _format_document_matches(data: Dict[str, Any]) -> str:
+    matches = data.get("matches", [])
+    if not matches:
+        return "No encontré coincidencias en los documentos guardados."
+    lines = ["## Coincidencias en la biblioteca", ""]
+    for index, item in enumerate(matches[:6], 1):
+        lines.append(f"### {index}. {item.get('file_name', 'Documento')}")
+        lines.append(str(item.get("excerpt", ""))[:1800])
+        lines.append("")
+    return "\n".join(lines)
+
+
 def direct_route(session_id: str, prompt: str) -> Optional[Dict[str, Any]]:
     if not DIRECT_ROUTES_ENABLED:
         return None
     lower = prompt.lower().strip()
+
+    if any(phrase in lower for phrase in ["qué hora es", "que hora es", "fecha de hoy", "qué día es", "que dia es"]):
+        now = current_datetime(session_id)
+        return {
+            "reply": f"En Honduras son las **{now['time']}** del **{now['date']}**.",
+            "tools": [{"name": "current_datetime", "status": "completed"}],
+            "mode": "direct", "model": None, "usage": {"total_tokens": 0},
+        }
+
+    if lower.startswith(("recuerda que ", "memoriza que ")):
+        content = re.sub(r"^(?:recuerda|memoriza)\s+que\s+", "", prompt, flags=re.I).strip()
+        saved = memory_save(session_id, content, "preference", 4)
+        return {
+            "reply": f"He guardado este recuerdo: **{saved['content']}**",
+            "tools": [{"name": "memory_save", "status": "completed"}],
+            "mode": "direct", "model": None, "usage": {"total_tokens": 0},
+        }
+
+    if any(phrase in lower for phrase in ["qué recuerdas", "que recuerdas", "muestra tu memoria", "mis recuerdos"]):
+        items = memory_search(session_id, "", 12)
+        return {
+            "reply": _format_memories(items),
+            "tools": [{"name": "memory_search", "status": "completed"}],
+            "mode": "direct", "model": None, "usage": {"total_tokens": 0},
+        }
+
+    reminder = _parse_simple_reminder(prompt)
+    if reminder:
+        title, due_at = reminder
+        created = reminder_create(session_id, title, due_at)
+        return {
+            "reply": f"Recordatorio creado: **{title}** para **{due_at}**.",
+            "tools": [{"name": "reminder_create", "status": "completed"}],
+            "mode": "direct", "model": None, "usage": {"total_tokens": 0},
+            "reminder": created,
+        }
+
+    if any(phrase in lower for phrase in ["busca en el documento", "busca en los documentos", "consulta el documento", "en mi biblioteca"]):
+        query = re.sub(r"^(?:busca|consulta).*?(?:documentos?|biblioteca)\s*", "", prompt, flags=re.I).strip()
+        data = document_search(session_id, query, limit=6)
+        return {
+            "reply": _format_document_matches(data),
+            "tools": [{"name": "document_search", "status": "completed"}],
+            "mode": "direct", "model": None, "usage": {"total_tokens": 0},
+        }
 
     if any(phrase in lower for phrase in [
         "qué capacidades tienes", "que capacidades tienes", "qué puedes hacer", "que puedes hacer",
@@ -1511,6 +1855,423 @@ def _format_web_results_direct(query: str, data: Dict[str, Any]) -> str:
         lines.append("")
     lines.append("_Respuesta presentada directamente desde la búsqueda para reducir consumo de tokens y conservar actualidad._")
     return "\n".join(lines)
+
+
+
+def _provider_messages(messages: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+    output: List[Dict[str, str]] = []
+    for message in messages:
+        role = str(message.get("role", "user"))
+        if role not in {"system", "user", "assistant"}:
+            continue
+        content = message.get("content", "")
+        if isinstance(content, list):
+            content = json.dumps(content, ensure_ascii=False)
+        content = str(content or "").strip()
+        if content:
+            output.append({"role": role, "content": content[:30000]})
+    return output[-MAX_HISTORY_MESSAGES - 2 :]
+
+
+def _call_openai_compatible_text(messages: List[Dict[str, Any]]) -> Tuple[str, str, Dict[str, int]]:
+    if not OPENAI_COMPAT_BASE_URL or not OPENAI_COMPAT_MODELS:
+        raise RuntimeError("Proveedor compatible no configurado")
+    url = f"{OPENAI_COMPAT_BASE_URL}/chat/completions"
+    headers = {"Content-Type": "application/json"}
+    if OPENAI_COMPAT_API_KEY:
+        headers["Authorization"] = f"Bearer {OPENAI_COMPAT_API_KEY}"
+    errors: List[str] = []
+    for model in OPENAI_COMPAT_MODELS:
+        try:
+            with httpx.Client(timeout=PROVIDER_TIMEOUT_SECONDS, follow_redirects=True) as http:
+                response = http.post(
+                    url,
+                    headers=headers,
+                    json={
+                        "model": model,
+                        "messages": _provider_messages(messages),
+                        "temperature": 0.2,
+                        "max_tokens": MAX_COMPLETION_TOKENS,
+                        "stream": False,
+                    },
+                )
+            response.raise_for_status()
+            payload = response.json()
+            text = str(payload.get("choices", [{}])[0].get("message", {}).get("content", "")).strip()
+            if not text:
+                raise RuntimeError("Respuesta vacía")
+            raw_usage = payload.get("usage", {}) or {}
+            usage = {
+                "prompt_tokens": int(raw_usage.get("prompt_tokens", 0) or 0),
+                "completion_tokens": int(raw_usage.get("completion_tokens", 0) or 0),
+                "total_tokens": int(raw_usage.get("total_tokens", 0) or 0),
+            }
+            return text, f"compat:{model}", usage
+        except Exception as exc:
+            errors.append(f"{model}: {safe_error_text(exc, 220)}")
+    raise RuntimeError("; ".join(errors) or "Proveedor compatible no disponible")
+
+
+def _call_ollama_text(messages: List[Dict[str, Any]]) -> Tuple[str, str, Dict[str, int]]:
+    if not OLLAMA_BASE_URL or not OLLAMA_MODELS:
+        raise RuntimeError("Ollama no configurado")
+    errors: List[str] = []
+    for model in OLLAMA_MODELS:
+        try:
+            with httpx.Client(timeout=PROVIDER_TIMEOUT_SECONDS, follow_redirects=True) as http:
+                response = http.post(
+                    f"{OLLAMA_BASE_URL}/api/chat",
+                    json={
+                        "model": model,
+                        "messages": _provider_messages(messages),
+                        "stream": False,
+                        "options": {"temperature": 0.2, "num_predict": MAX_COMPLETION_TOKENS},
+                    },
+                )
+            response.raise_for_status()
+            payload = response.json()
+            text = str(payload.get("message", {}).get("content", "")).strip()
+            if not text:
+                raise RuntimeError("Respuesta vacía")
+            usage = {
+                "prompt_tokens": int(payload.get("prompt_eval_count", 0) or 0),
+                "completion_tokens": int(payload.get("eval_count", 0) or 0),
+                "total_tokens": int(payload.get("prompt_eval_count", 0) or 0) + int(payload.get("eval_count", 0) or 0),
+            }
+            return text, f"ollama:{model}", usage
+        except Exception as exc:
+            errors.append(f"{model}: {safe_error_text(exc, 220)}")
+    raise RuntimeError("; ".join(errors) or "Ollama no disponible")
+
+
+def external_text_provider(messages: List[Dict[str, Any]]) -> Tuple[str, str, Dict[str, int], List[Dict[str, str]]]:
+    attempts: List[Dict[str, str]] = []
+    providers: List[Tuple[str, Callable[[List[Dict[str, Any]]], Tuple[str, str, Dict[str, int]]]]] = []
+    if OPENAI_COMPAT_BASE_URL and OPENAI_COMPAT_MODELS:
+        providers.append(("openai_compatible", _call_openai_compatible_text))
+    if OLLAMA_BASE_URL and OLLAMA_MODELS:
+        providers.append(("ollama", _call_ollama_text))
+    if not providers:
+        raise RuntimeError("No hay proveedores generativos secundarios configurados")
+    for name, provider in providers:
+        try:
+            text, model, usage = provider(messages)
+            attempts.append({"provider": name, "status": "completed", "model": model})
+            return text, model, usage, attempts
+        except Exception as exc:
+            attempts.append({"provider": name, "status": "failed", "detail": safe_error_text(exc, 260)})
+    raise RuntimeError(json.dumps(attempts, ensure_ascii=False))
+
+
+def _token_set(text: str) -> set[str]:
+    stop = {"para", "como", "esto", "esta", "este", "que", "con", "una", "uno", "por", "del", "las", "los", "the", "and", "from"}
+    return {word for word in re.findall(r"[a-záéíóúñü0-9]+", text.lower()) if len(word) > 2 and word not in stop}
+
+
+def cache_find_similar(session_id: str, prompt: str, threshold: float = 0.68) -> Optional[Dict[str, Any]]:
+    target = _token_set(prompt)
+    if not target:
+        return None
+    with db_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT prompt, response_json, expires_at
+            FROM response_cache
+            WHERE session_id = ? AND expires_at >= ?
+            ORDER BY created_at DESC LIMIT 50
+            """,
+            (safe_session_id(session_id), time.time()),
+        ).fetchall()
+    best: Optional[Tuple[float, Dict[str, Any]]] = None
+    for row in rows:
+        candidate = _token_set(row["prompt"])
+        if not candidate:
+            continue
+        score = len(target & candidate) / max(1, len(target | candidate))
+        if score >= threshold and (best is None or score > best[0]):
+            try:
+                payload = json.loads(row["response_json"])
+                payload["cached"] = True
+                payload["similar_cache"] = True
+                payload["similarity"] = round(score, 3)
+                best = (score, payload)
+            except Exception:
+                continue
+    return best[1] if best else None
+
+
+def build_execution_plan(intent: str, prompt: str) -> List[Dict[str, str]]:
+    base = [{"name": "understand", "label": "Comprender el objetivo"}]
+    plans = {
+        "research": [
+            {"name": "search", "label": "Buscar por varias rutas"},
+            {"name": "compare", "label": "Comparar y depurar fuentes"},
+            {"name": "synthesize", "label": "Sintetizar hallazgos"},
+            {"name": "verify", "label": "Verificar cobertura y fuentes"},
+        ],
+        "math": [
+            {"name": "parse", "label": "Interpretar la expresión"},
+            {"name": "solve", "label": "Resolver con motor exacto"},
+            {"name": "verify", "label": "Comprobar el resultado"},
+        ],
+        "documents": [
+            {"name": "retrieve", "label": "Recuperar documentos relacionados"},
+            {"name": "analyze", "label": "Analizar el contenido"},
+            {"name": "verify", "label": "Comprobar la respuesta"},
+        ],
+        "code": [
+            {"name": "inspect", "label": "Identificar el problema técnico"},
+            {"name": "solve", "label": "Proponer una solución"},
+            {"name": "verify", "label": "Revisar riesgos y coherencia"},
+        ],
+        "planning": [
+            {"name": "decompose", "label": "Dividir el objetivo"},
+            {"name": "prioritize", "label": "Ordenar pasos y dependencias"},
+            {"name": "verify", "label": "Confirmar que el plan sea ejecutable"},
+        ],
+    }
+    return [*base, *plans.get(intent, [
+        {"name": "resolve", "label": "Resolver por la mejor ruta disponible"},
+        {"name": "verify", "label": "Comprobar la respuesta"},
+    ])]
+
+
+def resolution_start(session_id: str, prompt: str, intent: str) -> str:
+    run_id = str(uuid.uuid4())
+    with db_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO resolution_runs(id, session_id, prompt, intent, status, created_at)
+            VALUES (?, ?, ?, ?, 'running', ?)
+            """,
+            (run_id, safe_session_id(session_id), prompt[:30000], intent[:80], time.time()),
+        )
+    return run_id
+
+
+def resolution_step(run_id: str, index: int, name: str, status: str, detail: Any = "") -> None:
+    try:
+        with db_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO resolution_steps(run_id, step_index, name, status, detail, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (run_id, index, name[:100], status[:40], str(detail)[:6000], time.time()),
+            )
+    except Exception:
+        logger.exception("No se pudo registrar un paso de resolución")
+
+
+def resolution_finish(run_id: str, route: str, attempts: int, verified: bool, detail: Any = "", status: str = "completed") -> None:
+    with db_connection() as conn:
+        conn.execute(
+            """
+            UPDATE resolution_runs
+            SET status = ?, route = ?, attempts = ?, verified = ?, detail = ?, completed_at = ?
+            WHERE id = ?
+            """,
+            (status, route[:80], attempts, int(verified), str(detail)[:6000], time.time(), run_id),
+        )
+
+
+def verify_result(prompt: str, intent: str, result: Dict[str, Any]) -> Dict[str, Any]:
+    reply = str(result.get("reply", "")).strip()
+    reasons: List[str] = []
+    if len(reply) < 24:
+        reasons.append("respuesta demasiado breve")
+    bad_markers = ["traceback", "internal server error", "respuesta vacía", "error desconocido"]
+    if any(marker in reply.lower() for marker in bad_markers):
+        reasons.append("contiene una señal de error")
+    if intent == "research":
+        sources = len(re.findall(r"https?://", reply))
+        tools = [str(item.get("name", "")) for item in result.get("tools", []) if isinstance(item, dict)]
+        if sources == 0 and "web_search" not in tools:
+            reasons.append("investigación sin fuentes o búsqueda")
+    if intent == "math":
+        math_tools = [str(item.get("name", "")) for item in result.get("tools", []) if isinstance(item, dict)]
+        has_numeric_result = bool(re.search(r"\d", reply))
+        if not has_numeric_result and not any(name in math_tools for name in ["calculator", "sympy_solve"]):
+            reasons.append("resultado matemático no identificable")
+    covered = bool(reply) and len(reasons) == 0
+    return {"verified": covered, "reasons": reasons, "score": 1.0 if covered else max(0.2, 0.75 - 0.18 * len(reasons))}
+
+
+def _document_context(session_id: str, prompt: str) -> str:
+    try:
+        data = document_search(session_id, prompt, limit=5)
+        items = data.get("matches", []) if isinstance(data, dict) else []
+        if not items:
+            return ""
+        return "\n\n".join(
+            f"Documento: {item.get('file_name', 'archivo')}\n{str(item.get('excerpt', item.get('snippet', item.get('text', ''))))[:2600]}"
+            for item in items
+        )[:10000]
+    except Exception:
+        return ""
+
+
+def _local_last_resort(session_id: str, prompt: str, intent: str) -> Dict[str, Any]:
+    if intent == "planning":
+        return {
+            "reply": (
+                "## Plan de resolución\n\n"
+                "1. Define el resultado final y los criterios de éxito.\n"
+                "2. Reúne los datos, archivos o restricciones necesarias.\n"
+                "3. Divide el objetivo en entregables pequeños y verificables.\n"
+                "4. Ejecuta primero el paso de mayor impacto o dependencia.\n"
+                "5. Comprueba cada resultado antes de avanzar.\n"
+                "6. Documenta pendientes, riesgos y siguiente acción.\n\n"
+                f"**Objetivo recibido:** {prompt}"
+            ),
+            "tools": [], "mode": "resilient_local", "model": None, "usage": {"total_tokens": 0}, "degraded": True,
+        }
+    if intent == "documents":
+        context = _document_context(session_id, prompt)
+        if context:
+            return {
+                "reply": f"## Información recuperada de la biblioteca\n\n{context}",
+                "tools": [{"name": "document_search", "status": "completed"}],
+                "mode": "resilient_documents", "model": None, "usage": {"total_tokens": 0}, "degraded": True,
+            }
+    try:
+        data = web_search(session_id, prompt, max_results=8)
+        return {
+            "reply": _format_web_results_direct(prompt, data),
+            "tools": [{"name": "web_search", "arguments": {"query": prompt}, "status": "completed"}],
+            "mode": "resilient_web", "model": None, "usage": {"total_tokens": 0}, "degraded": True,
+            "search_attempts": data.get("attempts", []),
+        }
+    except Exception:
+        return {
+            "reply": (
+                "El núcleo generativo y las fuentes externas no respondieron en este intento, pero JARVIS conservó la solicitud. "
+                "Las rutas locales de cálculo, ecuaciones, memoria, documentos y planificación continúan activas. "
+                "Reintenta la misma instrucción: el sistema volverá a probar modelos, caché y búsqueda sin perder el contexto."
+            ),
+            "tools": [], "mode": "resilient_local", "model": None, "usage": {"total_tokens": 0}, "degraded": True,
+        }
+
+
+def resilient_resolve(
+    session_id: str,
+    prompt: str,
+    *,
+    project_name: str,
+    mode: str,
+    intent_info: Dict[str, Any],
+) -> Dict[str, Any]:
+    sid = safe_session_id(session_id)
+    intent = str(intent_info.get("intent", "general"))
+    run_id = resolution_start(sid, prompt, intent)
+    plan = build_execution_plan(intent, prompt)
+    trace: List[Dict[str, Any]] = []
+    errors: List[str] = []
+    attempts = 0
+    result: Optional[Dict[str, Any]] = None
+
+    def attempt(route: str, function: Callable[[], Optional[Dict[str, Any]]]) -> Optional[Dict[str, Any]]:
+        nonlocal attempts
+        if attempts >= MAX_RESOLUTION_ATTEMPTS:
+            return None
+        attempts += 1
+        resolution_step(run_id, attempts, route, "running")
+        try:
+            value = function()
+            if value is None:
+                resolution_step(run_id, attempts, route, "empty")
+                trace.append({"route": route, "status": "empty"})
+                return None
+            resolution_step(run_id, attempts, route, "completed", value.get("mode", ""))
+            trace.append({"route": route, "status": "completed"})
+            return value
+        except Exception as exc:
+            detail = safe_error_text(exc, 420)
+            errors.append(f"{route}: {detail}")
+            resolution_step(run_id, attempts, route, "failed", detail)
+            trace.append({"route": route, "status": "failed", "detail": detail})
+            return None
+
+    result = attempt("direct", lambda: direct_route(sid, prompt))
+    if result is None:
+        result = attempt("exact_cache", lambda: cache_get(sid, prompt))
+    if result is None:
+        result = attempt("agent", lambda: run_agent(sid, prompt, project_name=project_name, mode=mode, intent=intent))
+
+    if result is None and intent == "research":
+        def research_fallback() -> Dict[str, Any]:
+            search_data = web_search(sid, prompt, max_results=WEB_SEARCH_RESULTS)
+            source_text = _format_web_results_direct(prompt, search_data)
+            messages = [
+                {"role": "system", "content": "Sintetiza en español la evidencia proporcionada. No inventes datos; conserva las fuentes y señala incertidumbre."},
+                {"role": "user", "content": f"Pregunta: {prompt}\n\nEvidencia:\n{source_text}"},
+            ]
+            try:
+                text, model, usage, provider_attempts = external_text_provider(messages)
+                return {
+                    "reply": text, "tools": [{"name": "web_search", "status": "completed"}],
+                    "mode": "provider_research", "model": model, "usage": usage,
+                    "provider_attempts": provider_attempts, "search_attempts": search_data.get("attempts", []),
+                }
+            except Exception:
+                return {
+                    "reply": source_text, "tools": [{"name": "web_search", "status": "completed"}],
+                    "mode": "resilient_web", "model": None, "usage": {"total_tokens": 0},
+                    "degraded": True, "search_attempts": search_data.get("attempts", []),
+                }
+        result = attempt("research_pipeline", research_fallback)
+
+    if result is None:
+        def secondary_provider() -> Dict[str, Any]:
+            context = _document_context(sid, prompt) if intent == "documents" else ""
+            messages = [
+                {"role": "system", "content": construir_prompt_sistema(sid, project_name, mode, intent)},
+                {"role": "user", "content": f"{prompt}\n\nContexto documental disponible:\n{context}" if context else prompt},
+            ]
+            text, model, usage, provider_attempts = external_text_provider(messages)
+            return {"reply": text, "tools": [], "mode": "secondary_provider", "model": model, "usage": usage, "provider_attempts": provider_attempts}
+        result = attempt("secondary_provider", secondary_provider)
+
+    if result is None:
+        result = attempt("similar_cache", lambda: cache_find_similar(sid, prompt))
+    if result is None:
+        result = attempt("local_last_resort", lambda: _local_last_resort(sid, prompt, intent))
+    if result is None:
+        result = _local_last_resort(sid, prompt, intent)
+
+    verification = verify_result(prompt, intent, result) if VERIFY_RESULTS else {"verified": True, "reasons": [], "score": 1.0}
+    if not verification["verified"] and attempts < MAX_RESOLUTION_ATTEMPTS:
+        def repair() -> Dict[str, Any]:
+            messages = [
+                {"role": "system", "content": "Corrige la respuesta para cubrir completamente la solicitud. No inventes información y conserva los datos verificables."},
+                {"role": "user", "content": f"Solicitud: {prompt}\n\nRespuesta a corregir:\n{result.get('reply','')}\n\nProblemas detectados: {', '.join(verification['reasons'])}"},
+            ]
+            text, model, usage, provider_attempts = external_text_provider(messages)
+            return {**result, "reply": text, "model": model, "usage": usage, "mode": "verified_repair", "provider_attempts": provider_attempts}
+        repaired = attempt("verification_repair", repair)
+        if repaired is not None:
+            repaired_verification = verify_result(prompt, intent, repaired)
+            if repaired_verification["score"] >= verification["score"]:
+                result, verification = repaired, repaired_verification
+
+    result_model = str(result.get("model", ""))
+    if result_model.startswith(("compat:", "ollama:")):
+        try:
+            record_usage_dict(sid, result_model, result.get("usage", {}) or {})
+        except Exception:
+            logger.exception("No se pudo registrar el uso del proveedor secundario")
+
+    result["execution_plan"] = plan
+    result["resolution_trace"] = trace
+    result["resolution_attempts"] = attempts
+    result["verified"] = bool(verification["verified"])
+    result["verification"] = verification
+    result["resolution_run_id"] = run_id
+    if errors:
+        result["recovered_errors"] = errors[-5:]
+    route = str(result.get("mode", "resilient"))
+    resolution_finish(run_id, route, attempts, bool(verification["verified"]), verification, "completed" if result.get("reply") else "degraded")
+    return result
 
 
 def degraded_fallback(session_id: str, prompt: str, retry_after: int) -> Dict[str, Any]:
@@ -1748,9 +2509,12 @@ def save_document(session_id: str, file_name: str, file_b64: str) -> Dict[str, A
 @app.post("/api/jarvis")
 async def consultar_jarvis(data: ChatInput, request: Request):
     started_at = time.perf_counter()
-    request_id = str(uuid.uuid4())
+    request_id = re.sub(r"[^a-zA-Z0-9_.:-]", "_", (data.request_id or str(uuid.uuid4())))[:160]
     enforce_request_guard(request)
     sid = safe_session_id(data.session_id)
+    replay = request_result_get(request_id, sid)
+    if replay is not None:
+        return replay
     prompt = data.message.strip() or "Hola, J.A.R.V.I.S."
     project_name = re.sub(r"\s+", " ", data.project_name or "General").strip()[:120]
     requested_mode = (data.mode or "auto").strip().lower()[:40]
@@ -1766,23 +2530,15 @@ async def consultar_jarvis(data: ChatInput, request: Request):
             if attached.file_b64 and attached.file_name:
                 save_document(sid, attached.file_name, attached.file_b64)
 
-        direct = direct_route(sid, prompt)
-        if direct is not None:
-            result = direct
-        else:
-            cached = cache_get(sid, prompt)
-            if cached is not None:
-                result = cached
-                result["mode"] = "cache"
-                result["cached"] = True
-            else:
-                try:
-                    result = run_agent(sid, prompt, project_name=project_name, mode=requested_mode, intent=intent_info["intent"])
-                except ModelsUnavailableError as exc:
-                    logger.warning("Todos los modelos están limitados: %s", safe_error_text(exc))
-                    result = degraded_fallback(sid, prompt, exc.retry_after_seconds)
-                if result.get("reply") and not result.get("degraded"):
-                    cache_set(sid, prompt, result)
+        result = resilient_resolve(
+            sid,
+            prompt,
+            project_name=project_name,
+            mode=requested_mode,
+            intent_info=intent_info,
+        )
+        if result.get("reply") and not result.get("degraded"):
+            cache_set(sid, prompt, result)
 
         guardar_mensaje_db(sid, "user", prompt)
         guardar_mensaje_db(sid, "assistant", result["reply"])
@@ -1799,7 +2555,9 @@ async def consultar_jarvis(data: ChatInput, request: Request):
         result.setdefault("project_name", project_name)
         result.setdefault("request_id", request_id)
         result["latency_ms"] = round((time.perf_counter() - started_at) * 1000)
-        return {"status": "degraded" if result.get("degraded") else "success", **result}
+        response_payload = {"status": "degraded" if result.get("degraded") else "success", **result}
+        request_result_set(request_id, sid, response_payload)
+        return response_payload
 
     except Exception as exc:
         detail = safe_error_text(exc)
@@ -1810,20 +2568,20 @@ async def consultar_jarvis(data: ChatInput, request: Request):
             "⚠️ El núcleo encontró un problema temporal. Las funciones locales siguen disponibles. "
             "Revisa el estado del backend si el problema continúa."
         )
-        return JSONResponse(
-            status_code=503 if kind in {"temporary", "rate_limit"} else 500,
-            content={
-                "status": "error",
-                "reply": user_reply,
-                "error_code": kind,
-                "retry_after_seconds": retry_after,
-                "tools": [],
-                "intent": intent_info.get("intent", "general"),
-                "route": "error",
-                "request_id": request_id,
-                "latency_ms": round((time.perf_counter() - started_at) * 1000),
-            },
-        )
+        emergency = _local_last_resort(sid, prompt, intent_info.get("intent", "general"))
+        content = {
+            "status": "degraded",
+            **emergency,
+            "error_code": kind,
+            "retry_after_seconds": retry_after,
+            "intent": intent_info.get("intent", "general"),
+            "route": emergency.get("mode", "emergency_fallback"),
+            "request_id": request_id,
+            "latency_ms": round((time.perf_counter() - started_at) * 1000),
+            "recovered": True,
+        }
+        request_result_set(request_id, sid, content)
+        return JSONResponse(status_code=200 if ALWAYS_RETURN_RESULT else (503 if kind in {"temporary", "rate_limit"} else 500), content=content)
 
 
 @app.post("/api/library/upload")
@@ -2042,8 +2800,12 @@ def execute_background_job(job_id: str, session_id: str, prompt: str) -> None:
                 "UPDATE jobs SET status = 'running', progress = 15, updated_at = ? WHERE id = ?",
                 (time.time(), job_id),
             )
-        direct = direct_route(sid, prompt)
-        result = direct if direct is not None else run_agent(sid, prompt)
+        intent_info = classify_intent(prompt)
+        with db_connection() as conn:
+            conn.execute("UPDATE jobs SET progress = 35, updated_at = ? WHERE id = ?", (time.time(), job_id))
+        result = resilient_resolve(sid, prompt, project_name="Trabajo autónomo", mode="auto", intent_info=intent_info)
+        with db_connection() as conn:
+            conn.execute("UPDATE jobs SET progress = 85, updated_at = ? WHERE id = ?", (time.time(), job_id))
         reply = str(result.get("reply", ""))
         with db_connection() as conn:
             conn.execute(
@@ -2179,6 +2941,49 @@ def knowledge_search(session_id: str, query: str, limit: int = 8):
     }
 
 
+@app.get("/api/resilience/status")
+def resilience_status(session_id: str = "default_session", limit: int = 12):
+    sid = safe_session_id(session_id)
+    limit = max(1, min(int(limit), 50))
+    with db_connection() as conn:
+        runs = conn.execute(
+            """
+            SELECT id, intent, status, route, attempts, verified, detail, created_at, completed_at
+            FROM resolution_runs
+            WHERE session_id = ?
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (sid, limit),
+        ).fetchall()
+        summary = conn.execute(
+            """
+            SELECT COUNT(*) AS total,
+                   SUM(CASE WHEN verified = 1 THEN 1 ELSE 0 END) AS verified,
+                   SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed,
+                   COALESCE(AVG(attempts), 0) AS average_attempts
+            FROM resolution_runs
+            WHERE session_id = ? AND created_at >= ?
+            """,
+            (sid, time.time() - 86400),
+        ).fetchone()
+    return {
+        "status": "ok",
+        "version": "17.0.0",
+        "providers": resilience_provider_status(),
+        "limits": {
+            "max_resolution_attempts": MAX_RESOLUTION_ATTEMPTS,
+            "web_search_attempts": WEB_SEARCH_ATTEMPTS,
+            "web_search_results": WEB_SEARCH_RESULTS,
+            "provider_timeout_seconds": PROVIDER_TIMEOUT_SECONDS,
+            "verification_enabled": VERIFY_RESULTS,
+            "always_return_result": ALWAYS_RETURN_RESULT,
+        },
+        "summary_24h": dict(summary) if summary else {},
+        "recent_runs": [dict(row) for row in runs],
+    }
+
+
 @app.get("/api/dashboard")
 def dashboard(session_id: str):
     sid = safe_session_id(session_id)
@@ -2197,13 +3002,14 @@ def dashboard(session_id: str):
             (sid, since),
         ).fetchone()
     return {
-        "version": "11.0.0",
-        "status": "online" if GROQ_API_KEY else "local_only",
+        "version": "17.0.0",
+        "status": "online" if (GROQ_API_KEY or OPENAI_COMPAT_BASE_URL or OLLAMA_BASE_URL) else "local_only",
         "counts": counts,
         "usage_24h": dict(usage),
         "models": provider_status(),
+        "providers": resilience_provider_status(),
         "database": {"ok": True, "path": DB_FILE},
-        "features": ["autonomous_agent", "smart_intent_router", "multi_model_router", "tool_calling", "background_jobs", "project_workspaces", "memory", "documents", "reminders", "knowledge_search", "self_check"],
+        "features": ["execution_planner", "resolution_trace", "local_verifier", "autonomous_agent", "smart_intent_router", "multi_provider_router", "tool_calling", "background_jobs", "project_workspaces", "memory", "documents", "reminders", "knowledge_search", "self_check"],
     }
 
 
@@ -2226,20 +3032,23 @@ def self_check():
     except Exception as exc:
         checks["sympy"] = {"ok": False, "detail": safe_error_text(exc)}
     checks["static_ui"] = {"ok": INDEX_FILE.exists()}
-    checks["groq_key"] = {"ok": bool(GROQ_API_KEY), "required_for": "conversación generativa"}
-    overall = all(item.get("ok") for key, item in checks.items() if key != "groq_key")
-    return {"status": "ok" if overall else "degraded", "checks": checks, "version": "11.0.0"}
+    checks["groq_key"] = {"ok": bool(GROQ_API_KEY), "required_for": "proveedor principal"}
+    checks["secondary_provider"] = {"ok": bool(OPENAI_COMPAT_BASE_URL and OPENAI_COMPAT_MODELS) or bool(OLLAMA_BASE_URL and OLLAMA_MODELS), "optional": True}
+    checks["resilient_search"] = {"ok": True, "attempts": WEB_SEARCH_ATTEMPTS, "max_results": WEB_SEARCH_RESULTS}
+    overall = all(item.get("ok") for key, item in checks.items() if key not in {"groq_key", "secondary_provider"})
+    return {"status": "ok" if overall else "degraded", "checks": checks, "version": "17.0.0"}
 
 
 @app.get("/api/capabilities")
 def capabilities():
     return {
         "autonomous_core": True,
-        "version": "11.0.0",
+        "version": "17.0.0",
         "groq_configured": bool(GROQ_API_KEY),
         "model": GROQ_MODEL,
         "model_chain": MODEL_CHAIN,
         "model_status": provider_status(),
+        "providers": resilience_provider_status(),
         "public_mode": PUBLIC_MODE,
         "access_key_required": bool(JARVIS_ACCESS_KEY) and not PUBLIC_MODE,
         "requests_per_minute": REQUESTS_PER_MINUTE,
@@ -2247,6 +3056,12 @@ def capabilities():
         "features": [
             "tool_calling",
             "multi_model_fallback",
+            "multi_provider_fallback",
+            "execution_planner",
+            "resolution_trace",
+            "result_verification",
+            "similar_cache_recovery",
+            "resilient_web_search",
             "rate_limit_circuit_breaker",
             "response_cache",
             "direct_zero_token_routes",
@@ -2263,7 +3078,7 @@ def capabilities():
             "improvement_report",
             "usage_tracking",
             "background_jobs",
-            "premium_nexus_ui",
+            "execution_core_ui",
             "anonymous_public_access",
             "self_check",
             "whatsapp_bridge_status",
@@ -2287,14 +3102,17 @@ def health():
         database_ok = False
         database_error = safe_error_text(exc)
 
-    status = "ok" if bool(GROQ_API_KEY) and database_ok else "degraded"
+    generative_configured = bool(GROQ_API_KEY or (OPENAI_COMPAT_BASE_URL and OPENAI_COMPAT_MODELS) or (OLLAMA_BASE_URL and OLLAMA_MODELS))
+    status = "ok" if generative_configured and database_ok else "degraded"
     return {
         "status": status,
         "groq_configured": bool(GROQ_API_KEY),
+        "secondary_provider_configured": bool((OPENAI_COMPAT_BASE_URL and OPENAI_COMPAT_MODELS) or (OLLAMA_BASE_URL and OLLAMA_MODELS)),
         "database_ok": database_ok,
         "database_error": database_error,
         "model": GROQ_MODEL,
         "models": provider_status(),
+        "providers": resilience_provider_status(),
         "public_mode": PUBLIC_MODE,
     }
 
@@ -2303,7 +3121,7 @@ def health():
 def system_info():
     return {
         "status": "JARVIS Core Interface Active",
-        "version": "11.0.0",
+        "version": "17.0.0",
         "groq_configured": bool(GROQ_API_KEY),
         "model": GROQ_MODEL,
         "model_chain": MODEL_CHAIN,

@@ -1,11 +1,11 @@
-const CACHE_NAME = 'jarvis-advanced-core-static-v16';
+const CACHE_NAME = 'jarvis-advanced-core-static-v17';
 const SHELL = [
   './',
   './index.html',
-  './styles.css?v=16',
-  './app.js?v=16',
-  './config.js?v=16',
-  './manifest.webmanifest?v=16',
+  './styles.css?v=17',
+  './app.js?v=17',
+  './config.js?v=17',
+  './manifest.webmanifest?v=17',
   './favicon-32.png',
   './favicon-64.png',
   './apple-touch-icon.png',

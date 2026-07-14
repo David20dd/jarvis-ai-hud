@@ -98,7 +98,7 @@
   document.addEventListener('DOMContentLoaded', init);
 
   function init() {
-    document.title = window.JARVIS_CONFIG?.APP_NAME || 'J.A.R.V.I.S. — Advanced Core';
+    document.title = window.JARVIS_CONFIG?.APP_NAME || 'J.A.R.V.I.S. — Execution Core';
     ensureProjects();
     migrateChatsToProjects();
     if (!state.activeChatId || !state.chats[state.activeChatId] || currentChat()?.projectId !== state.activeProjectId) {
@@ -663,7 +663,8 @@
     startStatusSequence();
 
     try {
-      const response = await fetch(apiUrl('/api/jarvis'), {
+      const clientRequestId = createRequestId();
+      const response = await resilientFetch(apiUrl('/api/jarvis'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -671,10 +672,11 @@
           session_id: backendConversationId(),
           project_name: currentProject()?.name || 'General',
           mode: state.mode,
-          files: outgoingFiles
+          files: outgoingFiles,
+          request_id: clientRequestId
         }),
         signal: state.abortController.signal
-      });
+      }, { attempts: 4, retryStatuses: [429, 502, 503, 504] });
 
       const raw = await response.text();
       let data;
@@ -697,7 +699,15 @@
         intent: data.intent || '',
         route: data.route || '',
         latencyMs: Number(data.latency_ms || 0),
-        requestId: data.request_id || ''
+        requestId: data.request_id || '',
+        verified: Boolean(data.verified),
+        verification: data.verification || {},
+        resolutionAttempts: Number(data.resolution_attempts || 0),
+        resolutionTrace: Array.isArray(data.resolution_trace) ? data.resolution_trace : [],
+        recoveredErrors: Array.isArray(data.recovered_errors) ? data.recovered_errors : [],
+        recovered: Boolean(data.recovered),
+        similarCache: Boolean(data.similar_cache),
+        idempotentReplay: Boolean(data.idempotent_replay)
       };
       appendAssistant(reply, meta, true, true);
       persistMessage({ role: 'assistant', content: reply, meta });
@@ -756,8 +766,8 @@
   function startStatusSequence() {
     clearStatusSequence();
     const states = state.mode === 'research'
-      ? ['Preparando investigación', 'Buscando información actual', 'Revisando fuentes', 'Comparando resultados', 'Redactando respuesta']
-      : ['Preparando respuesta', 'Analizando contexto', 'Seleccionando herramientas', 'Construyendo respuesta'];
+      ? ['Preparando investigación', 'Probando rutas de búsqueda', 'Revisando y depurando fuentes', 'Comparando resultados', 'Verificando la respuesta']
+      : ['Preparando respuesta', 'Analizando contexto', 'Seleccionando la mejor ruta', 'Probando alternativas si es necesario', 'Verificando el resultado'];
     let index = 0;
     els.thinkingText.textContent = states[0];
     const tick = () => {
@@ -831,7 +841,12 @@
       if (meta.route) toolRow.insertAdjacentHTML('beforeend', `<span class="tool-chip route-chip">${escapeHtml(humanRoute(meta.route))}</span>`);
       if (meta.latencyMs) toolRow.insertAdjacentHTML('beforeend', `<span class="tool-chip latency-chip">${Math.max(1, Math.round(meta.latencyMs))} ms</span>`);
       if (meta.cached) toolRow.insertAdjacentHTML('beforeend', '<span class="tool-chip">Respuesta en caché</span>');
-      if (meta.degraded) toolRow.insertAdjacentHTML('beforeend', '<span class="tool-chip">Modo degradado</span>');
+      if (meta.similarCache) toolRow.insertAdjacentHTML('beforeend', '<span class="tool-chip">Caché similar</span>');
+      if (meta.degraded) toolRow.insertAdjacentHTML('beforeend', '<span class="tool-chip">Modo resistente</span>');
+      if (meta.verified) toolRow.insertAdjacentHTML('beforeend', '<span class="tool-chip verified-chip">Verificado</span>');
+      if (meta.resolutionAttempts > 1) toolRow.insertAdjacentHTML('beforeend', `<span class="tool-chip attempts-chip">${meta.resolutionAttempts} rutas probadas</span>`);
+      if (meta.recoveredErrors?.length || meta.recovered) toolRow.insertAdjacentHTML('beforeend', '<span class="tool-chip recovered-chip">Recuperado automáticamente</span>');
+      if (meta.idempotentReplay) toolRow.insertAdjacentHTML('beforeend', '<span class="tool-chip">Reintento seguro</span>');
       body.appendChild(toolRow);
     }
 
@@ -995,6 +1010,7 @@
       { id:'jobs', icon:'◉', title:'Trabajos autónomos', sub:'Crear y revisar tareas en segundo plano', run:() => openPanel('jobs') },
       { id:'search', icon:'⌕', title:'Buscar conocimiento', sub:'Memoria, documentos y conversaciones', run:() => openPanel('search') },
       { id:'export', icon:'⇩', title:'Exportar conversación', sub:'Descargar Markdown o JSON', shortcut:'Ctrl+E', run:() => openPanel('export') },
+      { id:'resilience', icon:'⟲', title:'Resiliencia y rutas', sub:'Proveedores, verificaciones y recuperaciones', run:() => openPanel('resilience') },
       { id:'system', icon:'⚙', title:'Estado del núcleo', sub:'Diagnóstico, modelos y conexión', run:() => openPanel('system') },
       { id:'focus', icon:'/', title:'Escribir una pregunta', sub:'Enfocar el campo de conversación', shortcut:'/', run:() => els.userInput.focus() },
       { id:'mode', icon:'◎', title:'Cambiar modo', sub:MODES.find(item => item.id === state.mode)?.label || 'Modo automático', run:cycleMode },
@@ -1101,6 +1117,7 @@
       else if (panel === 'jobs') await renderJobs();
       else if (panel === 'search') await renderKnowledgeSearch();
       else if (panel === 'export') await renderExport();
+      else if (panel === 'resilience') await renderResilience();
       else await renderSystem();
     } catch (error) {
       els.sheetBody.innerHTML = `<div class="empty-note">${escapeHtml(error.message || 'No se pudo cargar esta sección.')}</div>`;
@@ -1108,7 +1125,7 @@
   }
 
   function panelTitle(panel) {
-    return ({ overview: 'Centro JARVIS', projects: 'Proyectos', library: 'Biblioteca', memory: 'Memoria', reminders: 'Recordatorios', jobs: 'Trabajos autónomos', search: 'Buscar conocimiento', export: 'Exportar conversación', system: 'Estado y ajustes' })[panel] || 'JARVIS';
+    return ({ overview: 'Centro JARVIS', projects: 'Proyectos', library: 'Biblioteca', memory: 'Memoria', reminders: 'Recordatorios', jobs: 'Trabajos autónomos', search: 'Buscar conocimiento', export: 'Exportar conversación', resilience: 'Resiliencia y rutas', system: 'Estado y ajustes' })[panel] || 'JARVIS';
   }
 
   async function renderOverview() {
@@ -1122,7 +1139,7 @@
         ${panelCard('Trabajos', `${c.jobs || 0} registrados`, 'jobs')}
       </div>
       <div style="height:14px"></div>
-      <div class="panel-card"><h3>Estado del núcleo</h3><p>Versión ${escapeHtml(data.version || '11.0.0')} · ${escapeHtml(data.status || 'operativo')} · ${Number(data.usage_24h?.total_tokens || 0).toLocaleString()} tokens en 24 horas.</p></div>`;
+      <div class="panel-card"><h3>Estado del núcleo</h3><p>Versión ${escapeHtml(data.version || '17.0.0')} · ${escapeHtml(data.status || 'operativo')} · ${Number(data.usage_24h?.total_tokens || 0).toLocaleString()} tokens en 24 horas.</p></div>`;
     $$('[data-open-panel]', els.sheetBody).forEach(btn => btn.addEventListener('click', () => openPanel(btn.dataset.openPanel)));
   }
 
@@ -1374,6 +1391,45 @@
     }));
   }
 
+  async function renderResilience() {
+    const data = await apiFetch(`/api/resilience/status?session_id=${encodeURIComponent(backendConversationId())}`);
+    const providers = data.providers || {};
+    const summary = data.summary_24h || {};
+    const limits = data.limits || {};
+    const recent = data.recent_runs || [];
+    const providerCards = [
+      ['Groq', Boolean(providers.groq?.configured), (providers.groq?.models || []).map(item => item.model).join(', ') || 'Sin modelos'],
+      ['Proveedor compatible', Boolean(providers.openai_compatible?.configured), (providers.openai_compatible?.models || []).join(', ') || 'Opcional'],
+      ['Ollama local', Boolean(providers.ollama?.configured), (providers.ollama?.models || []).join(', ') || 'Opcional'],
+      ['Rutas locales', true, 'Cálculo, SymPy, documentos, memoria, caché y búsqueda'],
+    ];
+    els.sheetBody.innerHTML = `
+      <div class="resilience-hero">
+        <div class="resilience-icon">⟲</div>
+        <div><h3>Núcleo de resolución resistente</h3><p>JARVIS prueba rutas locales, caché, modelos, proveedores secundarios y búsqueda antes de entregar un resultado degradado.</p></div>
+      </div>
+      <div class="panel-grid resilience-grid">
+        ${providerCards.map(([name,configured,detail]) => `<div class="panel-card resilience-provider"><div class="provider-state ${configured ? 'online' : 'optional'}"><span></span>${configured ? 'Activo' : 'Opcional'}</div><h3>${escapeHtml(name)}</h3><p>${escapeHtml(detail)}</p></div>`).join('')}
+      </div>
+      <div style="height:14px"></div>
+      <div class="panel-grid">
+        <div class="panel-card"><h3>Resoluciones en 24 h</h3><p>${Number(summary.total || 0).toLocaleString()} solicitudes registradas</p></div>
+        <div class="panel-card"><h3>Verificadas</h3><p>${Number(summary.verified || 0).toLocaleString()} resultados superaron la comprobación</p></div>
+        <div class="panel-card"><h3>Intentos promedio</h3><p>${Number(summary.average_attempts || 0).toFixed(1)} rutas por solicitud</p></div>
+        <div class="panel-card"><h3>Presupuesto de resolución</h3><p>Hasta ${limits.max_resolution_attempts || 0} rutas · ${limits.web_search_attempts || 0} intentos de búsqueda</p></div>
+      </div>
+      <div style="height:16px"></div>
+      <div class="section-panel-title">Ejecuciones recientes</div>
+      <div class="list-stack">${recent.length ? recent.map(run => `
+        <div class="list-item resolution-run">
+          <div class="list-main">
+            <div class="list-title">${escapeHtml(humanIntent(run.intent || 'general'))}</div>
+            <div class="list-sub">${escapeHtml(humanRoute(run.route || 'resilient'))} · ${Number(run.attempts || 0)} intento(s) · ${run.verified ? 'verificado' : 'resultado parcial'}</div>
+          </div>
+          <span class="run-status ${run.verified ? 'verified' : 'partial'}">${run.verified ? '✓' : '•'}</span>
+        </div>`).join('') : '<div class="empty-note">Todavía no hay ejecuciones registradas.</div>'}</div>`;
+  }
+
   async function renderSystem() {
     const [health, checks] = await Promise.all([apiFetch('/api/health'), apiFetch('/api/self-check')]);
     const configured = health.groq_configured ? 'Configurado' : 'No configurado';
@@ -1402,16 +1458,44 @@
   }
 
   async function apiFetch(path, options = {}) {
-    const response = await fetch(apiUrl(path), {
+    const response = await resilientFetch(apiUrl(path), {
       headers: { 'Content-Type':'application/json', ...(options.headers || {}) },
       ...options
-    });
+    }, { attempts: options.method && options.method !== 'GET' ? 2 : 3, retryStatuses: [429, 502, 503, 504] });
     const raw = await response.text();
     let data = {};
     try { data = raw ? JSON.parse(raw) : {}; }
     catch { throw new Error(`Respuesta no válida del servidor (HTTP ${response.status}).`); }
     if (!response.ok) throw new Error(data.detail || data.reply || `Error HTTP ${response.status}`);
     return data;
+  }
+
+  function createRequestId() {
+    if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+    return `req_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  }
+
+  async function resilientFetch(url, options = {}, config = {}) {
+    const attempts = Math.max(1, Number(config.attempts || 3));
+    const retryStatuses = new Set(config.retryStatuses || [429, 502, 503, 504]);
+    let lastError = null;
+    for (let index = 0; index < attempts; index++) {
+      try {
+        const response = await fetch(url, options);
+        if (!retryStatuses.has(response.status) || index === attempts - 1) return response;
+        const retryHeader = Number(response.headers.get('Retry-After') || 0);
+        const waitMs = retryHeader > 0 ? retryHeader * 1000 : Math.min(900 * (2 ** index), 6000);
+        setStatus(`Recuperando conexión · intento ${index + 2}`, 'warning');
+        await sleep(waitMs);
+      } catch (error) {
+        if (error.name === 'AbortError') throw error;
+        lastError = error;
+        if (index === attempts - 1) throw error;
+        setStatus(`Buscando ruta alternativa · intento ${index + 2}`, 'warning');
+        await sleep(Math.min(900 * (2 ** index), 6000));
+      }
+    }
+    throw lastError || new Error('No fue posible establecer conexión.');
   }
 
   async function checkHealth({ wake = false } = {}) {
@@ -1485,7 +1569,7 @@
   }
 
   function humanRoute(route) {
-    return ({ direct:'Ruta local', direct_web:'Búsqueda directa', autonomous:'Agente autónomo', cache:'Caché', degraded:'Modo local', degraded_web:'Web en modo local' })[route] || route;
+    return ({ direct:'Ruta local', direct_web:'Búsqueda directa', autonomous:'Agente autónomo', cache:'Caché', degraded:'Modo local', degraded_web:'Web en modo local', provider_research:'Investigación multirruta', secondary_provider:'Proveedor secundario', similar_cache:'Caché similar', resilient_web:'Búsqueda resistente', resilient_local:'Resolución local', resilient_documents:'Biblioteca local', verified_repair:'Respuesta reparada' })[route] || route;
   }
 
   function humanToolName(name) {

@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: jarvis-premium-nexus
+    name: jarvis-execution-core
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
@@ -30,3 +30,25 @@ services:
         value: "3600"
       - key: JARVIS_DB_FILE
         value: jarvis_memory.db
+      - key: JARVIS_MAX_RESOLUTION_ATTEMPTS
+        value: "5"
+      - key: JARVIS_WEB_SEARCH_ATTEMPTS
+        value: "3"
+      - key: JARVIS_WEB_SEARCH_RESULTS
+        value: "10"
+      - key: JARVIS_PROVIDER_TIMEOUT_SECONDS
+        value: "45"
+      - key: JARVIS_VERIFY_RESULTS
+        value: "true"
+      - key: JARVIS_ALWAYS_RETURN_RESULT
+        value: "true"
+      - key: JARVIS_OPENAI_COMPAT_BASE_URL
+        sync: false
+      - key: JARVIS_OPENAI_COMPAT_API_KEY
+        sync: false
+      - key: JARVIS_OPENAI_COMPAT_MODELS
+        sync: false
+      - key: JARVIS_OLLAMA_BASE_URL
+        sync: false
+      - key: JARVIS_OLLAMA_MODELS
+        value: llama3.1:8b
