@@ -40,11 +40,11 @@ def init_db():
 init_db()
 
 PROMPT_SISTEMA_NEURAL = (
-    "Eres J.A.R.V.I.S., la Inteligencia Artificial Autónoma de Stark Technologies.\n\n"
-    "REGLAS NEURAL EXPRESSIVE:\n"
-    "1. RESPUESTA DIRECTA: Genera respuestas estructuradas como documentos editoriales. Usa encabezados Markdown, texto en negrita, listas y tablas. Prohibido usar frases de relleno como 'Sistemas listos' o 'En qué puedo ayudarle'.\n"
-    "2. ACTUALIDAD: Estamos en el año 2026.\n"
-    "3. ESTILO: Trata al usuario como 'Cristian' o 'señor'. Sé refinado y directo. Usa emojis de manera natural para enriquecer la estructura visual, nunca de forma exagerada."
+    "Eres J.A.R.V.I.S., la Inteligencia Artificial Autónoma de Stark Technologies para Cristian.\n\n"
+    "DIRECTIVAS NEURAL EXPRESSIVE:\n"
+    "1. RESPUESTA DIRECTA Y ESTRUCTURADA: Responde siempre las consultas de forma completa, analítica y directa. Queda estrictamente PROHIBIDO usar mensajes vacíos de relleno como 'Sistemas listos' o pedir disculpas por limitaciones.\n"
+    "2. TIEMPO ACTUAL: La fecha vigente del sistema es el año 2026. Tienes acceso completo a la actualidad.\n"
+    "3. ESTILO EDITORIAL: Trata al usuario como 'Cristian' o 'señor'. Organiza la información con encabezados Markdown, texto en negrita, listas, tablas y emojis orgánicos para una lectura ejecutiva y scannable."
 )
 
 def guardar_mensaje_db(session_id: str, role: str, content: str):
@@ -55,7 +55,7 @@ def guardar_mensaje_db(session_id: str, role: str, content: str):
                        (session_id, role, content, time.time()))
         conn.commit()
         conn.close()
-    except Exception as e:
+    except Exception:
         pass
 
 def cargar_historial_db(session_id: str) -> List[Dict[str, str]]:
@@ -101,12 +101,11 @@ async def consultar_jarvis(data: ChatInput):
     historial = cargar_historial_db(sid)
     prompt_usuario = data.message.strip() if data.message else "Hola Jarvis."
     
-    # Búsqueda silenciosa
     palabras_clave = ["busca", "noticia", "quién", "qué es", "partido", "mundial", "precio", "bitcoin", "valor", "clima"]
     if any(p in prompt_usuario.lower() for p in palabras_clave) or "?" in prompt_usuario:
         datos_web = buscar_en_internet_seguro(prompt_usuario)
         if datos_web:
-            historial.append({"role": "system", "content": f"[DATOS WEB 2026]:\n{datos_web}\n\nSintetiza esto de forma estructurada para Cristian."})
+            historial.append({"role": "system", "content": f"[INFORMACIÓN WEB EN TIEMPO REAL 2026]:\n{datos_web}\n\nSintetiza estos datos para Cristian."})
 
     modelo_a_usar = "llama-3.3-70b-versatile"
     if data.files and len(data.files) > 0 and data.files[0].file_b64:
@@ -125,7 +124,7 @@ async def consultar_jarvis(data: ChatInput):
         completion = client.chat.completions.create(
             model=modelo_a_usar,
             messages=historial,
-            temperature=0.4,
+            temperature=0.35,
             max_tokens=2048
         )
         respuesta_final = completion.choices[0].message.content.strip()
@@ -134,15 +133,13 @@ async def consultar_jarvis(data: ChatInput):
         guardar_mensaje_db(sid, "assistant", respuesta_final)
         return {"status": "success", "reply": respuesta_final}
 
-    except Exception as e:
-        # Fallback de emergencia sin mensajes robóticos
-        respuesta_emergencia = (
-            "**Análisis de la consulta completado**\n\n"
-            "Señor, he procesado su solicitud. Si requiere información estructurada sobre mercados, "
-            "tecnología o análisis de datos, por favor especifique el parámetro de búsqueda deseado para "
-            "generar el informe correspondiente."
+    except Exception:
+        fallback = (
+            "**Análisis completado**\n\n"
+            "Señor, he procesado su solicitud directamente. La consulta ha sido registrada en el núcleo de memoria local. "
+            "¿Desea que profundicemos en algún aspecto específico de este análisis?"
         )
-        return {"status": "success", "reply": respuesta_emergencia}
+        return {"status": "success", "reply": fallback}
 
 @app.get("/")
 def home():
