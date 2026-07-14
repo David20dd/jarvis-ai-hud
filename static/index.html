@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#090d13" />
+  <meta name="description" content="JARVIS Premium Nexus: interfaz en GitHub Pages conectada al núcleo autónomo en Render." />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
+  <title>JARVIS Premium Nexus</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="./styles.css" />
+
+  <script defer src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/styles/github-dark.min.css" />
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/highlight.min.js"></script>
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+  <script src="./config.js"></script>
+  <script defer src="./app.js"></script>
+</head>
+<body>
+  <div class="ambient" id="ambientGlow" aria-hidden="true"></div>
+
+  <div class="app">
+    <header class="topbar">
+      <div class="top-left">
+        <button class="icon-btn" id="menuBtn" aria-label="Abrir menú" title="Menú">
+          <svg viewBox="0 0 24 24"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/></svg>
+        </button>
+        <div class="brand">
+          <img class="brand-reactor" src="./jarvis-reactor.svg" alt="" />
+          <div class="brand-copy">
+            <div class="brand-name">J.A.R.V.I.S.</div>
+            <div class="brand-sub">Premium Nexus Intelligence</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="top-right">
+        <div class="status-pill" id="statusPill" title="Estado del núcleo">
+          <span class="status-dot"></span>
+          <span id="statusText">Verificando núcleo</span>
+        </div>
+        <button class="icon-btn" id="workspaceBtn" aria-label="Abrir herramientas" title="Herramientas">
+          <svg viewBox="0 0 24 24"><path d="M7 2h10a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm0 2v16h10V4zm2 3h6v2H9zm0 4h6v2H9zm0 4h4v2H9z"/></svg>
+        </button>
+        <button class="icon-btn" id="newChatTopBtn" aria-label="Nueva conversación" title="Nueva conversación">
+          <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <main class="main">
+      <section class="chat-shell" aria-label="Conversación con JARVIS">
+        <div class="chat-scroll" id="chatScroll">
+          <section class="welcome" id="welcome">
+            <div class="reactor-wrap" aria-hidden="true">
+              <div class="reactor-aura"></div>
+              <div class="reactor-orbit one"></div>
+              <div class="reactor-orbit two"></div>
+              <img class="reactor-img" src="./jarvis-reactor.svg" alt="Reactor JARVIS" />
+            </div>
+            <div class="welcome-kicker">Autonomous Intelligence Interface</div>
+            <h1 class="welcome-title">¿Qué construiremos <span class="accent">hoy</span>?</h1>
+            <p class="welcome-sub">Conversa, investiga, analiza documentos, resuelve problemas y organiza tareas en una interfaz poderosa, clara y sin elementos innecesarios.</p>
+
+            <div class="suggestions" aria-label="Sugerencias">
+              <button class="suggestion" data-prompt="Investiga este tema con fuentes recientes y dame un resumen claro.">
+                <strong>Investigar</strong><span>Información actual, comparación de fuentes y conclusiones claras.</span>
+              </button>
+              <button class="suggestion" data-prompt="Ayúdame a analizar un documento y extraer sus puntos principales.">
+                <strong>Analizar documentos</strong><span>PDF, Word, Excel, PowerPoint, texto y código.</span>
+              </button>
+              <button class="suggestion" data-prompt="Resuelve esta ecuación paso a paso y explícamela de forma sencilla.">
+                <strong>Resolver matemática</strong><span>Cálculo exacto, álgebra y ecuaciones bien formateadas.</span>
+              </button>
+              <button class="suggestion" data-prompt="Convierte esta idea en un plan organizado con pasos concretos.">
+                <strong>Planificar</strong><span>Objetivos, tareas y ejecución estructurada.</span>
+              </button>
+            </div>
+          </section>
+
+          <div class="messages" id="messages" aria-live="polite"></div>
+
+          <div class="thinking-wrap" id="thinkingWrap" aria-live="polite" aria-label="JARVIS está preparando una respuesta">
+            <div class="thinking-card">
+              <div class="thinking-dots" aria-hidden="true"><span></span><span></span><span></span></div>
+              <span id="thinkingText">Preparando respuesta</span>
+            </div>
+          </div>
+        </div>
+
+        <button class="jump-btn" id="jumpBtn" type="button">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor"><path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg>
+          Volver a la respuesta
+        </button>
+
+        <div class="composer-zone">
+          <div class="attachments" id="attachments"></div>
+          <div class="composer">
+            <div class="composer-main">
+              <button class="icon-btn" id="attachBtn" type="button" aria-label="Adjuntar archivo" title="Adjuntar archivo">
+                <svg viewBox="0 0 24 24"><path d="M16.5 6.5 8.7 14.3a3 3 0 1 0 4.24 4.24l8.49-8.49a5 5 0 1 0-7.07-7.07L5.88 11.46a7 7 0 1 0 9.9 9.9l6.36-6.36-1.41-1.41-6.36 6.36a5 5 0 1 1-7.07-7.07l8.49-8.49a3 3 0 0 1 4.24 4.24l-8.49 8.49a1 1 0 1 1-1.41-1.41l7.79-7.79z"/></svg>
+              </button>
+              <textarea id="userInput" rows="1" maxlength="30000" placeholder="Pregunta, investiga, crea o analiza algo..."></textarea>
+              <button class="icon-btn" id="micBtn" type="button" aria-label="Dictado de voz" title="Dictado de voz">
+                <svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11z"/></svg>
+              </button>
+              <button class="icon-btn primary" id="sendBtn" type="button" aria-label="Enviar" title="Enviar">
+                <svg id="sendIcon" viewBox="0 0 24 24"><path d="M3.4 20.4 21 12 3.4 3.6 3 10l12 2-12 2z"/></svg>
+              </button>
+            </div>
+            <div class="composer-foot">
+              <button class="mode-btn" id="modeBtn" type="button">Modo automático</button>
+              <span class="composer-hint">Enter para enviar · Shift+Enter para nueva línea</span>
+            </div>
+          </div>
+          <input class="sr-only" id="fileInput" type="file" multiple accept=".pdf,.docx,.xlsx,.xlsm,.pptx,.txt,.md,.csv,.json,.py,.js,.html,.css" />
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="backdrop" id="backdrop"></div>
+
+  <aside class="drawer" id="drawer" aria-label="Menú lateral">
+    <div class="drawer-head">
+      <div class="drawer-brand">J.A.R.V.I.S.</div>
+      <button class="icon-btn" id="closeDrawerBtn" aria-label="Cerrar menú"><svg viewBox="0 0 24 24"><path d="m18.3 5.7-1.4-1.4L12 9.2 7.1 4.3 5.7 5.7l4.9 4.9-4.9 4.9 1.4 1.4 4.9-4.9 4.9 4.9 1.4-1.4-4.9-4.9z"/></svg></button>
+    </div>
+    <div class="drawer-body">
+      <button class="new-chat" id="newChatBtn"><svg viewBox="0 0 24 24" width="19" height="19" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></svg>Nueva conversación</button>
+      <div class="section-label">Recientes</div>
+      <div class="chat-list" id="chatList"></div>
+    </div>
+    <div class="drawer-foot">
+      <button class="drawer-link" data-panel="library"><span>▣</span> Biblioteca</button>
+      <button class="drawer-link" data-panel="memory"><span>◈</span> Memoria</button>
+      <button class="drawer-link" data-panel="reminders"><span>◷</span> Recordatorios</button>
+      <button class="drawer-link" data-panel="system"><span>⚙</span> Estado y ajustes</button>
+    </div>
+  </aside>
+
+  <section class="sheet" id="sheet" aria-modal="true" role="dialog" aria-labelledby="sheetTitle">
+    <div class="sheet-head">
+      <div class="sheet-title" id="sheetTitle">Herramientas</div>
+      <button class="icon-btn" id="closeSheetBtn" aria-label="Cerrar"><svg viewBox="0 0 24 24"><path d="m18.3 5.7-1.4-1.4L12 9.2 7.1 4.3 5.7 5.7l4.9 4.9-4.9 4.9 1.4 1.4 4.9-4.9 4.9 4.9 1.4-1.4-4.9-4.9z"/></svg></button>
+    </div>
+    <div class="sheet-body" id="sheetBody"></div>
+  </section>
+
+  <div class="toast" id="toast" role="status"></div>
+</body>
+</html>
