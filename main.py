@@ -235,14 +235,14 @@ def init_db() -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
-    logger.info("J.A.R.V.I.S. GitHub Pages Core v7 iniciado | public_mode=%s", PUBLIC_MODE)
+    logger.info("J.A.R.V.I.S. Advanced Core v11 iniciado | public_mode=%s", PUBLIC_MODE)
     yield
-    logger.info("J.A.R.V.I.S. GitHub Pages Core v7 detenido")
+    logger.info("J.A.R.V.I.S. Advanced Core v11 detenido")
 
 
 app = FastAPI(
-    title="J.A.R.V.I.S. GitHub Pages Core",
-    version="7.0.0",
+    title="J.A.R.V.I.S. Advanced Core",
+    version="11.0.0",
     lifespan=lifespan,
 )
 
@@ -273,6 +273,8 @@ class ChatInput(BaseModel):
     message: str
     session_id: str = "default_session"
     files: List[ArchivoInput] = Field(default_factory=list)
+    mode: str = "auto"
+    project_name: str = "General"
 
 
 class MemoryInput(BaseModel):
@@ -1182,8 +1184,18 @@ TOOLS: List[Dict[str, Any]] = [
 # PROMPT Y ORQUESTADOR
 # -----------------------------------------------------------------------------
 
-def construir_prompt_sistema(session_id: str) -> str:
+def construir_prompt_sistema(
+    session_id: str,
+    project_name: str = "General",
+    mode: str = "auto",
+    intent: str = "general",
+) -> str:
     now = datetime.now(LOCAL_TZ)
+    project_name = re.sub(r"\s+", " ", project_name or "General").strip()[:120]
+    mode = (mode or "auto").strip().lower()[:40]
+    if mode not in {"auto", "fast", "research", "math", "writing"}:
+        mode = "auto"
+    intent = (intent or "general").strip().lower()[:40]
     memories = memory_search(session_id, "", limit=6)
     memory_text = "\n".join(
         f"- [{item['category']}] {item['content']}" for item in memories
@@ -1192,6 +1204,9 @@ def construir_prompt_sistema(session_id: str) -> str:
     return f"""
 Eres J.A.R.V.I.S., un asistente inteligente, operativo y accesible para cualquier persona.
 Hora local de Honduras: {now.strftime('%Y-%m-%d %H:%M')}.
+Proyecto activo: {project_name}.
+Modo solicitado: {mode}.
+Intención detectada: {intent}.
 
 REGLAS OPERATIVAS
 - Responde en español claro, directo y verificable.
@@ -1356,6 +1371,76 @@ def _direct_calculation(prompt: str, session_id: str) -> Optional[Dict[str, Any]
     return None
 
 
+def classify_intent(prompt: str) -> Dict[str, Any]:
+    """Clasifica la intención con reglas locales para enrutar sin gastar tokens."""
+    text = re.sub(r"\s+", " ", prompt.lower().strip())
+    scores: Dict[str, int] = {
+        "research": 0,
+        "documents": 0,
+        "math": 0,
+        "code": 0,
+        "writing": 0,
+        "planning": 0,
+        "memory": 0,
+        "reminders": 0,
+        "general": 1,
+    }
+    keyword_groups = {
+        "research": ["busca", "investiga", "noticias", "actual", "fuentes", "compara", "precio", "clima", "resultado"],
+        "documents": ["documento", "pdf", "word", "excel", "powerpoint", "archivo", "resumen del archivo", "biblioteca"],
+        "math": ["calcula", "resuelve", "ecuación", "ecuacion", "porcentaje", "derivada", "integral", "matriz", "estadística", "estadistica"],
+        "code": ["código", "codigo", "programa", "python", "javascript", "java", "html", "css", "sql", "debug", "error de código", "api"],
+        "writing": ["redacta", "escribe", "corrige", "reescribe", "carta", "correo", "ensayo", "informe"],
+        "planning": ["plan", "organiza", "pasos", "proyecto", "cronograma", "tareas", "estrategia"],
+        "memory": ["recuerda", "memoriza", "qué recuerdas", "que recuerdas", "olvida"],
+        "reminders": ["recuérdame", "recuerdame", "recordatorio", "avísame", "avisame"],
+    }
+    for intent, words in keyword_groups.items():
+        scores[intent] += sum(2 for word in words if word in text)
+    if re.search(r"[0-9a-z²³+\-−*/×÷().^\s]+=[0-9a-z²³+\-−*/×÷().^\s]+", text):
+        scores["math"] += 6
+    if "```" in prompt or re.search(r"\b(traceback|syntaxerror|typeerror|referenceerror)\b", text):
+        scores["code"] += 6
+    intent = max(scores, key=scores.get)
+    if scores[intent] <= 1:
+        intent = "general"
+
+    tools_by_intent = {
+        "research": ["web_search"],
+        "documents": ["document_search"],
+        "math": ["calculator", "sympy_solve"],
+        "memory": ["memory_search", "memory_save"],
+        "reminders": ["current_datetime", "reminder_create", "reminder_list"],
+        "code": [],
+        "writing": [],
+        "planning": [],
+        "general": [],
+    }
+    mode_by_intent = {
+        "research": "research",
+        "math": "math",
+        "code": "fast",
+        "writing": "writing",
+        "documents": "auto",
+        "planning": "auto",
+        "memory": "auto",
+        "reminders": "auto",
+        "general": "auto",
+    }
+    direct_available = bool(
+        intent == "math"
+        or (intent == "research" and any(x in text for x in ["busca", "noticias", "actual", "resultados"]))
+        or intent in {"memory", "reminders"}
+    )
+    return {
+        "intent": intent,
+        "confidence": min(0.99, 0.5 + scores.get(intent, 0) * 0.07),
+        "recommended_mode": mode_by_intent.get(intent, "auto"),
+        "tool_candidates": tools_by_intent.get(intent, []),
+        "direct_available": direct_available,
+    }
+
+
 def direct_route(session_id: str, prompt: str) -> Optional[Dict[str, Any]]:
     if not DIRECT_ROUTES_ENABLED:
         return None
@@ -1464,13 +1549,20 @@ def degraded_fallback(session_id: str, prompt: str, retry_after: int) -> Dict[st
     }
 
 
-def run_agent(session_id: str, user_message: str) -> Dict[str, Any]:
+def run_agent(
+    session_id: str,
+    user_message: str,
+    *,
+    project_name: str = "General",
+    mode: str = "auto",
+    intent: str = "general",
+) -> Dict[str, Any]:
     if client is None:
         raise RuntimeError("Falta configurar GROQ_API_KEY en Render")
 
     sid = safe_session_id(session_id)
     messages: List[Dict[str, Any]] = [
-        {"role": "system", "content": construir_prompt_sistema(sid)}
+        {"role": "system", "content": construir_prompt_sistema(sid, project_name, mode, intent)}
     ]
     messages.extend(cargar_historial_db(sid))
     messages.append({"role": "user", "content": user_message})
@@ -1655,9 +1747,16 @@ def save_document(session_id: str, file_name: str, file_b64: str) -> Dict[str, A
 
 @app.post("/api/jarvis")
 async def consultar_jarvis(data: ChatInput, request: Request):
+    started_at = time.perf_counter()
+    request_id = str(uuid.uuid4())
     enforce_request_guard(request)
     sid = safe_session_id(data.session_id)
     prompt = data.message.strip() or "Hola, J.A.R.V.I.S."
+    project_name = re.sub(r"\s+", " ", data.project_name or "General").strip()[:120]
+    requested_mode = (data.mode or "auto").strip().lower()[:40]
+    if requested_mode not in {"auto", "fast", "research", "math", "writing"}:
+        requested_mode = "auto"
+    intent_info = classify_intent(prompt)
     if len(prompt) > MAX_MESSAGE_CHARS:
         raise HTTPException(status_code=413, detail=f"El mensaje supera el límite de {MAX_MESSAGE_CHARS} caracteres.")
     log_activity(sid, "request", "Solicitud recibida", prompt, "running")
@@ -1678,7 +1777,7 @@ async def consultar_jarvis(data: ChatInput, request: Request):
                 result["cached"] = True
             else:
                 try:
-                    result = run_agent(sid, prompt)
+                    result = run_agent(sid, prompt, project_name=project_name, mode=requested_mode, intent=intent_info["intent"])
                 except ModelsUnavailableError as exc:
                     logger.warning("Todos los modelos están limitados: %s", safe_error_text(exc))
                     result = degraded_fallback(sid, prompt, exc.retry_after_seconds)
@@ -1694,6 +1793,12 @@ async def consultar_jarvis(data: ChatInput, request: Request):
             ", ".join(item["name"] for item in result.get("tools", [])),
             "degraded" if result.get("degraded") else "completed",
         )
+        result.setdefault("intent", intent_info["intent"])
+        result.setdefault("route", result.get("mode", "autonomous"))
+        result.setdefault("recommended_mode", intent_info["recommended_mode"])
+        result.setdefault("project_name", project_name)
+        result.setdefault("request_id", request_id)
+        result["latency_ms"] = round((time.perf_counter() - started_at) * 1000)
         return {"status": "degraded" if result.get("degraded") else "success", **result}
 
     except Exception as exc:
@@ -1713,6 +1818,10 @@ async def consultar_jarvis(data: ChatInput, request: Request):
                 "error_code": kind,
                 "retry_after_seconds": retry_after,
                 "tools": [],
+                "intent": intent_info.get("intent", "general"),
+                "route": "error",
+                "request_id": request_id,
+                "latency_ms": round((time.perf_counter() - started_at) * 1000),
             },
         )
 
@@ -2047,6 +2156,29 @@ def reset_session(data: SettingsInput, request: Request):
     return {"status": "success", "history_cleared": data.clear_history, "cache_cleared": data.clear_cache}
 
 
+@app.get("/api/router/preview")
+def router_preview(message: str):
+    message = (message or "").strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="Escribe un mensaje para analizar la ruta.")
+    return classify_intent(message[:MAX_MESSAGE_CHARS])
+
+
+@app.get("/api/knowledge/search")
+def knowledge_search(session_id: str, query: str, limit: int = 8):
+    sid = safe_session_id(session_id)
+    query = (query or "").strip()
+    limit = max(1, min(int(limit), 20))
+    memories = memory_search(sid, query, limit=limit)
+    documents = document_search(sid, query, limit=limit).get("matches", [])
+    return {
+        "query": query,
+        "memories": memories,
+        "documents": documents,
+        "total": len(memories) + len(documents),
+    }
+
+
 @app.get("/api/dashboard")
 def dashboard(session_id: str):
     sid = safe_session_id(session_id)
@@ -2065,13 +2197,13 @@ def dashboard(session_id: str):
             (sid, since),
         ).fetchone()
     return {
-        "version": "6.0.0",
+        "version": "11.0.0",
         "status": "online" if GROQ_API_KEY else "local_only",
         "counts": counts,
         "usage_24h": dict(usage),
         "models": provider_status(),
         "database": {"ok": True, "path": DB_FILE},
-        "features": ["autonomous_agent", "multi_model_router", "tool_calling", "background_jobs", "memory", "documents", "reminders", "self_check"],
+        "features": ["autonomous_agent", "smart_intent_router", "multi_model_router", "tool_calling", "background_jobs", "project_workspaces", "memory", "documents", "reminders", "knowledge_search", "self_check"],
     }
 
 
@@ -2096,14 +2228,14 @@ def self_check():
     checks["static_ui"] = {"ok": INDEX_FILE.exists()}
     checks["groq_key"] = {"ok": bool(GROQ_API_KEY), "required_for": "conversación generativa"}
     overall = all(item.get("ok") for key, item in checks.items() if key != "groq_key")
-    return {"status": "ok" if overall else "degraded", "checks": checks, "version": "6.0.0"}
+    return {"status": "ok" if overall else "degraded", "checks": checks, "version": "11.0.0"}
 
 
 @app.get("/api/capabilities")
 def capabilities():
     return {
         "autonomous_core": True,
-        "version": "6.0.0",
+        "version": "11.0.0",
         "groq_configured": bool(GROQ_API_KEY),
         "model": GROQ_MODEL,
         "model_chain": MODEL_CHAIN,
@@ -2135,6 +2267,11 @@ def capabilities():
             "anonymous_public_access",
             "self_check",
             "whatsapp_bridge_status",
+            "smart_intent_router",
+            "project_workspaces",
+            "knowledge_search",
+            "command_palette",
+            "offline_pwa_shell",
         ],
     }
 
@@ -2166,7 +2303,7 @@ def health():
 def system_info():
     return {
         "status": "JARVIS Core Interface Active",
-        "version": "6.0.0",
+        "version": "11.0.0",
         "groq_configured": bool(GROQ_API_KEY),
         "model": GROQ_MODEL,
         "model_chain": MODEL_CHAIN,

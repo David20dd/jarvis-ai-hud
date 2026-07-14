@@ -11,6 +11,9 @@
     menuBtn: $('#menuBtn'),
     workspaceBtn: $('#workspaceBtn'),
     newChatTopBtn: $('#newChatTopBtn'),
+    projectBtn: $('#projectBtn'),
+    projectName: $('#projectName'),
+    commandBtn: $('#commandBtn'),
     chatScroll: $('#chatScroll'),
     welcome: $('#welcome'),
     messages: $('#messages'),
@@ -29,13 +32,20 @@
     drawer: $('#drawer'),
     closeDrawerBtn: $('#closeDrawerBtn'),
     newChatBtn: $('#newChatBtn'),
+    quickNewProjectBtn: $('#quickNewProjectBtn'),
+    projectList: $('#projectList'),
+    drawerSearch: $('#drawerSearch'),
     chatList: $('#chatList'),
     sheet: $('#sheet'),
     sheetTitle: $('#sheetTitle'),
     sheetBody: $('#sheetBody'),
     closeSheetBtn: $('#closeSheetBtn'),
     toast: $('#toast'),
-    reactorFx: $('#reactorFx')
+    reactorFx: $('#reactorFx'),
+    commandPalette: $('#commandPalette'),
+    commandInput: $('#commandInput'),
+    commandResults: $('#commandResults'),
+    offlineBanner: $('#offlineBanner')
   };
 
   const STORE = {
@@ -43,8 +53,10 @@
     chats: 'jarvis_nexus_chats',
     active: 'jarvis_nexus_active_chat',
     draftPrefix: 'jarvis_nexus_draft_',
-    apiBase: 'jarvis_pages_api_base_v10',
-    mode: 'jarvis_nexus_mode'
+    apiBase: 'jarvis_pages_api_base_v11',
+    mode: 'jarvis_nexus_mode',
+    projects: 'jarvis_nexus_projects_v11',
+    activeProject: 'jarvis_nexus_active_project_v11'
   };
 
   const MODES = [
@@ -64,6 +76,8 @@
   const state = {
     clientId: localStorage.getItem(STORE.client) || uid('client'),
     chats: loadJSON(STORE.chats, {}),
+    projects: loadJSON(STORE.projects, {}),
+    activeProjectId: localStorage.getItem(STORE.activeProject) || '',
     activeChatId: localStorage.getItem(STORE.active) || '',
     files: [],
     isGenerating: false,
@@ -74,7 +88,9 @@
     mode: localStorage.getItem(STORE.mode) || 'auto',
     apiBase: normalizeBase(localStorage.getItem(STORE.apiBase) || DEFAULT_API_BASE),
     lastPrompt: '',
-    wakeRetrying: false
+    wakeRetrying: false,
+    commandIndex: 0,
+    commandItems: []
   };
 
   localStorage.setItem(STORE.client, state.clientId);
@@ -82,11 +98,18 @@
   document.addEventListener('DOMContentLoaded', init);
 
   function init() {
-    document.title = window.JARVIS_CONFIG?.APP_NAME || 'J.A.R.V.I.S. — Autonomous Core';
-    if (!state.activeChatId || !state.chats[state.activeChatId]) createChat(false);
+    document.title = window.JARVIS_CONFIG?.APP_NAME || 'J.A.R.V.I.S. — Advanced Core';
+    ensureProjects();
+    migrateChatsToProjects();
+    if (!state.activeChatId || !state.chats[state.activeChatId] || currentChat()?.projectId !== state.activeProjectId) {
+      state.activeChatId = latestChatForProject(state.activeProjectId)?.id || '';
+    }
+    if (!state.activeChatId) createChat(false);
     configureMarkdown();
     bindEvents();
     renderMode();
+    renderProjectSwitcher();
+    renderProjectList();
     renderChatList();
     renderActiveChat();
     restoreDraft();
@@ -94,6 +117,9 @@
     bindHeroFx();
     checkHealth({ wake: true });
     pollNotifications();
+    registerServiceWorker();
+    updateOfflineBanner();
+    requestAnimationFrame(() => document.body.classList.add('app-ready'));
   }
 
   function bindEvents() {
@@ -101,9 +127,13 @@
     els.closeDrawerBtn.addEventListener('click', closeOverlays);
     els.backdrop.addEventListener('click', closeOverlays);
     els.workspaceBtn.addEventListener('click', () => openPanel('overview'));
+    els.projectBtn?.addEventListener('click', () => openPanel('projects'));
+    els.commandBtn?.addEventListener('click', openCommandPalette);
     els.closeSheetBtn.addEventListener('click', closeOverlays);
     els.newChatTopBtn.addEventListener('click', () => createChat(true));
     els.newChatBtn.addEventListener('click', () => createChat(true));
+    els.quickNewProjectBtn?.addEventListener('click', createProjectFlow);
+    els.drawerSearch?.addEventListener('input', () => renderChatList(els.drawerSearch.value));
 
     $$('.drawer-link').forEach(btn => btn.addEventListener('click', () => openPanel(btn.dataset.panel)));
     $$('.suggestion').forEach(btn => btn.addEventListener('click', () => {
@@ -119,8 +149,11 @@
     els.micBtn.addEventListener('click', startVoiceInput);
     els.modeBtn.addEventListener('click', cycleMode);
     els.jumpBtn.addEventListener('click', () => scrollToBottom(true));
-    els.statusPill.addEventListener('click', () => checkHealth({ wake: true }));
+    els.statusPill.addEventListener('click', () => openPanel('system'));
     els.reactorFx?.addEventListener('click', activateCoreVisual);
+    els.commandPalette?.addEventListener('click', event => { if (event.target === els.commandPalette) closeCommandPalette(); });
+    els.commandInput?.addEventListener('input', renderCommandPalette);
+    els.commandInput?.addEventListener('keydown', handleCommandKeydown);
 
     els.userInput.addEventListener('input', () => { autoResize(); saveDraft(); });
     els.userInput.addEventListener('keydown', e => {
@@ -135,8 +168,8 @@
       els.jumpBtn.classList.toggle('show', !state.followOutput && state.isGenerating);
     });
 
-    window.addEventListener('online', () => checkHealth({ wake: true }));
-    window.addEventListener('offline', () => setStatus('Sin conexión', 'error'));
+    window.addEventListener('online', () => { updateOfflineBanner(); checkHealth({ wake: true }); });
+    window.addEventListener('offline', () => { updateOfflineBanner(); setStatus('Sin conexión', 'error'); });
     window.addEventListener('keydown', handleGlobalKeys);
   }
 
@@ -158,7 +191,26 @@
   }
 
   function handleGlobalKeys(event) {
-    if (event.key === 'Escape') closeOverlays();
+    const key = event.key.toLowerCase();
+    if (event.key === 'Escape') {
+      closeCommandPalette();
+      closeOverlays();
+    }
+    if ((event.ctrlKey || event.metaKey) && key === 'k') {
+      event.preventDefault();
+      openCommandPalette();
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && event.shiftKey && key === 'n') {
+      event.preventDefault();
+      createChat(true);
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && key === 'e') {
+      event.preventDefault();
+      openPanel('export');
+      return;
+    }
     if (event.key === '/' && !event.metaKey && !event.ctrlKey && !event.altKey) {
       const tag = document.activeElement?.tagName?.toLowerCase();
       if (tag !== 'textarea' && tag !== 'input') {
@@ -218,6 +270,145 @@
     catch { return fallback; }
   }
 
+  function saveProjects() {
+    localStorage.setItem(STORE.projects, JSON.stringify(state.projects));
+    localStorage.setItem(STORE.activeProject, state.activeProjectId);
+  }
+
+  function ensureProjects() {
+    const projects = Object.values(state.projects || {});
+    if (!projects.length) {
+      const id = 'project_general';
+      state.projects = {
+        [id]: {
+          id,
+          name: 'General',
+          description: 'Conversaciones y tareas generales.',
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        }
+      };
+      state.activeProjectId = id;
+      saveProjects();
+      return;
+    }
+    if (!state.activeProjectId || !state.projects[state.activeProjectId]) {
+      state.activeProjectId = projects[0].id;
+      saveProjects();
+    }
+  }
+
+  function migrateChatsToProjects() {
+    let changed = false;
+    Object.values(state.chats).forEach(chat => {
+      if (!chat.projectId) {
+        chat.projectId = state.activeProjectId;
+        changed = true;
+      }
+    });
+    if (changed) saveChats();
+  }
+
+  function currentProject() {
+    return state.projects[state.activeProjectId] || Object.values(state.projects)[0];
+  }
+
+  function latestChatForProject(projectId) {
+    return Object.values(state.chats)
+      .filter(chat => chat.projectId === projectId)
+      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0] || null;
+  }
+
+  function projectChatCount(projectId) {
+    return Object.values(state.chats).filter(chat => chat.projectId === projectId).length;
+  }
+
+  function renderProjectSwitcher() {
+    const project = currentProject();
+    if (els.projectName) els.projectName.textContent = project?.name || 'General';
+  }
+
+  function renderProjectList() {
+    if (!els.projectList) return;
+    const projects = Object.values(state.projects).sort((a,b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    els.projectList.innerHTML = '';
+    projects.forEach(project => {
+      const button = document.createElement('button');
+      button.className = `project-item${project.id === state.activeProjectId ? ' active' : ''}`;
+      button.innerHTML = `<span class="project-item-dot"></span><span class="project-item-copy"><span class="project-item-name">${escapeHtml(project.name)}</span><span class="project-item-count">${projectChatCount(project.id)} conversaciones</span></span>`;
+      button.addEventListener('click', () => switchProject(project.id));
+      els.projectList.appendChild(button);
+    });
+  }
+
+  function createProjectFlow() {
+    const name = prompt('Nombre del nuevo proyecto:');
+    if (!name?.trim()) return;
+    const description = prompt('Descripción breve del proyecto:', '') || '';
+    const id = uid('project');
+    state.projects[id] = {
+      id,
+      name: name.trim().slice(0, 60),
+      description: description.trim().slice(0, 240),
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+    state.activeProjectId = id;
+    saveProjects();
+    renderProjectSwitcher();
+    renderProjectList();
+    createChat(false);
+    toast(`Proyecto “${state.projects[id].name}” creado`);
+  }
+
+  function switchProject(projectId) {
+    if (!state.projects[projectId] || projectId === state.activeProjectId) {
+      closeOverlays();
+      return;
+    }
+    if (state.isGenerating) stopGeneration();
+    state.activeProjectId = projectId;
+    state.projects[projectId].updatedAt = Date.now();
+    const latest = latestChatForProject(projectId);
+    state.activeChatId = latest?.id || '';
+    saveProjects();
+    if (!state.activeChatId) createChat(false);
+    saveChats();
+    renderProjectSwitcher();
+    renderProjectList();
+    renderChatList();
+    renderActiveChat();
+    restoreDraft();
+    closeOverlays();
+    toast(`Proyecto activo: ${currentProject()?.name || 'General'}`);
+  }
+
+  function deleteProject(projectId) {
+    if (!state.projects[projectId]) return;
+    if (Object.keys(state.projects).length <= 1) {
+      toast('Debe existir al menos un proyecto');
+      return;
+    }
+    const project = state.projects[projectId];
+    if (!confirm(`¿Eliminar el proyecto “${project.name}” y sus conversaciones locales?`)) return;
+    Object.keys(state.chats).forEach(chatId => {
+      if (state.chats[chatId].projectId === projectId) {
+        delete state.chats[chatId];
+        localStorage.removeItem(STORE.draftPrefix + chatId);
+      }
+    });
+    delete state.projects[projectId];
+    state.activeProjectId = Object.keys(state.projects)[0];
+    state.activeChatId = latestChatForProject(state.activeProjectId)?.id || '';
+    saveProjects();
+    saveChats();
+    if (!state.activeChatId) createChat(false);
+    renderProjectSwitcher();
+    renderProjectList();
+    renderChatList();
+    renderActiveChat();
+  }
+
   function saveChats() {
     localStorage.setItem(STORE.chats, JSON.stringify(state.chats));
     localStorage.setItem(STORE.active, state.activeChatId);
@@ -228,15 +419,19 @@
   }
 
   function backendConversationId(chatId = state.activeChatId) {
-    return `public_${state.clientId}_${chatId}`.replace(/[^a-zA-Z0-9_.:@-]/g, '_').slice(0, 150);
+    const projectId = currentChat()?.projectId || state.activeProjectId || 'project_general';
+    return `public_${state.clientId}_${projectId}_${chatId}`.replace(/[^a-zA-Z0-9_.:@-]/g, '_').slice(0, 150);
   }
 
   function createChat(showToast = true) {
     if (state.isGenerating) stopGeneration();
     const id = uid('chat');
-    state.chats[id] = { id, title: 'Nueva conversación', messages: [], createdAt: Date.now(), updatedAt: Date.now() };
+    state.chats[id] = { id, projectId: state.activeProjectId, title: 'Nueva conversación', messages: [], createdAt: Date.now(), updatedAt: Date.now() };
     state.activeChatId = id;
+    if (state.projects[state.activeProjectId]) state.projects[state.activeProjectId].updatedAt = Date.now();
+    saveProjects();
     saveChats();
+    renderProjectList();
     renderChatList();
     renderActiveChat();
     restoreDraft();
@@ -248,10 +443,11 @@
   function removeChat(id) {
     delete state.chats[id];
     localStorage.removeItem(STORE.draftPrefix + id);
-    const remaining = Object.keys(state.chats);
-    state.activeChatId = remaining[0] || '';
+    const remaining = Object.values(state.chats).filter(chat => chat.projectId === state.activeProjectId);
+    state.activeChatId = remaining[0]?.id || '';
     if (!state.activeChatId) createChat(false);
     saveChats();
+    renderProjectList();
     renderChatList();
     renderActiveChat();
   }
@@ -267,19 +463,39 @@
     closeOverlays();
   }
 
-  function renderChatList() {
-    const items = Object.values(state.chats).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  function renderChatList(query = '') {
+    const normalized = String(query || '').trim().toLowerCase();
+    const items = Object.values(state.chats)
+      .filter(chat => chat.projectId === state.activeProjectId)
+      .filter(chat => !normalized || `${chat.title || ''} ${(chat.messages || []).map(item => item.content || '').join(' ')}`.toLowerCase().includes(normalized))
+      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
     els.chatList.innerHTML = '';
     if (!items.length) {
-      els.chatList.innerHTML = '<div class="empty-note">No hay conversaciones todavía.</div>';
+      els.chatList.innerHTML = '<div class="history-empty"><span>◇</span><strong>Sin conversaciones</strong><small>Inicia un chat nuevo dentro de este proyecto.</small></div>';
       return;
     }
     items.forEach(chat => {
       const btn = document.createElement('button');
+      const preview = chatPreview(chat);
+      const count = chat.messages?.length || 0;
       btn.className = `chat-item${chat.id === state.activeChatId ? ' active' : ''}`;
-      btn.textContent = chat.title || 'Conversación';
       btn.title = chat.title || 'Conversación';
-      btn.addEventListener('click', () => switchChat(chat.id));
+      btn.innerHTML = `
+        <span class="chat-item-icon" aria-hidden="true">${chat.id === state.activeChatId ? '◆' : '◇'}</span>
+        <span class="chat-item-copy">
+          <span class="chat-item-title">${escapeHtml(chat.title || 'Conversación')}</span>
+          <span class="chat-item-preview">${escapeHtml(preview)}</span>
+          <span class="chat-item-meta">${count} ${count === 1 ? 'mensaje' : 'mensajes'} · ${escapeHtml(formatRelativeTime(chat.updatedAt))}</span>
+        </span>
+        <span class="chat-item-delete" role="button" aria-label="Eliminar conversación" title="Eliminar">×</span>`;
+      btn.addEventListener('click', event => {
+        if (event.target.closest('.chat-item-delete')) {
+          event.stopPropagation();
+          if (confirm('¿Eliminar esta conversación?')) removeChat(chat.id);
+          return;
+        }
+        switchChat(chat.id);
+      });
       btn.addEventListener('contextmenu', e => {
         e.preventDefault();
         if (confirm('¿Eliminar esta conversación?')) removeChat(chat.id);
@@ -288,12 +504,57 @@
     });
   }
 
+  function chatPreview(chat) {
+    const latest = [...(chat.messages || [])].reverse().find(item => String(item.content || '').trim());
+    return String(latest?.content || 'Conversación nueva').replace(/\s+/g, ' ').slice(0, 82);
+  }
+
+  function formatRelativeTime(value) {
+    const time = Number(value || 0);
+    if (!time) return 'ahora';
+    const diff = Date.now() - time;
+    const minute = 60 * 1000;
+    const hour = 60 * minute;
+    const day = 24 * hour;
+    if (diff < minute) return 'ahora';
+    if (diff < hour) return `hace ${Math.max(1, Math.floor(diff / minute))} min`;
+    if (diff < day) return `hace ${Math.max(1, Math.floor(diff / hour))} h`;
+    if (diff < 7 * day) return `hace ${Math.max(1, Math.floor(diff / day))} d`;
+    return new Date(time).toLocaleDateString('es-HN', { day: '2-digit', month: 'short' });
+  }
+
+  function showWelcome() {
+    clearTimeout(showWelcome.timer);
+    els.welcome.classList.remove('hidden', 'leaving');
+    els.welcome.style.display = 'flex';
+  }
+
+  function dismissWelcome(animated = true) {
+    clearTimeout(showWelcome.timer);
+    if (els.welcome.classList.contains('hidden')) return;
+    if (!animated || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      els.welcome.classList.add('hidden');
+      els.welcome.classList.remove('leaving');
+      els.welcome.style.display = 'none';
+      return;
+    }
+    els.welcome.classList.add('leaving');
+    showWelcome.timer = setTimeout(() => {
+      els.welcome.classList.add('hidden');
+      els.welcome.classList.remove('leaving');
+      els.welcome.style.display = 'none';
+    }, 280);
+  }
+
   function renderActiveChat() {
     els.messages.innerHTML = '';
     const chat = currentChat();
     const hasMessages = Boolean(chat?.messages?.length);
-    els.welcome.style.display = hasMessages ? 'none' : 'flex';
-    if (!hasMessages) return;
+    if (!hasMessages) {
+      showWelcome();
+      return;
+    }
+    dismissWelcome(false);
     chat.messages.forEach(msg => {
       if (msg.role === 'user') appendUser(msg.content, false, msg.files || []);
       else appendAssistant(msg.content, msg.meta || {}, false, false);
@@ -385,7 +646,7 @@
     state.followOutput = true;
     state.abortController = new AbortController();
     setSendState(true);
-    els.welcome.style.display = 'none';
+    dismissWelcome(true);
 
     const fileNames = state.files.map(f => f.file_name);
     appendUser(text || 'Analiza los archivos adjuntos.', true, fileNames);
@@ -408,6 +669,8 @@
         body: JSON.stringify({
           message: text || 'Analiza los archivos adjuntos.',
           session_id: backendConversationId(),
+          project_name: currentProject()?.name || 'General',
+          mode: state.mode,
           files: outgoingFiles
         }),
         signal: state.abortController.signal
@@ -430,7 +693,11 @@
         model: data.model || '',
         cached: Boolean(data.cached),
         degraded: Boolean(data.degraded),
-        mode: data.mode || ''
+        mode: data.mode || '',
+        intent: data.intent || '',
+        route: data.route || '',
+        latencyMs: Number(data.latency_ms || 0),
+        requestId: data.request_id || ''
       };
       appendAssistant(reply, meta, true, true);
       persistMessage({ role: 'assistant', content: reply, meta });
@@ -520,20 +787,28 @@
   function appendAssistant(text, meta = {}, scroll = true, animateBlocks = true) {
     const row = document.createElement('div');
     row.className = 'message assistant';
+    const avatarWrap = document.createElement('div');
+    avatarWrap.className = 'assistant-avatar';
     const avatar = document.createElement('img');
-    avatar.className = 'assistant-avatar';
     const reactorRef = document.querySelector('.brand-reactor')?.getAttribute('src') || './static/jarvis-reactor-v10.png';
     avatar.src = new URL(reactorRef, document.baseURI).href;
     avatar.alt = 'JARVIS';
+    avatarWrap.appendChild(avatar);
 
     const body = document.createElement('div');
+    body.className = 'assistant-body';
+    const head = document.createElement('div');
+    head.className = 'assistant-head';
+    const modelName = formatModelName(meta.model);
+    head.innerHTML = `<span class="assistant-label">J.A.R.V.I.S.</span><span class="assistant-head-meta">${escapeHtml(modelName || humanRoute(meta.route) || 'Núcleo inteligente')}</span>`;
+
     const content = document.createElement('div');
     content.className = 'assistant-content';
-    body.appendChild(content);
+    body.append(head, content);
 
     const grid = document.createElement('div');
     grid.className = 'assistant-row';
-    grid.append(avatar, body);
+    grid.append(avatarWrap, body);
     row.appendChild(grid);
     els.messages.appendChild(row);
 
@@ -545,13 +820,16 @@
     }
 
     const tools = Array.isArray(meta.tools) ? meta.tools : [];
-    if (tools.length || meta.cached || meta.degraded) {
+    if (tools.length || meta.cached || meta.degraded || meta.intent || meta.route || meta.latencyMs) {
       const toolRow = document.createElement('div');
       toolRow.className = 'tool-row';
       tools.forEach(tool => {
         const name = typeof tool === 'string' ? tool : (tool.name || tool.tool || 'Herramienta');
         toolRow.insertAdjacentHTML('beforeend', `<span class="tool-chip">${escapeHtml(humanToolName(name))}</span>`);
       });
+      if (meta.intent) toolRow.insertAdjacentHTML('beforeend', `<span class="tool-chip intent-chip">${escapeHtml(humanIntent(meta.intent))}</span>`);
+      if (meta.route) toolRow.insertAdjacentHTML('beforeend', `<span class="tool-chip route-chip">${escapeHtml(humanRoute(meta.route))}</span>`);
+      if (meta.latencyMs) toolRow.insertAdjacentHTML('beforeend', `<span class="tool-chip latency-chip">${Math.max(1, Math.round(meta.latencyMs))} ms</span>`);
       if (meta.cached) toolRow.insertAdjacentHTML('beforeend', '<span class="tool-chip">Respuesta en caché</span>');
       if (meta.degraded) toolRow.insertAdjacentHTML('beforeend', '<span class="tool-chip">Modo degradado</span>');
       body.appendChild(toolRow);
@@ -562,6 +840,17 @@
     requestAnimationFrame(() => actions.classList.add('visible'));
 
     if (scroll) followBottom();
+  }
+
+  function formatModelName(model) {
+    const value = String(model || '').trim();
+    if (!value) return '';
+    return value
+      .replace(/^meta-llama\//i, '')
+      .replace(/^openai\//i, '')
+      .replace(/[-_]+/g, ' ')
+      .replace(/\b\w/g, char => char.toUpperCase())
+      .slice(0, 42);
   }
 
   function renderMarkdown(text) {
@@ -664,8 +953,11 @@
     const chat = currentChat();
     chat.messages.push(message);
     chat.updatedAt = Date.now();
+    if (state.projects[chat.projectId]) state.projects[chat.projectId].updatedAt = chat.updatedAt;
+    saveProjects();
     saveChats();
-    renderChatList();
+    renderProjectList();
+    renderChatList(els.drawerSearch?.value || '');
   }
 
   function updateChatTitle(prompt) {
@@ -674,7 +966,8 @@
     chat.title = prompt.trim().replace(/\s+/g, ' ').slice(0, 46) || 'Conversación';
     chat.updatedAt = Date.now();
     saveChats();
-    renderChatList();
+    renderProjectList();
+    renderChatList(els.drawerSearch?.value || '');
   }
 
   function isNearBottom() {
@@ -692,7 +985,97 @@
     els.jumpBtn.classList.remove('show');
   }
 
+  function commandDefinitions() {
+    return [
+      { id:'new-chat', icon:'＋', title:'Nueva conversación', sub:'Crear un chat en el proyecto activo', shortcut:'Ctrl+Shift+N', run:() => createChat(true) },
+      { id:'new-project', icon:'◆', title:'Nuevo proyecto', sub:'Crear un espacio de trabajo independiente', run:createProjectFlow },
+      { id:'projects', icon:'◇', title:'Administrar proyectos', sub:'Cambiar, crear o eliminar proyectos', run:() => openPanel('projects') },
+      { id:'library', icon:'▣', title:'Abrir biblioteca', sub:'Documentos del proyecto activo', run:() => openPanel('library') },
+      { id:'memory', icon:'◈', title:'Abrir memoria', sub:'Recuerdos y preferencias del proyecto', run:() => openPanel('memory') },
+      { id:'jobs', icon:'◉', title:'Trabajos autónomos', sub:'Crear y revisar tareas en segundo plano', run:() => openPanel('jobs') },
+      { id:'search', icon:'⌕', title:'Buscar conocimiento', sub:'Memoria, documentos y conversaciones', run:() => openPanel('search') },
+      { id:'export', icon:'⇩', title:'Exportar conversación', sub:'Descargar Markdown o JSON', shortcut:'Ctrl+E', run:() => openPanel('export') },
+      { id:'system', icon:'⚙', title:'Estado del núcleo', sub:'Diagnóstico, modelos y conexión', run:() => openPanel('system') },
+      { id:'focus', icon:'/', title:'Escribir una pregunta', sub:'Enfocar el campo de conversación', shortcut:'/', run:() => els.userInput.focus() },
+      { id:'mode', icon:'◎', title:'Cambiar modo', sub:MODES.find(item => item.id === state.mode)?.label || 'Modo automático', run:cycleMode },
+    ];
+  }
+
+  function openCommandPalette() {
+    closeOverlays();
+    els.commandPalette?.classList.add('open');
+    state.commandIndex = 0;
+    if (els.commandInput) els.commandInput.value = '';
+    renderCommandPalette();
+    setTimeout(() => els.commandInput?.focus(), 40);
+  }
+
+  function closeCommandPalette() {
+    els.commandPalette?.classList.remove('open');
+  }
+
+  function paletteItems(query = '') {
+    const needle = query.trim().toLowerCase();
+    const commands = commandDefinitions()
+      .filter(item => !needle || `${item.title} ${item.sub}`.toLowerCase().includes(needle))
+      .map(item => ({ ...item, group:'Comandos' }));
+    const projects = Object.values(state.projects)
+      .filter(item => !needle || `${item.name} ${item.description || ''}`.toLowerCase().includes(needle))
+      .slice(0,8)
+      .map(item => ({ id:`project:${item.id}`, icon:'◆', title:item.name, sub:item.description || 'Cambiar a este proyecto', group:'Proyectos', run:() => switchProject(item.id) }));
+    const chats = Object.values(state.chats)
+      .filter(chat => !needle || `${chat.title} ${(chat.messages || []).map(item => item.content || '').join(' ')}`.toLowerCase().includes(needle))
+      .sort((a,b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+      .slice(0,10)
+      .map(chat => ({ id:`chat:${chat.id}`, icon:'◌', title:chat.title || 'Conversación', sub:state.projects[chat.projectId]?.name || 'Proyecto', group:'Conversaciones', run:() => { if (chat.projectId !== state.activeProjectId) switchProject(chat.projectId); switchChat(chat.id); } }));
+    return [...commands, ...projects, ...chats];
+  }
+
+  function renderCommandPalette() {
+    if (!els.commandResults) return;
+    const items = paletteItems(els.commandInput?.value || '');
+    state.commandItems = items;
+    state.commandIndex = Math.max(0, Math.min(state.commandIndex, items.length - 1));
+    if (!items.length) {
+      els.commandResults.innerHTML = '<div class="empty-note">No hay coincidencias.</div>';
+      return;
+    }
+    let currentGroup = '';
+    els.commandResults.innerHTML = items.map((item,index) => {
+      const group = item.group !== currentGroup ? `<div class="command-group-label">${escapeHtml(item.group)}</div>` : '';
+      currentGroup = item.group;
+      return `${group}<button class="command-item${index === state.commandIndex ? ' active' : ''}" data-command-index="${index}"><span class="command-item-icon">${escapeHtml(item.icon)}</span><span class="command-item-copy"><span class="command-item-title">${escapeHtml(item.title)}</span><span class="command-item-sub">${escapeHtml(item.sub || '')}</span></span>${item.shortcut ? `<span class="command-item-shortcut">${escapeHtml(item.shortcut)}</span>` : ''}</button>`;
+    }).join('');
+    $$('[data-command-index]', els.commandResults).forEach(button => button.addEventListener('click', () => runCommand(Number(button.dataset.commandIndex))));
+  }
+
+  function handleCommandKeydown(event) {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      state.commandIndex = Math.min(state.commandIndex + 1, state.commandItems.length - 1);
+      renderCommandPalette();
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      state.commandIndex = Math.max(state.commandIndex - 1, 0);
+      renderCommandPalette();
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      runCommand(state.commandIndex);
+    } else if (event.key === 'Escape') {
+      closeCommandPalette();
+    }
+  }
+
+  function runCommand(index) {
+    const item = state.commandItems[index];
+    if (!item) return;
+    closeCommandPalette();
+    item.run?.();
+  }
+
   function openDrawer() {
+    renderProjectList();
+    renderChatList(els.drawerSearch?.value || '');
     els.drawer.classList.add('open');
     els.backdrop.classList.add('open');
   }
@@ -711,9 +1094,13 @@
     els.sheetBody.innerHTML = '<div class="empty-note">Cargando...</div>';
     try {
       if (panel === 'overview') await renderOverview();
+      else if (panel === 'projects') await renderProjects();
       else if (panel === 'library') await renderLibrary();
       else if (panel === 'memory') await renderMemory();
       else if (panel === 'reminders') await renderReminders();
+      else if (panel === 'jobs') await renderJobs();
+      else if (panel === 'search') await renderKnowledgeSearch();
+      else if (panel === 'export') await renderExport();
       else await renderSystem();
     } catch (error) {
       els.sheetBody.innerHTML = `<div class="empty-note">${escapeHtml(error.message || 'No se pudo cargar esta sección.')}</div>`;
@@ -721,7 +1108,7 @@
   }
 
   function panelTitle(panel) {
-    return ({ overview: 'Centro JARVIS', library: 'Biblioteca', memory: 'Memoria', reminders: 'Recordatorios', system: 'Estado y ajustes' })[panel] || 'JARVIS';
+    return ({ overview: 'Centro JARVIS', projects: 'Proyectos', library: 'Biblioteca', memory: 'Memoria', reminders: 'Recordatorios', jobs: 'Trabajos autónomos', search: 'Buscar conocimiento', export: 'Exportar conversación', system: 'Estado y ajustes' })[panel] || 'JARVIS';
   }
 
   async function renderOverview() {
@@ -729,13 +1116,13 @@
     const c = data.counts || {};
     els.sheetBody.innerHTML = `
       <div class="panel-grid">
+        ${panelCard('Proyecto activo', escapeHtml(currentProject()?.name || 'General'), 'projects')}
         ${panelCard('Biblioteca', `${c.documents || 0} documentos`, 'library')}
         ${panelCard('Memoria', `${c.memories || 0} recuerdos`, 'memory')}
-        ${panelCard('Recordatorios', `${c.reminders || 0} activos`, 'reminders')}
-        ${panelCard('Trabajos', `${c.jobs || 0} registrados`, 'system')}
+        ${panelCard('Trabajos', `${c.jobs || 0} registrados`, 'jobs')}
       </div>
       <div style="height:14px"></div>
-      <div class="panel-card"><h3>Estado del núcleo</h3><p>Versión ${escapeHtml(data.version || '6.0.0')} · ${escapeHtml(data.status || 'operativo')} · ${Number(data.usage_24h?.total_tokens || 0).toLocaleString()} tokens en 24 horas.</p></div>`;
+      <div class="panel-card"><h3>Estado del núcleo</h3><p>Versión ${escapeHtml(data.version || '11.0.0')} · ${escapeHtml(data.status || 'operativo')} · ${Number(data.usage_24h?.total_tokens || 0).toLocaleString()} tokens en 24 horas.</p></div>`;
     $$('[data-open-panel]', els.sheetBody).forEach(btn => btn.addEventListener('click', () => openPanel(btn.dataset.openPanel)));
   }
 
@@ -743,13 +1130,186 @@
     return `<button class="panel-card" data-open-panel="${panel}" style="text-align:left;color:inherit;cursor:pointer"><h3>${title}</h3><p>${text}</p></button>`;
   }
 
+  async function renderProjects() {
+    const projects = Object.values(state.projects).sort((a,b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    els.sheetBody.innerHTML = `
+      <div class="project-hero premium-project-hero">
+        <div class="project-hero-icon">◈</div>
+        <div><h3>Espacios de trabajo</h3><p>Cada proyecto separa conversaciones, memoria, documentos, recordatorios y trabajos del núcleo.</p></div>
+      </div>
+      <div class="project-create-box">
+        <input class="text-input" id="projectNameInput" placeholder="Nombre del proyecto"/>
+        <input class="text-input" id="projectDescInput" placeholder="Descripción breve"/>
+        <button class="primary-btn" id="createProjectPanelBtn">Crear proyecto</button>
+      </div>
+      <div class="project-grid premium-project-grid">${projects.map(project => {
+        const chats = Object.values(state.chats).filter(chat => chat.projectId === project.id);
+        const messages = chats.reduce((total, chat) => total + (chat.messages?.length || 0), 0);
+        const active = project.id === state.activeProjectId;
+        return `
+          <article class="project-card${active ? ' active' : ''}" data-project-card="${escapeHtml(project.id)}">
+            <div class="project-card-top">
+              <span class="project-card-orb">${active ? '◆' : '◇'}</span>
+              ${active ? '<span class="project-active-badge">Activo</span>' : ''}
+              ${projects.length > 1 ? `<button class="project-card-delete" data-delete-project="${escapeHtml(project.id)}" title="Eliminar">×</button>` : ''}
+            </div>
+            <h3>${escapeHtml(project.name)}</h3>
+            <p>${escapeHtml(project.description || 'Sin descripción.')}</p>
+            <div class="project-stats">
+              <span><strong>${chats.length}</strong> chats</span>
+              <span><strong>${messages}</strong> mensajes</span>
+              <span>${escapeHtml(formatRelativeTime(project.updatedAt))}</span>
+            </div>
+          </article>`;
+      }).join('')}</div>`;
+    $('#createProjectPanelBtn', els.sheetBody)?.addEventListener('click', () => {
+      const name = $('#projectNameInput', els.sheetBody).value.trim();
+      if (!name) return;
+      const desc = $('#projectDescInput', els.sheetBody).value.trim();
+      const id = uid('project');
+      state.projects[id] = { id, name:name.slice(0,60), description:desc.slice(0,240), createdAt:Date.now(), updatedAt:Date.now() };
+      state.activeProjectId = id;
+      saveProjects();
+      renderProjectSwitcher();
+      renderProjectList();
+      createChat(false);
+      renderProjects();
+    });
+    $$('[data-project-card]', els.sheetBody).forEach(card => card.addEventListener('click', event => {
+      if (event.target.closest('[data-delete-project]')) return;
+      switchProject(card.dataset.projectCard);
+    }));
+    $$('[data-delete-project]', els.sheetBody).forEach(btn => btn.addEventListener('click', event => {
+      event.stopPropagation();
+      deleteProject(btn.dataset.deleteProject);
+      renderProjects();
+    }));
+  }
+
+  async function renderJobs() {
+    const data = await apiFetch(`/api/jobs?session_id=${encodeURIComponent(backendConversationId())}`);
+    const jobs = data.jobs || [];
+    els.sheetBody.innerHTML = `
+      <div class="form-row"><input class="text-input" id="jobTitleInput" placeholder="Nombre del trabajo"/><input class="text-input" id="jobPromptInput" placeholder="Instrucción que JARVIS ejecutará"/><button class="primary-btn" id="createJobBtn">Ejecutar</button></div>
+      <div style="height:14px"></div>
+      <div class="list-stack">${jobs.length ? jobs.map(job => `
+        <div class="list-item"><div class="list-main"><div class="list-title">${escapeHtml(job.title)}</div><div class="list-sub">${escapeHtml(job.status || '')} · ${Number(job.progress || 0)}%</div><div class="job-progress"><span style="width:${Math.max(0,Math.min(100,Number(job.progress || 0)))}%"></span></div>${job.result ? `<div class="list-sub">${escapeHtml(String(job.result).slice(0,220))}</div>` : ''}</div><button class="danger-btn" data-delete-job="${escapeHtml(job.id)}">Eliminar</button></div>`).join('') : '<div class="empty-note">Todavía no hay trabajos autónomos en este proyecto.</div>'}</div>`;
+    $('#createJobBtn', els.sheetBody)?.addEventListener('click', async () => {
+      const title = $('#jobTitleInput', els.sheetBody).value.trim() || 'Trabajo autónomo';
+      const promptText = $('#jobPromptInput', els.sheetBody).value.trim();
+      if (!promptText) return;
+      await apiFetch('/api/jobs', { method:'POST', body:JSON.stringify({ session_id:backendConversationId(), title, prompt:promptText }) });
+      toast('Trabajo enviado al núcleo');
+      renderJobs();
+    });
+    $$('[data-delete-job]', els.sheetBody).forEach(btn => btn.addEventListener('click', async () => {
+      await apiFetch(`/api/jobs/${encodeURIComponent(btn.dataset.deleteJob)}?session_id=${encodeURIComponent(backendConversationId())}`, { method:'DELETE' });
+      renderJobs();
+    }));
+  }
+
+  async function renderKnowledgeSearch() {
+    els.sheetBody.innerHTML = `
+      <div class="form-row"><input class="text-input" id="knowledgeQuery" placeholder="Busca en memorias, documentos y conversaciones..."/><button class="primary-btn" id="knowledgeSearchBtn">Buscar</button></div>
+      <div style="height:14px"></div><div id="knowledgeResults" class="empty-note">Escribe una consulta para buscar en el conocimiento del proyecto.</div>`;
+    const execute = async () => {
+      const query = $('#knowledgeQuery', els.sheetBody).value.trim();
+      if (!query) return;
+      const [remote, localHits] = await Promise.all([
+        apiFetch(`/api/knowledge/search?session_id=${encodeURIComponent(backendConversationId())}&query=${encodeURIComponent(query)}&limit=8`),
+        Promise.resolve(searchLocalChats(query))
+      ]);
+      const memories = remote.memories || [];
+      const documents = remote.documents || [];
+      $('#knowledgeResults', els.sheetBody).innerHTML = `
+        ${searchSection('Conversaciones locales', localHits.map(hit => ({ title:hit.title, text:hit.preview })))}
+        ${searchSection('Memoria', memories.map(item => ({ title:item.category || 'Recuerdo', text:item.content })))}
+        ${searchSection('Documentos', documents.map(item => ({ title:item.file_name || 'Documento', text:item.excerpt || '' })))}
+        ${!localHits.length && !memories.length && !documents.length ? '<div class="empty-note">No se encontraron coincidencias.</div>' : ''}`;
+    };
+    $('#knowledgeSearchBtn', els.sheetBody)?.addEventListener('click', execute);
+    $('#knowledgeQuery', els.sheetBody)?.addEventListener('keydown', event => { if (event.key === 'Enter') execute(); });
+  }
+
+  function searchSection(title, items) {
+    if (!items.length) return '';
+    return `<section class="search-result-section"><h3>${escapeHtml(title)}</h3>${items.map(item => `<div class="search-hit"><div class="search-hit-title">${escapeHtml(item.title)}</div><div class="search-hit-text">${escapeHtml(String(item.text || '').slice(0,700))}</div></div>`).join('')}</section>`;
+  }
+
+  function searchLocalChats(query) {
+    const needle = query.toLowerCase();
+    return Object.values(state.chats)
+      .filter(chat => chat.projectId === state.activeProjectId)
+      .map(chat => {
+        const text = (chat.messages || []).map(item => item.content || '').join('\n');
+        const index = text.toLowerCase().indexOf(needle);
+        if (index < 0 && !(chat.title || '').toLowerCase().includes(needle)) return null;
+        const start = Math.max(0, index - 90);
+        return { id:chat.id, title:chat.title || 'Conversación', preview:text.slice(start,start+260) };
+      })
+      .filter(Boolean)
+      .slice(0,10);
+  }
+
+  async function renderExport() {
+    const chat = currentChat();
+    const count = chat?.messages?.length || 0;
+    els.sheetBody.innerHTML = `
+      <div class="project-hero"><h3>${escapeHtml(chat?.title || 'Conversación')}</h3><p>${count} mensajes · proyecto ${escapeHtml(currentProject()?.name || 'General')}</p></div>
+      <div class="export-actions">
+        <button class="export-card" id="exportMarkdown"><strong>Exportar Markdown</strong><span>Documento legible con toda la conversación.</span></button>
+        <button class="export-card" id="exportJson"><strong>Exportar JSON</strong><span>Datos estructurados para respaldo o integración.</span></button>
+      </div>`;
+    $('#exportMarkdown', els.sheetBody)?.addEventListener('click', () => exportCurrentChat('markdown'));
+    $('#exportJson', els.sheetBody)?.addEventListener('click', () => exportCurrentChat('json'));
+  }
+
+  function exportCurrentChat(format) {
+    const chat = currentChat();
+    if (!chat) return;
+    const project = currentProject();
+    const safeName = `${project?.name || 'JARVIS'}-${chat.title || 'conversacion'}`.replace(/[^a-z0-9_-]+/gi,'-').replace(/-+/g,'-').slice(0,80);
+    if (format === 'json') {
+      downloadFile(`${safeName}.json`, JSON.stringify({ project, chat, exportedAt:new Date().toISOString() }, null, 2), 'application/json');
+      return;
+    }
+    const lines = [`# ${chat.title || 'Conversación JARVIS'}`, '', `Proyecto: ${project?.name || 'General'}`, `Exportado: ${new Date().toLocaleString()}`, ''];
+    (chat.messages || []).forEach(message => {
+      lines.push(message.role === 'user' ? '## Usuario' : '## J.A.R.V.I.S.', '', message.content || '', '');
+    });
+    downloadFile(`${safeName}.md`, lines.join('\n'), 'text/markdown');
+  }
+
+  function downloadFile(name, content, type) {
+    const blob = new Blob([content], { type:`${type};charset=utf-8` });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast('Archivo exportado');
+  }
+
   async function renderLibrary() {
     const data = await apiFetch(`/api/library?session_id=${encodeURIComponent(backendConversationId())}`);
     const docs = data.documents || [];
+    const totalCharacters = docs.reduce((sum, doc) => sum + Number(doc.characters || 0), 0);
     els.sheetBody.innerHTML = `
-      <div class="form-row"><button class="primary-btn" id="uploadFromPanel">Subir archivo</button><span style="color:var(--muted);font-size:.8rem">PDF, Word, Excel, PowerPoint, texto y código.</span></div>
-      <div style="height:14px"></div>
-      <div class="list-stack" id="libraryList">${docs.length ? docs.map(doc => listDocument(doc)).join('') : '<div class="empty-note">Aún no hay documentos en esta conversación.</div>'}</div>`;
+      <div class="library-hero">
+        <div class="library-hero-icon">▤</div>
+        <div class="library-hero-copy"><h3>Biblioteca del proyecto</h3><p>Centraliza documentos, código y archivos de referencia para consultarlos desde JARVIS.</p></div>
+        <button class="primary-btn" id="uploadFromPanel">Subir archivo</button>
+      </div>
+      <div class="library-stats">
+        <span><strong>${docs.length}</strong> archivos</span>
+        <span><strong>${totalCharacters.toLocaleString()}</strong> caracteres indexados</span>
+        <span>PDF · Office · texto · código</span>
+      </div>
+      <div class="document-grid" id="libraryList">${docs.length ? docs.map(doc => listDocument(doc)).join('') : `
+        <div class="library-empty">
+          <span class="library-empty-icon">⇧</span>
+          <strong>Tu biblioteca está vacía</strong>
+          <small>Sube un archivo para resumirlo, buscar información o utilizarlo como contexto.</small>
+        </div>`}</div>`;
     $('#uploadFromPanel', els.sheetBody)?.addEventListener('click', () => els.fileInput.click());
     $$('[data-delete-doc]', els.sheetBody).forEach(btn => btn.addEventListener('click', async () => {
       await apiFetch(`/api/library/${encodeURIComponent(btn.dataset.deleteDoc)}?session_id=${encodeURIComponent(backendConversationId())}`, { method: 'DELETE' });
@@ -758,7 +1318,31 @@
   }
 
   function listDocument(doc) {
-    return `<div class="list-item"><div class="list-main"><div class="list-title">${escapeHtml(doc.file_name)}</div><div class="list-sub">${escapeHtml(doc.file_type || '')} · ${Number(doc.characters || 0).toLocaleString()} caracteres</div></div><button class="danger-btn" data-delete-doc="${escapeHtml(doc.id)}">Eliminar</button></div>`;
+    const extension = fileExtension(doc.file_name || doc.file_type || '');
+    const icon = documentIcon(extension);
+    return `<article class="document-card">
+      <div class="document-icon ${escapeHtml(extension || 'file')}">${icon}</div>
+      <div class="document-copy">
+        <div class="document-title" title="${escapeHtml(doc.file_name)}">${escapeHtml(doc.file_name)}</div>
+        <div class="document-meta">${escapeHtml((doc.file_type || extension || 'archivo').toUpperCase())} · ${Number(doc.characters || 0).toLocaleString()} caracteres</div>
+        <div class="document-status"><span></span> Indexado y disponible</div>
+      </div>
+      <button class="document-delete" data-delete-doc="${escapeHtml(doc.id)}" aria-label="Eliminar documento" title="Eliminar">×</button>
+    </article>`;
+  }
+
+  function fileExtension(name) {
+    const clean = String(name || '').toLowerCase().split('?')[0];
+    return clean.includes('.') ? clean.split('.').pop().slice(0, 6) : clean.replace(/[^a-z0-9]/g, '').slice(0, 6);
+  }
+
+  function documentIcon(extension) {
+    if (extension === 'pdf') return 'PDF';
+    if (['doc', 'docx'].includes(extension)) return 'W';
+    if (['xls', 'xlsx', 'xlsm', 'csv'].includes(extension)) return 'X';
+    if (['ppt', 'pptx'].includes(extension)) return 'P';
+    if (['js', 'py', 'html', 'css', 'json'].includes(extension)) return '&lt;/&gt;';
+    return '▤';
   }
 
   async function renderMemory() {
@@ -880,6 +1464,28 @@
       saveDraft(); autoResize(); els.userInput.focus();
     };
     recognition.start();
+  }
+
+  function updateOfflineBanner() {
+    els.offlineBanner?.classList.toggle('show', !navigator.onLine);
+  }
+
+  async function registerServiceWorker() {
+    if (!('serviceWorker' in navigator)) return;
+    try {
+      const swUrl = new URL('./service-worker.js', document.baseURI).href;
+      await navigator.serviceWorker.register(swUrl);
+    } catch (error) {
+      console.warn('No se pudo registrar el modo offline:', error);
+    }
+  }
+
+  function humanIntent(intent) {
+    return ({ research:'Investigación', documents:'Documentos', math:'Matemática', code:'Programación', writing:'Escritura', planning:'Planificación', memory:'Memoria', reminders:'Recordatorios', general:'Conversación' })[intent] || intent;
+  }
+
+  function humanRoute(route) {
+    return ({ direct:'Ruta local', direct_web:'Búsqueda directa', autonomous:'Agente autónomo', cache:'Caché', degraded:'Modo local', degraded_web:'Web en modo local' })[route] || route;
   }
 
   function humanToolName(name) {

@@ -43,6 +43,7 @@ class JarvisNexusSmokeTests(unittest.TestCase):
         self.assertTrue((main.STATIC_DIR / "manifest.webmanifest").exists())
         self.assertTrue((main.STATIC_DIR / "styles.css").exists())
         self.assertTrue((main.STATIC_DIR / "app.js").exists())
+        self.assertTrue((main.BASE_DIR / "service-worker.js").exists())
         self.assertTrue(main.INDEX_FILE.exists())
 
     def test_health_endpoint(self):
@@ -64,10 +65,35 @@ class JarvisNexusSmokeTests(unittest.TestCase):
     def test_public_direct_math_route(self):
         response = self.client.post(
             "/api/jarvis",
-            json={"message": "Calcula el 12% de 85000", "session_id": "test_public"},
+            json={"message": "Calcula el 12% de 85000", "session_id": "test_public", "project_name": "Economía", "mode": "math"},
         )
         self.assertEqual(response.status_code, 200)
-        self.assertIn("reply", response.json())
+        payload = response.json()
+        self.assertIn("reply", payload)
+        self.assertEqual(payload.get("intent"), "math")
+        self.assertIn("latency_ms", payload)
+        self.assertEqual(payload.get("project_name"), "Economía")
+
+    def test_capabilities_include_advanced_features(self):
+        response = self.client.get("/api/capabilities")
+        self.assertEqual(response.status_code, 200)
+        features = set(response.json().get("features", []))
+        self.assertIn("smart_intent_router", features)
+        self.assertIn("project_workspaces", features)
+        self.assertIn("offline_pwa_shell", features)
+
+    def test_router_preview(self):
+        response = self.client.get("/api/router/preview", params={"message": "Investiga noticias recientes sobre inteligencia artificial"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload.get("intent"), "research")
+        self.assertIn("recommended_mode", payload)
+
+    def test_knowledge_search(self):
+        main.memory_save("test_knowledge", "El proyecto usa una interfaz oscura", "project", 4)
+        response = self.client.get("/api/knowledge/search", params={"session_id": "test_knowledge", "query": "interfaz"})
+        self.assertEqual(response.status_code, 200)
+        self.assertGreaterEqual(response.json().get("total", 0), 1)
 
 
 if __name__ == "__main__":
