@@ -5,6 +5,6 @@
 */
 window.JARVIS_CONFIG = Object.freeze({
   API_BASE: "https://jarvis-ai-hud.onrender.com",
-  APP_NAME: "J.A.R.V.I.S. Premium Nexus",
+  APP_NAME: "J.A.R.V.I.S. — Autonomous Core",
   PUBLIC_MODE: true
 });

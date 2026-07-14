@@ -38,7 +38,9 @@ class JarvisNexusSmokeTests(unittest.TestCase):
         self.assertEqual(set(result["solutions"]), {"2", "3"})
 
     def test_assets_exist(self):
-        self.assertTrue((main.STATIC_DIR / "jarvis-reactor.svg").exists())
+        self.assertTrue((main.STATIC_DIR / "jarvis-reactor-v10.png").exists())
+        self.assertTrue((main.STATIC_DIR / "jarvis-reactor-v10.webp").exists())
+        self.assertTrue((main.STATIC_DIR / "manifest.webmanifest").exists())
         self.assertTrue((main.STATIC_DIR / "styles.css").exists())
         self.assertTrue((main.STATIC_DIR / "app.js").exists())
         self.assertTrue(main.INDEX_FILE.exists())

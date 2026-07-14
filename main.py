@@ -2165,7 +2165,7 @@ def health():
 @app.get("/api/system")
 def system_info():
     return {
-        "status": "JARVIS Premium Nexus Core Active",
+        "status": "JARVIS Core Interface Active",
         "version": "6.0.0",
         "groq_configured": bool(GROQ_API_KEY),
         "model": GROQ_MODEL,
@@ -2183,6 +2183,6 @@ def home():
     if INDEX_FILE.exists():
         return FileResponse(INDEX_FILE)
     return HTMLResponse(
-        "<h1>J.A.R.V.I.S. Premium Nexus Core activo</h1><p>Falta static/index.html.</p>",
+        "<h1>J.A.R.V.I.S. Core Interface activo</h1><p>Falta static/index.html.</p>",
         status_code=200,
     )

@@ -34,7 +34,8 @@
     sheetTitle: $('#sheetTitle'),
     sheetBody: $('#sheetBody'),
     closeSheetBtn: $('#closeSheetBtn'),
-    toast: $('#toast')
+    toast: $('#toast'),
+    reactorFx: $('#reactorFx')
   };
 
   const STORE = {
@@ -42,7 +43,7 @@
     chats: 'jarvis_nexus_chats',
     active: 'jarvis_nexus_active_chat',
     draftPrefix: 'jarvis_nexus_draft_',
-    apiBase: 'jarvis_pages_api_base_v7',
+    apiBase: 'jarvis_pages_api_base_v10',
     mode: 'jarvis_nexus_mode'
   };
 
@@ -81,6 +82,7 @@
   document.addEventListener('DOMContentLoaded', init);
 
   function init() {
+    document.title = window.JARVIS_CONFIG?.APP_NAME || 'J.A.R.V.I.S. — Autonomous Core';
     if (!state.activeChatId || !state.chats[state.activeChatId]) createChat(false);
     configureMarkdown();
     bindEvents();
@@ -89,6 +91,7 @@
     renderActiveChat();
     restoreDraft();
     autoResize();
+    bindHeroFx();
     checkHealth({ wake: true });
     pollNotifications();
   }
@@ -116,6 +119,8 @@
     els.micBtn.addEventListener('click', startVoiceInput);
     els.modeBtn.addEventListener('click', cycleMode);
     els.jumpBtn.addEventListener('click', () => scrollToBottom(true));
+    els.statusPill.addEventListener('click', () => checkHealth({ wake: true }));
+    els.reactorFx?.addEventListener('click', activateCoreVisual);
 
     els.userInput.addEventListener('input', () => { autoResize(); saveDraft(); });
     els.userInput.addEventListener('keydown', e => {
@@ -132,6 +137,60 @@
 
     window.addEventListener('online', () => checkHealth({ wake: true }));
     window.addEventListener('offline', () => setStatus('Sin conexión', 'error'));
+    window.addEventListener('keydown', handleGlobalKeys);
+  }
+
+
+  function activateCoreVisual() {
+    const node = els.reactorFx;
+    if (!node) return;
+    node.classList.remove('core-surge');
+    void node.offsetWidth;
+    node.classList.add('core-surge');
+    els.ambient.classList.add('active');
+    clearTimeout(activateCoreVisual.timer);
+    activateCoreVisual.timer = setTimeout(() => {
+      node.classList.remove('core-surge');
+      if (!state.isGenerating) els.ambient.classList.remove('active');
+    }, 980);
+    toast('Núcleo visual sincronizado');
+    setTimeout(() => els.userInput.focus(), 180);
+  }
+
+  function handleGlobalKeys(event) {
+    if (event.key === 'Escape') closeOverlays();
+    if (event.key === '/' && !event.metaKey && !event.ctrlKey && !event.altKey) {
+      const tag = document.activeElement?.tagName?.toLowerCase();
+      if (tag !== 'textarea' && tag !== 'input') {
+        event.preventDefault();
+        els.userInput.focus();
+      }
+    }
+  }
+
+  function bindHeroFx() {
+    const node = els.reactorFx;
+    if (!node || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const update = (x, y) => {
+      node.style.setProperty('--mx', `${x}px`);
+      node.style.setProperty('--my', `${y}px`);
+      const rx = ((y / node.clientHeight) - 0.5) * -8;
+      const ry = ((x / node.clientWidth) - 0.5) * 10;
+      node.style.setProperty('--rx', `${rx.toFixed(2)}deg`);
+      node.style.setProperty('--ry', `${ry.toFixed(2)}deg`);
+    };
+    node.addEventListener('pointermove', (event) => {
+      const rect = node.getBoundingClientRect();
+      update(event.clientX - rect.left, event.clientY - rect.top);
+    });
+    node.addEventListener('pointerleave', () => {
+      node.style.setProperty('--mx', `${node.clientWidth / 2}px`);
+      node.style.setProperty('--my', `${node.clientHeight / 2}px`);
+      node.style.setProperty('--rx', '0deg');
+      node.style.setProperty('--ry', '0deg');
+    });
+    node.style.setProperty('--mx', `${node.clientWidth / 2}px`);
+    node.style.setProperty('--my', `${node.clientHeight / 2}px`);
   }
 
   function configureMarkdown() {
@@ -463,7 +522,7 @@
     row.className = 'message assistant';
     const avatar = document.createElement('img');
     avatar.className = 'assistant-avatar';
-    const reactorRef = document.querySelector('.brand-reactor')?.getAttribute('src') || './static/jarvis-reactor.svg';
+    const reactorRef = document.querySelector('.brand-reactor')?.getAttribute('src') || './static/jarvis-reactor-v10.png';
     avatar.src = new URL(reactorRef, document.baseURI).href;
     avatar.alt = 'JARVIS';
 
