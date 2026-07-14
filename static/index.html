@@ -351,7 +351,9 @@
     const state = {
       sessionId: localStorage.getItem('jarvis_session_id') || `stark_${crypto.randomUUID?.() || Math.random().toString(36).slice(2)}`,
       accessKey: localStorage.getItem('jarvis_access_key') || '',
-      apiBase: localStorage.getItem('jarvis_api_base') || 'https://jarvis-ai-hud.onrender.com',
+      apiBase:
+        localStorage.getItem('jarvis_api_base') ||
+        'https://jarvis-ai-hud.onrender.com'
       busy: false,
       selectedFile: null,
       latestPrompt: '',
