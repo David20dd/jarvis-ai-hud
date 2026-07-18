@@ -1,5 +1,5 @@
 {
-  "name": "J.A.R.V.I.S. Stability Core",
+  "name": "J.A.R.V.I.S. Multi-Provider Core",
   "short_name": "JARVIS",
   "description": "Asistente resistente con múltiples rutas, caché, trabajos persistentes y verificación.",
   "start_url": "../",

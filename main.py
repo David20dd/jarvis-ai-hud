@@ -35,6 +35,17 @@ except ImportError:  # El núcleo local sigue funcionando sin el SDK opcional.
 from pydantic import BaseModel, Field
 
 from jarvis_core import RuntimeSupport, compact_messages, disk_status
+from jarvis_core.providers import (
+    GeminiProvider,
+    GroqProvider,
+    MultiProviderGateway,
+    OllamaProvider,
+    OpenAICompatibleProvider,
+    OpenAIProvider,
+    ProviderError,
+    ProviderModel,
+    ProviderRequest,
+)
 
 try:
     from zoneinfo import ZoneInfo
@@ -83,11 +94,20 @@ WEB_SEARCH_RESULTS = max(4, min(int(os.getenv("JARVIS_WEB_SEARCH_RESULTS", "10")
 PROVIDER_TIMEOUT_SECONDS = max(10, min(int(os.getenv("JARVIS_PROVIDER_TIMEOUT_SECONDS", "45")), 180))
 VERIFY_RESULTS = os.getenv("JARVIS_VERIFY_RESULTS", "true").strip().lower() not in {"0", "false", "no", "off"}
 ALWAYS_RETURN_RESULT = os.getenv("JARVIS_ALWAYS_RETURN_RESULT", "true").strip().lower() not in {"0", "false", "no", "off"}
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
+OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").strip().rstrip("/")
+OPENAI_MODELS = [m.strip() for m in os.getenv("OPENAI_MODELS", "").split(",") if m.strip()]
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+GEMINI_API_VERSION = os.getenv("GEMINI_API_VERSION", "v1beta").strip() or "v1beta"
+GEMINI_MODELS = [m.strip() for m in os.getenv("GEMINI_MODELS", "").split(",") if m.strip()]
 OPENAI_COMPAT_BASE_URL = os.getenv("JARVIS_OPENAI_COMPAT_BASE_URL", "").strip().rstrip("/")
 OPENAI_COMPAT_API_KEY = os.getenv("JARVIS_OPENAI_COMPAT_API_KEY", "").strip()
 OPENAI_COMPAT_MODELS = [m.strip() for m in os.getenv("JARVIS_OPENAI_COMPAT_MODELS", "").split(",") if m.strip()]
 OLLAMA_BASE_URL = os.getenv("JARVIS_OLLAMA_BASE_URL", "").strip().rstrip("/")
+OLLAMA_API_KEY = os.getenv("JARVIS_OLLAMA_API_KEY", "").strip()
 OLLAMA_MODELS = [m.strip() for m in os.getenv("JARVIS_OLLAMA_MODELS", "llama3.1:8b").split(",") if m.strip()]
+PROVIDER_ORDER = [p.strip().lower() for p in os.getenv("JARVIS_PROVIDER_ORDER", "groq,openai,gemini,compatible,ollama").split(",") if p.strip()]
+PROVIDER_MAX_ATTEMPTS = max(1, min(int(os.getenv("JARVIS_PROVIDER_MAX_ATTEMPTS", "8")), 20))
 REDIS_URL = os.getenv("JARVIS_REDIS_URL", os.getenv("REDIS_URL", "")).strip()
 REQUEST_TIMEOUT_SECONDS = max(30, min(int(os.getenv("JARVIS_REQUEST_TIMEOUT_SECONDS", "120")), 600))
 CONTEXT_MAX_CHARS = max(12000, min(int(os.getenv("JARVIS_CONTEXT_MAX_CHARS", "60000")), 240000))
@@ -107,6 +127,30 @@ runtime = RuntimeSupport(
     circuit_failures=CIRCUIT_FAILURE_THRESHOLD,
     circuit_recovery_seconds=CIRCUIT_RECOVERY_SECONDS,
     metrics_samples=METRICS_SAMPLES,
+)
+
+
+def _provider_models(names: List[str], provider: str) -> List[ProviderModel]:
+    defaults = {
+        "groq": dict(capabilities={"text", "fast", "coding", "reasoning"}, quality=0.78, speed=0.96, cost=0.25),
+        "openai": dict(capabilities={"text", "reasoning", "coding", "research"}, quality=0.96, speed=0.72, cost=0.72),
+        "gemini": dict(capabilities={"text", "research", "reasoning", "coding", "long_context"}, quality=0.92, speed=0.82, cost=0.55),
+        "compatible": dict(capabilities={"text", "reasoning", "coding"}, quality=0.72, speed=0.68, cost=0.5),
+        "ollama": dict(capabilities={"text", "local", "privacy", "coding"}, quality=0.65, speed=0.45, cost=0.05),
+    }
+    values = defaults[provider]
+    return [ProviderModel(id=name, **values) for name in names]
+
+
+provider_gateway = MultiProviderGateway(
+    [
+        GroqProvider(api_key=GROQ_API_KEY, models=_provider_models(MODEL_CHAIN, "groq"), runtime=runtime, timeout_seconds=PROVIDER_TIMEOUT_SECONDS),
+        OpenAIProvider(api_key=OPENAI_API_KEY, models=_provider_models(OPENAI_MODELS, "openai"), runtime=runtime, timeout_seconds=PROVIDER_TIMEOUT_SECONDS, base_url=OPENAI_BASE_URL),
+        GeminiProvider(api_key=GEMINI_API_KEY, models=_provider_models(GEMINI_MODELS, "gemini"), runtime=runtime, timeout_seconds=PROVIDER_TIMEOUT_SECONDS, api_version=GEMINI_API_VERSION),
+        OpenAICompatibleProvider(base_url=OPENAI_COMPAT_BASE_URL, api_key=OPENAI_COMPAT_API_KEY, models=_provider_models(OPENAI_COMPAT_MODELS, "compatible"), runtime=runtime, timeout_seconds=PROVIDER_TIMEOUT_SECONDS),
+        OllamaProvider(base_url=OLLAMA_BASE_URL, api_key=OLLAMA_API_KEY, models=_provider_models(OLLAMA_MODELS, "ollama"), runtime=runtime, timeout_seconds=max(PROVIDER_TIMEOUT_SECONDS, 60)),
+    ],
+    order=PROVIDER_ORDER,
 )
 JOB_EXECUTOR = ThreadPoolExecutor(max_workers=JOB_WORKERS, thread_name_prefix="jarvis-job")
 _job_submit_lock = threading.RLock()
@@ -417,7 +461,7 @@ async def lifespan(_: FastAPI):
     _start_maintenance()
     recovered = _recover_interrupted_jobs()
     logger.info(
-        "J.A.R.V.I.S. Stability Core v18 iniciado | public_mode=%s | redis=%s | jobs_recuperados=%s",
+        "J.A.R.V.I.S. Multi-Provider Core v19 iniciado | public_mode=%s | redis=%s | jobs_recuperados=%s",
         PUBLIC_MODE,
         bool(REDIS_URL),
         recovered,
@@ -425,12 +469,13 @@ async def lifespan(_: FastAPI):
     yield
     _stop_maintenance()
     JOB_EXECUTOR.shutdown(wait=False, cancel_futures=True)
-    logger.info("J.A.R.V.I.S. Stability Core v18 detenido")
+    provider_gateway.close()
+    logger.info("J.A.R.V.I.S. Multi-Provider Core v19 detenido")
 
 
 app = FastAPI(
-    title="J.A.R.V.I.S. Stability Core",
-    version="18.0.0",
+    title="J.A.R.V.I.S. Multi-Provider Core",
+    version="19.0.0",
     lifespan=lifespan,
 )
 
@@ -499,7 +544,7 @@ async def request_observability(request: Request, call_next):
         elif response.status_code >= 400:
             status = "cancelled" if response.status_code == 499 else "error"
         response.headers["X-Request-ID"] = request_id
-        response.headers["X-JARVIS-Version"] = "18.0.0"
+        response.headers["X-JARVIS-Version"] = "19.0.0"
         if request.url.path.startswith("/api/"):
             response.headers.setdefault("Cache-Control", "no-store")
         return response
@@ -574,6 +619,13 @@ class SettingsInput(BaseModel):
     clear_cache: bool = False
 
 
+class ProviderRouteInput(BaseModel):
+    message: str = Field(min_length=1, max_length=12000)
+    intent: str = ""
+    mode: str = "auto"
+    preferred_provider: str = ""
+
+
 class WhatsAppStatusInput(BaseModel):
     connected: bool = False
     qr_raw: Optional[str] = None
@@ -590,8 +642,9 @@ def safe_session_id(value: str) -> str:
 
 def safe_error_text(exc: Exception, limit: int = 700) -> str:
     text = f"{type(exc).__name__}: {exc}".strip()
-    if GROQ_API_KEY:
-        text = text.replace(GROQ_API_KEY, "[CLAVE_OCULTA]")
+    for secret in (GROQ_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, OPENAI_COMPAT_API_KEY, OLLAMA_API_KEY):
+        if secret:
+            text = text.replace(secret, "[CLAVE_OCULTA]")
     text = re.sub(r"org_[a-zA-Z0-9]+", "[ORGANIZACION_OCULTA]", text)
     text = re.sub(r"https://console\.groq\.com/[^\s'\"]+", "[ENLACE_GROQ]", text)
     return text[:limit]
@@ -936,17 +989,28 @@ def provider_status() -> List[Dict[str, Any]]:
 
 
 def resilience_provider_status() -> Dict[str, Any]:
+    gateway = provider_gateway.snapshot()
+    providers = gateway.get("providers", {})
     return {
-        "groq": {"configured": bool(GROQ_API_KEY), "models": provider_status()},
+        "groq": {"configured": bool(GROQ_API_KEY), "models": provider_status(), "gateway": providers.get("groq", {})},
+        "openai": providers.get("openai", {}),
+        "gemini": providers.get("gemini", {}),
         "openai_compatible": {
             "configured": bool(OPENAI_COMPAT_BASE_URL and OPENAI_COMPAT_MODELS),
             "base_url": OPENAI_COMPAT_BASE_URL if OPENAI_COMPAT_BASE_URL else "",
             "models": OPENAI_COMPAT_MODELS,
+            "gateway": providers.get("compatible", {}),
         },
         "ollama": {
             "configured": bool(OLLAMA_BASE_URL and OLLAMA_MODELS),
             "base_url": OLLAMA_BASE_URL if OLLAMA_BASE_URL else "",
             "models": OLLAMA_MODELS if OLLAMA_BASE_URL else [],
+            "gateway": providers.get("ollama", {}),
+        },
+        "gateway": {
+            "configured": gateway.get("configured", []),
+            "order": gateway.get("order", []),
+            "last_routes": gateway.get("last_routes", []),
         },
         "local_routes": {
             "calculator": True,
@@ -2251,23 +2315,23 @@ def _call_ollama_text(messages: List[Dict[str, Any]]) -> Tuple[str, str, Dict[st
     raise RuntimeError("; ".join(errors) or "Ollama no disponible")
 
 
-def external_text_provider(messages: List[Dict[str, Any]]) -> Tuple[str, str, Dict[str, int], List[Dict[str, str]]]:
-    attempts: List[Dict[str, str]] = []
-    providers: List[Tuple[str, Callable[[List[Dict[str, Any]]], Tuple[str, str, Dict[str, int]]]]] = []
-    if OPENAI_COMPAT_BASE_URL and OPENAI_COMPAT_MODELS:
-        providers.append(("openai_compatible", _call_openai_compatible_text))
-    if OLLAMA_BASE_URL and OLLAMA_MODELS:
-        providers.append(("ollama", _call_ollama_text))
-    if not providers:
-        raise RuntimeError("No hay proveedores generativos secundarios configurados")
-    for name, provider in providers:
-        try:
-            text, model, usage = provider(messages)
-            attempts.append({"provider": name, "status": "completed", "model": model})
-            return text, model, usage, attempts
-        except Exception as exc:
-            attempts.append({"provider": name, "status": "failed", "detail": safe_error_text(exc, 260)})
-    raise RuntimeError(json.dumps(attempts, ensure_ascii=False))
+def external_text_provider(
+    messages: List[Dict[str, Any]],
+    *,
+    intent: str = "general",
+    mode: str = "auto",
+    preferred_provider: str = "",
+) -> Tuple[str, str, Dict[str, int], List[Dict[str, Any]]]:
+    request = ProviderRequest(
+        messages=_provider_messages(messages),
+        intent=intent or "general",
+        mode=mode or "auto",
+        temperature=0.22,
+        max_tokens=MAX_COMPLETION_TOKENS,
+        preferred_provider=preferred_provider,
+    )
+    result, attempts = provider_gateway.generate(request, max_attempts=PROVIDER_MAX_ATTEMPTS)
+    return result.text, result.route_model, result.usage, attempts
 
 
 def _token_set(text: str) -> set[str]:
@@ -2514,7 +2578,7 @@ def resilient_resolve(
                 {"role": "user", "content": f"Pregunta: {prompt}\n\nEvidencia:\n{source_text}"},
             ]
             try:
-                text, model, usage, provider_attempts = external_text_provider(messages)
+                text, model, usage, provider_attempts = external_text_provider(messages, intent=intent, mode="research")
                 return {
                     "reply": text, "tools": [{"name": "web_search", "status": "completed"}],
                     "mode": "provider_research", "model": model, "usage": usage,
@@ -2535,7 +2599,7 @@ def resilient_resolve(
                 {"role": "system", "content": construir_prompt_sistema(sid, project_name, mode, intent)},
                 {"role": "user", "content": f"{prompt}\n\nContexto documental disponible:\n{context}" if context else prompt},
             ]
-            text, model, usage, provider_attempts = external_text_provider(messages)
+            text, model, usage, provider_attempts = external_text_provider(messages, intent=intent, mode=mode)
             return {"reply": text, "tools": [], "mode": "secondary_provider", "model": model, "usage": usage, "provider_attempts": provider_attempts}
         result = attempt("secondary_provider", secondary_provider)
 
@@ -2553,7 +2617,7 @@ def resilient_resolve(
                 {"role": "system", "content": "Corrige la respuesta para cubrir completamente la solicitud. No inventes información y conserva los datos verificables."},
                 {"role": "user", "content": f"Solicitud: {prompt}\n\nRespuesta a corregir:\n{result.get('reply','')}\n\nProblemas detectados: {', '.join(verification['reasons'])}"},
             ]
-            text, model, usage, provider_attempts = external_text_provider(messages)
+            text, model, usage, provider_attempts = external_text_provider(messages, intent=intent, mode=mode)
             return {**result, "reply": text, "model": model, "usage": usage, "mode": "verified_repair", "provider_attempts": provider_attempts}
         repaired = attempt("verification_repair", repair)
         if repaired is not None:
@@ -2562,7 +2626,7 @@ def resilient_resolve(
                 result, verification = repaired, repaired_verification
 
     result_model = str(result.get("model", ""))
-    if result_model.startswith(("compat:", "ollama:")):
+    if result_model.startswith(("groq:", "openai:", "gemini:", "compatible:", "compat:", "ollama:")):
         try:
             record_usage_dict(sid, result_model, result.get("usage", {}) or {})
         except Exception:
@@ -2625,10 +2689,23 @@ def run_agent(
     mode: str = "auto",
     intent: str = "general",
 ) -> Dict[str, Any]:
-    if client is None:
-        raise RuntimeError("Falta configurar GROQ_API_KEY en Render")
-
     sid = safe_session_id(session_id)
+    if client is None:
+        messages: List[Dict[str, Any]] = [
+            {"role": "system", "content": construir_prompt_sistema(sid, project_name, mode, intent)}
+        ]
+        messages.extend(cargar_historial_db(sid))
+        messages.append({"role": "user", "content": user_message})
+        text, model, usage, attempts = external_text_provider(messages, intent=intent, mode=mode)
+        return {
+            "reply": text,
+            "tools": [],
+            "mode": "multi_provider",
+            "model": model,
+            "usage": usage,
+            "provider_attempts": attempts,
+        }
+
     messages: List[Dict[str, Any]] = [
         {"role": "system", "content": construir_prompt_sistema(sid, project_name, mode, intent)}
     ]
@@ -2943,7 +3020,7 @@ async def consultar_jarvis_stream(data: ChatInput, request: Request):
             "Probando alternativas y caché",
             "Verificando el resultado",
         ]
-        yield json.dumps({"type": "progress", "stage": states[0], "version": "18.0.0"}, ensure_ascii=False) + "\n"
+        yield json.dumps({"type": "progress", "stage": states[0], "version": "19.0.0"}, ensure_ascii=False) + "\n"
         task = asyncio.create_task(consultar_jarvis(data, request))
         index = 1
         while not task.done():
@@ -3600,7 +3677,7 @@ def resilience_status(session_id: str = "default_session", limit: int = 12):
         ).fetchone()
     return {
         "status": "ok",
-        "version": "18.0.0",
+        "version": "19.0.0",
         "providers": resilience_provider_status(),
         "limits": {
             "max_resolution_attempts": MAX_RESOLUTION_ATTEMPTS,
@@ -3635,8 +3712,8 @@ def dashboard(session_id: str):
             (sid, since),
         ).fetchone()
     return {
-        "version": "18.0.0",
-        "status": "online" if (GROQ_API_KEY or OPENAI_COMPAT_BASE_URL or OLLAMA_BASE_URL) else "local_only",
+        "version": "19.0.0",
+        "status": "online" if provider_gateway.configured_names() else "local_only",
         "counts": counts,
         "usage_24h": dict(usage),
         "models": provider_status(),
@@ -3668,7 +3745,7 @@ def self_check():
         checks["sympy"] = {"ok": False, "detail": safe_error_text(exc)}
     checks["static_ui"] = {"ok": INDEX_FILE.exists()}
     checks["groq_key"] = {"ok": bool(GROQ_API_KEY), "required_for": "proveedor principal"}
-    checks["secondary_provider"] = {"ok": bool(OPENAI_COMPAT_BASE_URL and OPENAI_COMPAT_MODELS) or bool(OLLAMA_BASE_URL and OLLAMA_MODELS), "optional": True}
+    checks["multi_provider_gateway"] = {"ok": bool(provider_gateway.configured_names()), "optional": True, "configured": provider_gateway.configured_names()}
     checks["resilient_search"] = {"ok": True, "attempts": WEB_SEARCH_ATTEMPTS, "max_results": WEB_SEARCH_RESULTS}
     checks["l1_cache"] = {"ok": True, **runtime.cache.stats()}
     checks["redis"] = {**runtime.redis.ping(), "optional": True}
@@ -3676,14 +3753,14 @@ def self_check():
     checks["disk"] = disk_status(str(BASE_DIR))
     checks["context_compaction"] = {"ok": len(compact_messages([{"role":"system","content":"a"*1000},{"role":"user","content":"b"*20000}], 5000, 4)) >= 1}
     overall = all(item.get("ok") for key, item in checks.items() if key not in {"groq_key", "secondary_provider", "redis"})
-    return {"status": "ok" if overall else "degraded", "checks": checks, "version": "18.0.0"}
+    return {"status": "ok" if overall else "degraded", "checks": checks, "version": "19.0.0"}
 
 
 @app.get("/api/capabilities")
 def capabilities():
     return {
         "autonomous_core": True,
-        "version": "18.0.0",
+        "version": "19.0.0",
         "groq_configured": bool(GROQ_API_KEY),
         "model": GROQ_MODEL,
         "model_chain": MODEL_CHAIN,
@@ -3697,6 +3774,11 @@ def capabilities():
             "tool_calling",
             "multi_model_fallback",
             "multi_provider_fallback",
+            "openai_responses_api",
+            "gemini_generate_content",
+            "provider_scoring_router",
+            "provider_route_preview",
+            "provider_usage_telemetry",
             "execution_planner",
             "resolution_trace",
             "result_verification",
@@ -3780,11 +3862,44 @@ def _job_health() -> Dict[str, Any]:
     }
 
 
+@app.get("/api/providers")
+def providers_status():
+    snapshot = provider_gateway.snapshot()
+    return {
+        "status": "ok",
+        "version": "19.0.0",
+        "gateway": snapshot,
+        "configured_count": len(snapshot.get("configured", [])),
+        "local_routes_available": True,
+    }
+
+
+@app.post("/api/providers/route-preview")
+def providers_route_preview(data: ProviderRouteInput):
+    intent_info = classify_intent(data.message)
+    intent = (data.intent or intent_info.get("intent") or "general").strip().lower()
+    mode = (data.mode or intent_info.get("recommended_mode") or "auto").strip().lower()
+    request = ProviderRequest(
+        messages=[{"role": "user", "content": data.message}],
+        intent=intent,
+        mode=mode,
+        preferred_provider=(data.preferred_provider or "").strip().lower(),
+        max_tokens=MAX_COMPLETION_TOKENS,
+    )
+    return {
+        "status": "ok",
+        "intent": intent,
+        "mode": mode,
+        "configured": provider_gateway.configured_names(),
+        "routes": provider_gateway.route_preview(request),
+    }
+
+
 @app.get("/api/health/live")
 def health_live():
     return {
         "status": "ok",
-        "version": "18.0.0",
+        "version": "19.0.0",
         "uptime_seconds": runtime.metrics.summary().get("uptime_seconds", 0),
         "timestamp": time.time(),
     }
@@ -3799,13 +3914,11 @@ def health_ready():
         status_code=200 if ready else 503,
         content={
             "status": "ready" if ready else "not_ready",
-            "version": "18.0.0",
+            "version": "19.0.0",
             "database": database,
             "static_ui": {"ok": static_ok},
             "generative_route_configured": bool(
-                GROQ_API_KEY
-                or (OPENAI_COMPAT_BASE_URL and OPENAI_COMPAT_MODELS)
-                or (OLLAMA_BASE_URL and OLLAMA_MODELS)
+                provider_gateway.configured_names()
             ),
             "local_routes_available": True,
         },
@@ -3831,7 +3944,7 @@ def health_deep():
     status = "ok" if required_ok and not open_circuits else ("degraded" if required_ok else "failed")
     payload = {
         "status": status,
-        "version": "18.0.0",
+        "version": "19.0.0",
         "database": database,
         "redis": redis,
         "disk": disk,
@@ -3878,7 +3991,7 @@ def performance(session_id: str = "default_session", hours: int = 24):
         ).fetchall()
     return {
         "status": "ok",
-        "version": "18.0.0",
+        "version": "19.0.0",
         "hours": hours,
         "runtime": runtime.snapshot(),
         "jobs": _job_health(),
@@ -3910,19 +4023,19 @@ def health():
         database_ok = False
         database_error = safe_error_text(exc)
 
-    generative_configured = bool(GROQ_API_KEY or (OPENAI_COMPAT_BASE_URL and OPENAI_COMPAT_MODELS) or (OLLAMA_BASE_URL and OLLAMA_MODELS))
+    generative_configured = bool(provider_gateway.configured_names())
     status = "ok" if generative_configured and database_ok else "degraded"
     return {
         "status": status,
         "groq_configured": bool(GROQ_API_KEY),
-        "secondary_provider_configured": bool((OPENAI_COMPAT_BASE_URL and OPENAI_COMPAT_MODELS) or (OLLAMA_BASE_URL and OLLAMA_MODELS)),
+        "secondary_provider_configured": bool([name for name in provider_gateway.configured_names() if name != "groq"]),
         "database_ok": database_ok,
         "database_error": database_error,
         "model": GROQ_MODEL,
         "models": provider_status(),
         "providers": resilience_provider_status(),
         "public_mode": PUBLIC_MODE,
-        "version": "18.0.0",
+        "version": "19.0.0",
         "runtime": {
             "cache": runtime.snapshot().get("cache", {}),
             "singleflight": runtime.singleflight.stats(),
@@ -3936,7 +4049,7 @@ def health():
 def system_info():
     return {
         "status": "JARVIS Core Interface Active",
-        "version": "18.0.0",
+        "version": "19.0.0",
         "groq_configured": bool(GROQ_API_KEY),
         "model": GROQ_MODEL,
         "model_chain": MODEL_CHAIN,
@@ -3947,6 +4060,8 @@ def system_info():
         "health_ready_endpoint": "/api/health/ready",
         "health_deep_endpoint": "/api/health/deep",
         "performance_endpoint": "/api/performance",
+        "providers_endpoint": "/api/providers",
+        "provider_route_preview_endpoint": "/api/providers/route-preview",
         "capabilities_endpoint": "/api/capabilities",
         "dashboard_endpoint": "/api/dashboard",
         "redis_configured": bool(REDIS_URL),

@@ -16,6 +16,11 @@ services:
       JARVIS_DB_FILE: /data/jarvis_memory.db
       JARVIS_PUBLIC_MODE: "true"
       GROQ_API_KEY: ${GROQ_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODELS: ${OPENAI_MODELS:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODELS: ${GEMINI_MODELS:-}
+      JARVIS_PROVIDER_ORDER: ${JARVIS_PROVIDER_ORDER:-groq,openai,gemini,compatible,ollama}
     ports:
       - "8000:8000"
     volumes:

@@ -98,7 +98,7 @@
   document.addEventListener('DOMContentLoaded', init);
 
   function init() {
-    document.title = window.JARVIS_CONFIG?.APP_NAME || 'J.A.R.V.I.S. — Stability Core';
+    document.title = window.JARVIS_CONFIG?.APP_NAME || 'J.A.R.V.I.S. — Multi-Provider Core';
     ensureProjects();
     migrateChatsToProjects();
     if (!state.activeChatId || !state.chats[state.activeChatId] || currentChat()?.projectId !== state.activeProjectId) {
@@ -996,6 +996,7 @@
       { id:'jobs', icon:'◉', title:'Trabajos autónomos', sub:'Crear y revisar tareas en segundo plano', run:() => openPanel('jobs') },
       { id:'search', icon:'⌕', title:'Buscar conocimiento', sub:'Memoria, documentos y conversaciones', run:() => openPanel('search') },
       { id:'export', icon:'⇩', title:'Exportar conversación', sub:'Descargar Markdown o JSON', shortcut:'Ctrl+E', run:() => openPanel('export') },
+      { id:'providers', icon:'◫', title:'Proveedores IA', sub:'OpenAI, Gemini, Groq, Ollama y rutas automáticas', run:() => openPanel('providers') },
       { id:'resilience', icon:'⟲', title:'Resiliencia y rutas', sub:'Proveedores, verificaciones y recuperaciones', run:() => openPanel('resilience') },
       { id:'performance', icon:'⌁', title:'Rendimiento', sub:'Velocidad, caché, circuitos y trabajos', run:() => openPanel('performance') },
       { id:'system', icon:'⚙', title:'Estado del núcleo', sub:'Diagnóstico, modelos y conexión', run:() => openPanel('system') },
@@ -1104,6 +1105,7 @@
       else if (panel === 'jobs') await renderJobs();
       else if (panel === 'search') await renderKnowledgeSearch();
       else if (panel === 'export') await renderExport();
+      else if (panel === 'providers') await renderProviders();
       else if (panel === 'resilience') await renderResilience();
       else if (panel === 'performance') await renderPerformance();
       else await renderSystem();
@@ -1113,7 +1115,7 @@
   }
 
   function panelTitle(panel) {
-    return ({ overview: 'Centro JARVIS', projects: 'Proyectos', library: 'Biblioteca', memory: 'Memoria', reminders: 'Recordatorios', jobs: 'Trabajos autónomos', search: 'Buscar conocimiento', export: 'Exportar conversación', resilience: 'Resiliencia y rutas', performance: 'Rendimiento y estabilidad', system: 'Estado y ajustes' })[panel] || 'JARVIS';
+    return ({ overview: 'Centro JARVIS', projects: 'Proyectos', library: 'Biblioteca', memory: 'Memoria', reminders: 'Recordatorios', jobs: 'Trabajos autónomos', search: 'Buscar conocimiento', export: 'Exportar conversación', providers: 'Proveedores IA', resilience: 'Resiliencia y rutas', performance: 'Rendimiento y estabilidad', system: 'Estado y ajustes' })[panel] || 'JARVIS';
   }
 
   async function renderOverview() {
@@ -1127,7 +1129,7 @@
         ${panelCard('Trabajos', `${c.jobs || 0} registrados`, 'jobs')}
       </div>
       <div style="height:14px"></div>
-      <div class="panel-card"><h3>Estado del núcleo</h3><p>Versión ${escapeHtml(data.version || '18.0.0')} · ${escapeHtml(data.status || 'operativo')} · ${Number(data.usage_24h?.total_tokens || 0).toLocaleString()} tokens en 24 horas.</p></div>`;
+      <div class="panel-card"><h3>Estado del núcleo</h3><p>Versión ${escapeHtml(data.version || '19.0.0')} · ${escapeHtml(data.status || 'operativo')} · ${Number(data.usage_24h?.total_tokens || 0).toLocaleString()} tokens en 24 horas.</p></div>`;
     $$('[data-open-panel]', els.sheetBody).forEach(btn => btn.addEventListener('click', () => openPanel(btn.dataset.openPanel)));
   }
 
@@ -1411,6 +1413,75 @@
     }));
   }
 
+  async function renderProviders() {
+    const data = await apiFetch('/api/providers');
+    const gateway = data.gateway || {};
+    const providers = gateway.providers || {};
+    const configured = new Set(gateway.configured || []);
+    const labels = { groq:'Groq', openai:'OpenAI', gemini:'Google Gemini', compatible:'Proveedor compatible', ollama:'Ollama' };
+    const descriptions = {
+      groq:'Velocidad, clasificación, conversación y respuestas cotidianas.',
+      openai:'Razonamiento, programación, agentes y tareas complejas.',
+      gemini:'Investigación, contexto amplio y procesamiento multimodal.',
+      compatible:'Servidor adicional con interfaz compatible con OpenAI.',
+      ollama:'Ruta local o privada para contingencia y trabajo sin proveedor externo.'
+    };
+    const order = gateway.order || Object.keys(providers);
+    const cards = order.map(name => {
+      const item = providers[name] || {};
+      const stats = item.stats || {};
+      const models = item.models || [];
+      const isConfigured = configured.has(name) || Boolean(item.configured);
+      return `<article class="provider-card ${isConfigured ? 'is-online' : 'is-optional'}">
+        <div class="provider-card-head">
+          <div class="provider-logo provider-${escapeHtml(name)}">${escapeHtml((labels[name] || name).slice(0,1))}</div>
+          <div class="provider-state ${isConfigured ? 'online' : 'optional'}"><span></span>${isConfigured ? 'Configurado' : 'Opcional'}</div>
+        </div>
+        <h3>${escapeHtml(labels[name] || name)}</h3>
+        <p>${escapeHtml(descriptions[name] || '')}</p>
+        <div class="provider-models">${models.length ? models.map(model => `<span>${escapeHtml(model)}</span>`).join('') : '<span>Sin modelos configurados</span>'}</div>
+        <div class="provider-metrics">
+          <span><strong>${Math.round(Number(stats.success_rate || 0) * 100)}%</strong> éxito</span>
+          <span><strong>${Number(stats.average_latency_ms || 0).toFixed(0)}</strong> ms</span>
+          <span><strong>${Number(stats.requests || 0)}</strong> solicitudes</span>
+        </div>
+      </article>`;
+    }).join('');
+    els.sheetBody.innerHTML = `
+      <div class="providers-hero">
+        <div class="providers-icon">◫</div>
+        <div><h3>Multi-Provider Gateway</h3><p>JARVIS selecciona automáticamente la ruta más conveniente según tarea, velocidad, capacidad y disponibilidad.</p></div>
+      </div>
+      <div class="provider-summary">
+        <div><strong>${configured.size}</strong><span>proveedores configurados</span></div>
+        <div><strong>${order.length}</strong><span>rutas reconocidas</span></div>
+        <div><strong>${escapeHtml((gateway.order || []).join(' → ') || 'Sin orden')}</strong><span>orden base</span></div>
+      </div>
+      <div class="provider-grid">${cards}</div>
+      <div style="height:18px"></div>
+      <div class="route-lab">
+        <div class="section-panel-title">Laboratorio de enrutamiento</div>
+        <p>Escribe una tarea para ver qué proveedor priorizaría JARVIS. Esta vista no consume tokens.</p>
+        <div class="form-row"><input class="text-input" id="routePreviewInput" placeholder="Ejemplo: investiga la inflación y compara fuentes oficiales"/><button class="primary-btn" id="routePreviewBtn">Analizar ruta</button></div>
+        <div id="routePreviewResult" class="route-preview-result"></div>
+      </div>`;
+    $('#routePreviewBtn', els.sheetBody)?.addEventListener('click', async () => {
+      const input = $('#routePreviewInput', els.sheetBody);
+      const resultBox = $('#routePreviewResult', els.sheetBody);
+      const message = input?.value.trim();
+      if (!message) return;
+      resultBox.innerHTML = '<div class="empty-note">Evaluando proveedores...</div>';
+      try {
+        const preview = await apiFetch('/api/providers/route-preview', { method:'POST', body:JSON.stringify({ message, mode:'auto' }) });
+        const rows = preview.routes || [];
+        resultBox.innerHTML = `<div class="route-preview-meta">Intención: <strong>${escapeHtml(preview.intent || 'general')}</strong> · modo: <strong>${escapeHtml(preview.mode || 'auto')}</strong></div>${rows.map((row,index) => `<div class="route-preview-row ${row.configured ? '' : 'disabled'}"><span class="route-rank">${index + 1}</span><div><strong>${escapeHtml(labels[row.provider] || row.provider)}</strong><small>${row.configured ? `${(row.models || []).length} modelo(s) elegible(s)` : 'No configurado'}</small></div><b>${row.score >= 0 ? Number(row.score).toFixed(2) : '—'}</b></div>`).join('')}`;
+      } catch (error) {
+        resultBox.innerHTML = `<div class="empty-note">${escapeHtml(error.message || 'No se pudo evaluar la ruta.')}</div>`;
+      }
+    });
+  }
+
+
   async function renderResilience() {
     const data = await apiFetch(`/api/resilience/status?session_id=${encodeURIComponent(backendConversationId())}`);
     const providers = data.providers || {};
@@ -1419,6 +1490,8 @@
     const recent = data.recent_runs || [];
     const providerCards = [
       ['Groq', Boolean(providers.groq?.configured), (providers.groq?.models || []).map(item => item.model).join(', ') || 'Sin modelos'],
+      ['OpenAI', Boolean(providers.openai?.configured), (providers.openai?.models || []).join(', ') || 'Opcional'],
+      ['Google Gemini', Boolean(providers.gemini?.configured), (providers.gemini?.models || []).join(', ') || 'Opcional'],
       ['Proveedor compatible', Boolean(providers.openai_compatible?.configured), (providers.openai_compatible?.models || []).join(', ') || 'Opcional'],
       ['Ollama local', Boolean(providers.ollama?.configured), (providers.ollama?.models || []).join(', ') || 'Opcional'],
       ['Rutas locales', true, 'Cálculo, SymPy, documentos, memoria, caché y búsqueda'],
@@ -1464,7 +1537,7 @@
     els.sheetBody.innerHTML = `
       <div class="performance-hero">
         <div class="performance-icon">⌁</div>
-        <div><h3>Stability & Performance Core</h3><p>Telemetría local para detectar lentitud, reutilizar resultados y aislar proveedores que fallen repetidamente.</p></div>
+        <div><h3>Multi-Provider Performance Core</h3><p>Telemetría local para detectar lentitud, reutilizar resultados y aislar proveedores que fallen repetidamente.</p></div>
       </div>
       <div class="panel-grid performance-grid">
         <div class="panel-card metric-card"><span>Latencia media</span><strong>${Number(chatMetric.avg_ms || 0).toFixed(0)} ms</strong><small>P95 ${Number(chatMetric.p95_ms || 0).toFixed(0)} ms</small></div>
@@ -1688,7 +1761,7 @@
   }
 
   function humanRoute(route) {
-    return ({ direct:'Ruta local', direct_web:'Búsqueda directa', autonomous:'Agente autónomo', cache:'Caché', degraded:'Modo local', degraded_web:'Web en modo local', provider_research:'Investigación multirruta', secondary_provider:'Proveedor secundario', similar_cache:'Caché similar', resilient_web:'Búsqueda resistente', resilient_local:'Resolución local', resilient_documents:'Biblioteca local', verified_repair:'Respuesta reparada' })[route] || route;
+    return ({ direct:'Ruta local', direct_web:'Búsqueda directa', autonomous:'Agente autónomo', cache:'Caché', degraded:'Modo local', degraded_web:'Web en modo local', provider_research:'Investigación multirruta', secondary_provider:'Proveedor secundario', multi_provider:'Gateway multimodelo', similar_cache:'Caché similar', resilient_web:'Búsqueda resistente', resilient_local:'Resolución local', resilient_documents:'Biblioteca local', verified_repair:'Respuesta reparada' })[route] || route;
   }
 
   function humanToolName(name) {
