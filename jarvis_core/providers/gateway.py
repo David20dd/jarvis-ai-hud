@@ -8,22 +8,23 @@ from .base import BaseProvider, ProviderError, ProviderModel, ProviderRequest, P
 
 
 INTENT_PROVIDER_PREFERENCES: Dict[str, List[str]] = {
-    "research": ["gemini", "openai", "groq", "compatible", "ollama"],
-    "documents": ["gemini", "openai", "groq", "compatible", "ollama"],
-    "coding": ["openai", "groq", "gemini", "compatible", "ollama"],
-    "code": ["openai", "groq", "gemini", "compatible", "ollama"],
-    "math": ["groq", "openai", "gemini", "compatible", "ollama"],
-    "writing": ["openai", "gemini", "groq", "compatible", "ollama"],
-    "planning": ["openai", "gemini", "groq", "compatible", "ollama"],
-    "general": ["groq", "openai", "gemini", "compatible", "ollama"],
+    "research": ["gemini", "anthropic", "openai", "groq", "compatible", "ollama"],
+    "documents": ["anthropic", "gemini", "openai", "groq", "compatible", "ollama"],
+    "coding": ["anthropic", "openai", "groq", "gemini", "compatible", "ollama"],
+    "code": ["anthropic", "openai", "groq", "gemini", "compatible", "ollama"],
+    "math": ["groq", "openai", "anthropic", "gemini", "compatible", "ollama"],
+    "writing": ["anthropic", "openai", "gemini", "groq", "compatible", "ollama"],
+    "planning": ["anthropic", "openai", "gemini", "groq", "compatible", "ollama"],
+    "general": ["groq", "openai", "anthropic", "gemini", "compatible", "ollama"],
 }
 
 MODE_PROVIDER_PREFERENCES: Dict[str, List[str]] = {
-    "fast": ["groq", "gemini", "openai", "compatible", "ollama"],
-    "research": ["gemini", "openai", "groq", "compatible", "ollama"],
-    "writing": ["openai", "gemini", "groq", "compatible", "ollama"],
-    "math": ["groq", "openai", "gemini", "compatible", "ollama"],
-    "private": ["ollama", "groq", "openai", "gemini", "compatible"],
+    "deep": ["anthropic", "openai", "gemini", "groq", "compatible", "ollama"],
+    "fast": ["groq", "gemini", "openai", "anthropic", "compatible", "ollama"],
+    "research": ["gemini", "anthropic", "openai", "groq", "compatible", "ollama"],
+    "writing": ["anthropic", "openai", "gemini", "groq", "compatible", "ollama"],
+    "math": ["groq", "openai", "anthropic", "gemini", "compatible", "ollama"],
+    "private": ["ollama", "groq", "anthropic", "openai", "gemini", "compatible"],
 }
 
 
@@ -110,8 +111,11 @@ class MultiProviderGateway:
 
     def candidates(self, request: ProviderRequest) -> Iterable[Tuple[BaseProvider, ProviderModel, float]]:
         preview = self.route_preview(request)
+        excluded = {str(item).strip().lower() for item in request.metadata.get("exclude_providers", []) if str(item).strip()}
         for provider_row in preview:
             provider = self.providers[provider_row["provider"]]
+            if provider.name in excluded:
+                continue
             if not provider.configured:
                 continue
             model_by_id = {model.id: model for model in provider.model_candidates(request)}
@@ -173,6 +177,22 @@ class MultiProviderGateway:
             retry_after_seconds=retry_after,
         )
 
+    def capability_matrix(self) -> Dict[str, Any]:
+        capabilities: Dict[str, Dict[str, Any]] = {}
+        for name, provider in self.providers.items():
+            model_caps = sorted({cap for model in provider.models for cap in model.capabilities} | set(provider.capabilities))
+            capabilities[name] = {
+                "label": provider.label,
+                "configured": provider.configured,
+                "capabilities": model_caps,
+                "models": [model.id for model in provider.models],
+                "stats": provider.stats.snapshot(),
+            }
+        tasks: Dict[str, List[str]] = {}
+        for intent, order in INTENT_PROVIDER_PREFERENCES.items():
+            tasks[intent] = [name for name in order if name in self.providers]
+        return {"providers": capabilities, "task_preferences": tasks, "modes": MODE_PROVIDER_PREFERENCES}
+
     def snapshot(self) -> Dict[str, Any]:
         return {
             "configured": self.configured_names(),
@@ -185,4 +205,5 @@ class MultiProviderGateway:
                 for name, provider in self.providers.items()
             },
             "last_routes": self.last_routes,
+            "capability_matrix": self.capability_matrix(),
         }

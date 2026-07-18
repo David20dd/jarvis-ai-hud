@@ -1,3 +1,4 @@
+from .anthropic_provider import AnthropicProvider
 from .base import ProviderError, ProviderModel, ProviderRequest, ProviderResult
 from .compat_provider import OpenAICompatibleProvider
 from .gateway import MultiProviderGateway
@@ -7,6 +8,7 @@ from .ollama_provider import OllamaProvider
 from .openai_provider import OpenAIProvider
 
 __all__ = [
+    "AnthropicProvider",
     "ProviderError",
     "ProviderModel",
     "ProviderRequest",

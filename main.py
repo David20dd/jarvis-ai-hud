@@ -34,8 +34,9 @@ except ImportError:  # El núcleo local sigue funcionando sin el SDK opcional.
     Groq = None  # type: ignore
 from pydantic import BaseModel, Field
 
-from jarvis_core import RuntimeSupport, compact_messages, disk_status
+from jarvis_core import RuntimeSupport, ToolRegistry, compact_messages, disk_status
 from jarvis_core.providers import (
+    AnthropicProvider,
     GeminiProvider,
     GroqProvider,
     MultiProviderGateway,
@@ -100,14 +101,23 @@ OPENAI_MODELS = [m.strip() for m in os.getenv("OPENAI_MODELS", "").split(",") if
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 GEMINI_API_VERSION = os.getenv("GEMINI_API_VERSION", "v1beta").strip() or "v1beta"
 GEMINI_MODELS = [m.strip() for m in os.getenv("GEMINI_MODELS", "").split(",") if m.strip()]
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "").strip()
+ANTHROPIC_BASE_URL = os.getenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com").strip().rstrip("/")
+ANTHROPIC_API_VERSION = os.getenv("ANTHROPIC_API_VERSION", "2023-06-01").strip() or "2023-06-01"
+ANTHROPIC_MODELS = [m.strip() for m in os.getenv("ANTHROPIC_MODELS", "").split(",") if m.strip()]
+ANTHROPIC_PROMPT_CACHE = os.getenv("JARVIS_ANTHROPIC_PROMPT_CACHE", "true").strip().lower() not in {"0", "false", "no", "off"}
+ANTHROPIC_CACHE_TTL = "1h" if os.getenv("JARVIS_ANTHROPIC_CACHE_TTL", "5m").strip().lower() == "1h" else "5m"
 OPENAI_COMPAT_BASE_URL = os.getenv("JARVIS_OPENAI_COMPAT_BASE_URL", "").strip().rstrip("/")
 OPENAI_COMPAT_API_KEY = os.getenv("JARVIS_OPENAI_COMPAT_API_KEY", "").strip()
 OPENAI_COMPAT_MODELS = [m.strip() for m in os.getenv("JARVIS_OPENAI_COMPAT_MODELS", "").split(",") if m.strip()]
 OLLAMA_BASE_URL = os.getenv("JARVIS_OLLAMA_BASE_URL", "").strip().rstrip("/")
 OLLAMA_API_KEY = os.getenv("JARVIS_OLLAMA_API_KEY", "").strip()
 OLLAMA_MODELS = [m.strip() for m in os.getenv("JARVIS_OLLAMA_MODELS", "llama3.1:8b").split(",") if m.strip()]
-PROVIDER_ORDER = [p.strip().lower() for p in os.getenv("JARVIS_PROVIDER_ORDER", "groq,openai,gemini,compatible,ollama").split(",") if p.strip()]
+PROVIDER_ORDER = [p.strip().lower() for p in os.getenv("JARVIS_PROVIDER_ORDER", "groq,anthropic,openai,gemini,compatible,ollama").split(",") if p.strip()]
 PROVIDER_MAX_ATTEMPTS = max(1, min(int(os.getenv("JARVIS_PROVIDER_MAX_ATTEMPTS", "8")), 20))
+CONSENSUS_ENABLED = os.getenv("JARVIS_CONSENSUS_ENABLED", "false").strip().lower() not in {"0", "false", "no", "off"}
+CONSENSUS_INTENTS = {item.strip().lower() for item in os.getenv("JARVIS_CONSENSUS_INTENTS", "research,documents,coding,planning").split(",") if item.strip()}
+CONSENSUS_MAX_PROVIDERS = max(2, min(int(os.getenv("JARVIS_CONSENSUS_MAX_PROVIDERS", "2")), 3))
 REDIS_URL = os.getenv("JARVIS_REDIS_URL", os.getenv("REDIS_URL", "")).strip()
 REQUEST_TIMEOUT_SECONDS = max(30, min(int(os.getenv("JARVIS_REQUEST_TIMEOUT_SECONDS", "120")), 600))
 CONTEXT_MAX_CHARS = max(12000, min(int(os.getenv("JARVIS_CONTEXT_MAX_CHARS", "60000")), 240000))
@@ -134,6 +144,7 @@ def _provider_models(names: List[str], provider: str) -> List[ProviderModel]:
     defaults = {
         "groq": dict(capabilities={"text", "fast", "coding", "reasoning"}, quality=0.78, speed=0.96, cost=0.25),
         "openai": dict(capabilities={"text", "reasoning", "coding", "research"}, quality=0.96, speed=0.72, cost=0.72),
+        "anthropic": dict(capabilities={"text", "reasoning", "coding", "research", "writing", "long_context"}, quality=0.97, speed=0.68, cost=0.76),
         "gemini": dict(capabilities={"text", "research", "reasoning", "coding", "long_context"}, quality=0.92, speed=0.82, cost=0.55),
         "compatible": dict(capabilities={"text", "reasoning", "coding"}, quality=0.72, speed=0.68, cost=0.5),
         "ollama": dict(capabilities={"text", "local", "privacy", "coding"}, quality=0.65, speed=0.45, cost=0.05),
@@ -146,6 +157,7 @@ provider_gateway = MultiProviderGateway(
     [
         GroqProvider(api_key=GROQ_API_KEY, models=_provider_models(MODEL_CHAIN, "groq"), runtime=runtime, timeout_seconds=PROVIDER_TIMEOUT_SECONDS),
         OpenAIProvider(api_key=OPENAI_API_KEY, models=_provider_models(OPENAI_MODELS, "openai"), runtime=runtime, timeout_seconds=PROVIDER_TIMEOUT_SECONDS, base_url=OPENAI_BASE_URL),
+        AnthropicProvider(api_key=ANTHROPIC_API_KEY, models=_provider_models(ANTHROPIC_MODELS, "anthropic"), runtime=runtime, timeout_seconds=PROVIDER_TIMEOUT_SECONDS, base_url=ANTHROPIC_BASE_URL, api_version=ANTHROPIC_API_VERSION, prompt_cache=ANTHROPIC_PROMPT_CACHE, cache_ttl=ANTHROPIC_CACHE_TTL),
         GeminiProvider(api_key=GEMINI_API_KEY, models=_provider_models(GEMINI_MODELS, "gemini"), runtime=runtime, timeout_seconds=PROVIDER_TIMEOUT_SECONDS, api_version=GEMINI_API_VERSION),
         OpenAICompatibleProvider(base_url=OPENAI_COMPAT_BASE_URL, api_key=OPENAI_COMPAT_API_KEY, models=_provider_models(OPENAI_COMPAT_MODELS, "compatible"), runtime=runtime, timeout_seconds=PROVIDER_TIMEOUT_SECONDS),
         OllamaProvider(base_url=OLLAMA_BASE_URL, api_key=OLLAMA_API_KEY, models=_provider_models(OLLAMA_MODELS, "ollama"), runtime=runtime, timeout_seconds=max(PROVIDER_TIMEOUT_SECONDS, 60)),
@@ -461,7 +473,7 @@ async def lifespan(_: FastAPI):
     _start_maintenance()
     recovered = _recover_interrupted_jobs()
     logger.info(
-        "J.A.R.V.I.S. Clean Agent Edition v20 iniciado | public_mode=%s | redis=%s | jobs_recuperados=%s",
+        "J.A.R.V.I.S. Unified Intelligence Core v21 iniciado | public_mode=%s | redis=%s | jobs_recuperados=%s",
         PUBLIC_MODE,
         bool(REDIS_URL),
         recovered,
@@ -470,12 +482,12 @@ async def lifespan(_: FastAPI):
     _stop_maintenance()
     JOB_EXECUTOR.shutdown(wait=False, cancel_futures=True)
     provider_gateway.close()
-    logger.info("J.A.R.V.I.S. Clean Agent Edition v20 detenido")
+    logger.info("J.A.R.V.I.S. Unified Intelligence Core v21 detenido")
 
 
 app = FastAPI(
-    title="J.A.R.V.I.S. Clean Agent Edition",
-    version="20.0.0",
+    title="J.A.R.V.I.S. Unified Intelligence Core",
+    version="21.0.0",
     lifespan=lifespan,
 )
 
@@ -544,7 +556,7 @@ async def request_observability(request: Request, call_next):
         elif response.status_code >= 400:
             status = "cancelled" if response.status_code == 499 else "error"
         response.headers["X-Request-ID"] = request_id
-        response.headers["X-JARVIS-Version"] = "20.0.0"
+        response.headers["X-JARVIS-Version"] = "21.0.0"
         if request.url.path.startswith("/api/"):
             response.headers.setdefault("Cache-Control", "no-store")
         return response
@@ -653,7 +665,7 @@ def safe_session_id(value: str) -> str:
 
 def safe_error_text(exc: Exception, limit: int = 700) -> str:
     text = f"{type(exc).__name__}: {exc}".strip()
-    for secret in (GROQ_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, OPENAI_COMPAT_API_KEY, OLLAMA_API_KEY):
+    for secret in (GROQ_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, ANTHROPIC_API_KEY, OPENAI_COMPAT_API_KEY, OLLAMA_API_KEY):
         if secret:
             text = text.replace(secret, "[CLAVE_OCULTA]")
     text = re.sub(r"org_[a-zA-Z0-9]+", "[ORGANIZACION_OCULTA]", text)
@@ -1005,6 +1017,7 @@ def resilience_provider_status() -> Dict[str, Any]:
     return {
         "groq": {"configured": bool(GROQ_API_KEY), "models": provider_status(), "gateway": providers.get("groq", {})},
         "openai": providers.get("openai", {}),
+        "anthropic": providers.get("anthropic", {}),
         "gemini": providers.get("gemini", {}),
         "openai_compatible": {
             "configured": bool(OPENAI_COMPAT_BASE_URL and OPENAI_COMPAT_MODELS),
@@ -1596,6 +1609,9 @@ TOOL_FUNCTIONS: Dict[str, Callable[..., Any]] = {
     "current_datetime": current_datetime,
     "document_search": document_search,
 }
+
+
+TOOL_REGISTRY = ToolRegistry(TOOL_FUNCTIONS)
 
 
 def object_schema(properties: Dict[str, Any], required: Optional[List[str]] = None) -> Dict[str, Any]:
@@ -2332,6 +2348,7 @@ def external_text_provider(
     intent: str = "general",
     mode: str = "auto",
     preferred_provider: str = "",
+    exclude_providers: Optional[List[str]] = None,
 ) -> Tuple[str, str, Dict[str, int], List[Dict[str, Any]]]:
     request = ProviderRequest(
         messages=_provider_messages(messages),
@@ -2340,6 +2357,7 @@ def external_text_provider(
         temperature=0.22,
         max_tokens=MAX_COMPLETION_TOKENS,
         preferred_provider=preferred_provider,
+        metadata={"exclude_providers": list(exclude_providers or [])},
     )
     result, attempts = provider_gateway.generate(request, max_attempts=PROVIDER_MAX_ATTEMPTS)
     return result.text, result.route_model, result.usage, attempts
@@ -2698,7 +2716,52 @@ def resilient_resolve(
                 result, verification = repaired, repaired_verification
 
     result_model = str(result.get("model", ""))
-    if result_model.startswith(("groq:", "openai:", "gemini:", "compatible:", "compat:", "ollama:")):
+    if CONSENSUS_ENABLED and intent in CONSENSUS_INTENTS and result_model and result.get("reply"):
+        original_provider = result_model.split(":", 1)[0].lower()
+        try:
+            review_messages = [
+                {
+                    "role": "system",
+                    "content": (
+                        "Actúa como revisor independiente. Entrega una versión final mejorada, precisa y completa. "
+                        "Corrige omisiones o contradicciones, conserva datos verificables y no menciones el proceso de revisión."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": f"Solicitud original: {prompt}\n\nRespuesta candidata:\n{result.get('reply', '')}",
+                },
+            ]
+            consensus_text, consensus_model, consensus_usage, consensus_attempts = external_text_provider(
+                review_messages,
+                intent=intent,
+                mode="deep",
+                exclude_providers=[original_provider],
+            )
+            if consensus_text.strip():
+                previous_usage = result.get("usage", {}) or {}
+                merged_usage = {
+                    "prompt_tokens": int(previous_usage.get("prompt_tokens", 0) or 0) + int(consensus_usage.get("prompt_tokens", 0) or 0),
+                    "completion_tokens": int(previous_usage.get("completion_tokens", 0) or 0) + int(consensus_usage.get("completion_tokens", 0) or 0),
+                    "total_tokens": int(previous_usage.get("total_tokens", 0) or 0) + int(consensus_usage.get("total_tokens", 0) or 0),
+                }
+                result.update({
+                    "reply": consensus_text,
+                    "model": consensus_model,
+                    "usage": merged_usage,
+                    "mode": "consensus_verified",
+                    "consensus": {
+                        "enabled": True,
+                        "primary_model": result_model,
+                        "review_model": consensus_model,
+                        "attempts": consensus_attempts,
+                    },
+                })
+                result_model = consensus_model
+                trace.append({"route": "quality_council", "status": "completed", "model": consensus_model})
+        except Exception as exc:
+            trace.append({"route": "quality_council", "status": "skipped", "detail": safe_error_text(exc, 220)})
+    if result_model.startswith(("groq:", "openai:", "anthropic:", "gemini:", "compatible:", "compat:", "ollama:")):
         try:
             record_usage_dict(sid, result_model, result.get("usage", {}) or {})
         except Exception:
@@ -3092,7 +3155,7 @@ async def consultar_jarvis_stream(data: ChatInput, request: Request):
             "Probando alternativas y caché",
             "Verificando el resultado",
         ]
-        yield json.dumps({"type": "progress", "stage": states[0], "version": "20.0.0"}, ensure_ascii=False) + "\n"
+        yield json.dumps({"type": "progress", "stage": states[0], "version": "21.0.0"}, ensure_ascii=False) + "\n"
         task = asyncio.create_task(consultar_jarvis(data, request))
         index = 1
         while not task.done():
@@ -3575,7 +3638,7 @@ def agent_status(session_id: str):
         ).fetchall()
     counts = {row["status"]: row["total"] for row in rows}
     active = sum(counts.get(status, 0) for status in ("queued", "running", "retrying", "paused", "cancelling"))
-    return {"status": "ok", "active": active, "counts": counts, "version": "20.0.0"}
+    return {"status": "ok", "active": active, "counts": counts, "version": "21.0.0"}
 
 
 @app.post("/api/jobs")
@@ -3791,7 +3854,7 @@ def resilience_status(session_id: str = "default_session", limit: int = 12):
         ).fetchone()
     return {
         "status": "ok",
-        "version": "20.0.0",
+        "version": "21.0.0",
         "providers": resilience_provider_status(),
         "limits": {
             "max_resolution_attempts": MAX_RESOLUTION_ATTEMPTS,
@@ -3826,14 +3889,14 @@ def dashboard(session_id: str):
             (sid, since),
         ).fetchone()
     return {
-        "version": "20.0.0",
+        "version": "21.0.0",
         "status": "online" if provider_gateway.configured_names() else "local_only",
         "counts": counts,
         "usage_24h": dict(usage),
         "models": provider_status(),
         "providers": resilience_provider_status(),
         "database": {"ok": True, "path": DB_FILE},
-        "features": ["execution_planner", "resolution_trace", "local_verifier", "autonomous_agent", "smart_intent_router", "multi_provider_router", "agent_execution_core", "agent_plan_preview", "agent_checkpoints", "human_approval_signals", "tool_calling", "persistent_background_jobs", "pause_resume_cancel", "multi_level_cache", "singleflight_deduplication", "circuit_breakers", "context_compaction", "performance_telemetry", "deep_health_checks", "project_workspaces", "memory", "documents", "reminders", "knowledge_search", "self_check"],
+        "features": ["execution_planner", "resolution_trace", "local_verifier", "autonomous_agent", "smart_intent_router", "multi_provider_router", "anthropic_messages_api", "provider_capability_matrix", "optional_quality_council", "structured_tool_registry", "agent_execution_core", "agent_plan_preview", "agent_checkpoints", "human_approval_signals", "tool_calling", "persistent_background_jobs", "pause_resume_cancel", "multi_level_cache", "singleflight_deduplication", "circuit_breakers", "context_compaction", "performance_telemetry", "deep_health_checks", "project_workspaces", "memory", "documents", "reminders", "knowledge_search", "self_check"],
         "runtime": runtime.snapshot(),
         "jobs_health": _job_health(),
     }
@@ -3867,14 +3930,14 @@ def self_check():
     checks["disk"] = disk_status(str(BASE_DIR))
     checks["context_compaction"] = {"ok": len(compact_messages([{"role":"system","content":"a"*1000},{"role":"user","content":"b"*20000}], 5000, 4)) >= 1}
     overall = all(item.get("ok") for key, item in checks.items() if key not in {"groq_key", "secondary_provider", "redis"})
-    return {"status": "ok" if overall else "degraded", "checks": checks, "version": "20.0.0"}
+    return {"status": "ok" if overall else "degraded", "checks": checks, "version": "21.0.0"}
 
 
 @app.get("/api/capabilities")
 def capabilities():
     return {
         "autonomous_core": True,
-        "version": "20.0.0",
+        "version": "21.0.0",
         "groq_configured": bool(GROQ_API_KEY),
         "model": GROQ_MODEL,
         "model_chain": MODEL_CHAIN,
@@ -3890,6 +3953,11 @@ def capabilities():
             "multi_provider_fallback",
             "openai_responses_api",
             "gemini_generate_content",
+            "anthropic_messages_api",
+            "anthropic_prompt_caching",
+            "provider_capability_matrix",
+            "optional_quality_council",
+            "structured_tool_registry",
             "provider_scoring_router",
             "provider_route_preview",
             "provider_usage_telemetry",
@@ -3983,15 +4051,41 @@ def _job_health() -> Dict[str, Any]:
     }
 
 
+@app.get("/api/tools/registry")
+def tools_registry_status():
+    return {"status": "ok", "version": "21.0.0", **TOOL_REGISTRY.snapshot()}
+
+
 @app.get("/api/providers")
 def providers_status():
     snapshot = provider_gateway.snapshot()
     return {
         "status": "ok",
-        "version": "20.0.0",
+        "version": "21.0.0",
         "gateway": snapshot,
         "configured_count": len(snapshot.get("configured", [])),
         "local_routes_available": True,
+    }
+
+
+@app.get("/api/providers/capabilities")
+def providers_capabilities():
+    return {
+        "status": "ok",
+        "version": "21.0.0",
+        "matrix": provider_gateway.capability_matrix(),
+        "quality_council": {
+            "enabled": CONSENSUS_ENABLED,
+            "intents": sorted(CONSENSUS_INTENTS),
+            "max_providers": CONSENSUS_MAX_PROVIDERS,
+        },
+        "claude": {
+            "configured": bool(ANTHROPIC_API_KEY and ANTHROPIC_MODELS),
+            "models": ANTHROPIC_MODELS,
+            "prompt_cache": ANTHROPIC_PROMPT_CACHE,
+            "cache_ttl": ANTHROPIC_CACHE_TTL if ANTHROPIC_PROMPT_CACHE else "off",
+            "api_version": ANTHROPIC_API_VERSION,
+        },
     }
 
 
@@ -4020,7 +4114,7 @@ def providers_route_preview(data: ProviderRouteInput):
 def health_live():
     return {
         "status": "ok",
-        "version": "20.0.0",
+        "version": "21.0.0",
         "uptime_seconds": runtime.metrics.summary().get("uptime_seconds", 0),
         "timestamp": time.time(),
     }
@@ -4035,7 +4129,7 @@ def health_ready():
         status_code=200 if ready else 503,
         content={
             "status": "ready" if ready else "not_ready",
-            "version": "20.0.0",
+            "version": "21.0.0",
             "database": database,
             "static_ui": {"ok": static_ok},
             "generative_route_configured": bool(
@@ -4065,7 +4159,7 @@ def health_deep():
     status = "ok" if required_ok and not open_circuits else ("degraded" if required_ok else "failed")
     payload = {
         "status": status,
-        "version": "20.0.0",
+        "version": "21.0.0",
         "database": database,
         "redis": redis,
         "disk": disk,
@@ -4112,7 +4206,7 @@ def performance(session_id: str = "default_session", hours: int = 24):
         ).fetchall()
     return {
         "status": "ok",
-        "version": "20.0.0",
+        "version": "21.0.0",
         "hours": hours,
         "runtime": runtime.snapshot(),
         "jobs": _job_health(),
@@ -4156,7 +4250,7 @@ def health():
         "models": provider_status(),
         "providers": resilience_provider_status(),
         "public_mode": PUBLIC_MODE,
-        "version": "20.0.0",
+        "version": "21.0.0",
         "runtime": {
             "cache": runtime.snapshot().get("cache", {}),
             "singleflight": runtime.singleflight.stats(),
@@ -4170,7 +4264,7 @@ def health():
 def system_info():
     return {
         "status": "JARVIS Core Interface Active",
-        "version": "20.0.0",
+        "version": "21.0.0",
         "groq_configured": bool(GROQ_API_KEY),
         "model": GROQ_MODEL,
         "model_chain": MODEL_CHAIN,

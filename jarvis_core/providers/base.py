@@ -146,7 +146,7 @@ class BaseProvider:
             timeout=httpx.Timeout(self.timeout_seconds, connect=min(8.0, float(self.timeout_seconds))),
             follow_redirects=True,
             limits=limits,
-            headers={"User-Agent": "JARVIS-MultiProvider/19.0"},
+            headers={"User-Agent": "JARVIS-UnifiedIntelligence/21.0"},
         )
 
     @property

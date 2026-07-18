@@ -59,7 +59,7 @@
     mode: 'jarvis_nexus_mode',
     projects: 'jarvis_nexus_projects_v11',
     activeProject: 'jarvis_nexus_active_project_v11',
-    moreToolsOpen: 'jarvis_clean_more_tools_v20'
+    moreToolsOpen: 'jarvis_clean_more_tools_v21'
   };
 
   const MODES = [
@@ -102,7 +102,7 @@
   document.addEventListener('DOMContentLoaded', init);
 
   function init() {
-    document.title = window.JARVIS_CONFIG?.APP_NAME || 'J.A.R.V.I.S. — Clean Agent Edition';
+    document.title = window.JARVIS_CONFIG?.APP_NAME || 'J.A.R.V.I.S. — Unified Intelligence Core';
     ensureProjects();
     migrateChatsToProjects();
     if (!state.activeChatId || !state.chats[state.activeChatId] || currentChat()?.projectId !== state.activeProjectId) {
@@ -1173,7 +1173,7 @@
         ${panelCard('Trabajos', `${c.jobs || 0} registrados`, 'jobs')}
       </div>
       <div style="height:14px"></div>
-      <div class="panel-card"><h3>Estado del núcleo</h3><p>Versión ${escapeHtml(data.version || '20.0.0')} · ${escapeHtml(data.status || 'operativo')} · ${Number(data.usage_24h?.total_tokens || 0).toLocaleString()} tokens en 24 horas.</p></div>`;
+      <div class="panel-card"><h3>Estado del núcleo</h3><p>Versión ${escapeHtml(data.version || '21.0.0')} · ${escapeHtml(data.status || 'operativo')} · ${Number(data.usage_24h?.total_tokens || 0).toLocaleString()} tokens en 24 horas.</p></div>`;
     $$('[data-open-panel]', els.sheetBody).forEach(btn => btn.addEventListener('click', () => openPanel(btn.dataset.openPanel)));
   }
 
@@ -1540,10 +1540,11 @@
     const gateway = data.gateway || {};
     const providers = gateway.providers || {};
     const configured = new Set(gateway.configured || []);
-    const labels = { groq:'Groq', openai:'OpenAI', gemini:'Google Gemini', compatible:'Proveedor compatible', ollama:'Ollama' };
+    const labels = { groq:'Groq', openai:'OpenAI', anthropic:'Claude', gemini:'Google Gemini', compatible:'Proveedor compatible', ollama:'Ollama' };
     const descriptions = {
       groq:'Velocidad, clasificación, conversación y respuestas cotidianas.',
       openai:'Razonamiento, programación, agentes y tareas complejas.',
+      anthropic:'Análisis profundo, programación, documentos extensos y redacción de alta calidad.',
       gemini:'Investigación, contexto amplio y procesamiento multimodal.',
       compatible:'Servidor adicional con interfaz compatible con OpenAI.',
       ollama:'Ruta local o privada para contingencia y trabajo sin proveedor externo.'
@@ -1613,6 +1614,7 @@
     const providerCards = [
       ['Groq', Boolean(providers.groq?.configured), (providers.groq?.models || []).map(item => item.model).join(', ') || 'Sin modelos'],
       ['OpenAI', Boolean(providers.openai?.configured), (providers.openai?.models || []).join(', ') || 'Opcional'],
+      ['Claude', Boolean(providers.anthropic?.configured), (providers.anthropic?.models || []).join(', ') || 'Opcional'],
       ['Google Gemini', Boolean(providers.gemini?.configured), (providers.gemini?.models || []).join(', ') || 'Opcional'],
       ['Proveedor compatible', Boolean(providers.openai_compatible?.configured), (providers.openai_compatible?.models || []).join(', ') || 'Opcional'],
       ['Ollama local', Boolean(providers.ollama?.configured), (providers.ollama?.models || []).join(', ') || 'Opcional'],
@@ -1883,7 +1885,7 @@
   }
 
   function humanRoute(route) {
-    return ({ direct:'Ruta local', direct_web:'Búsqueda directa', autonomous:'Agente autónomo', cache:'Caché', degraded:'Modo local', degraded_web:'Web en modo local', provider_research:'Investigación multirruta', secondary_provider:'Proveedor secundario', multi_provider:'Gateway multimodelo', similar_cache:'Caché similar', resilient_web:'Búsqueda resistente', resilient_local:'Resolución local', resilient_documents:'Biblioteca local', verified_repair:'Respuesta reparada' })[route] || route;
+    return ({ direct:'Ruta local', direct_web:'Búsqueda directa', autonomous:'Agente autónomo', cache:'Caché', degraded:'Modo local', degraded_web:'Web en modo local', provider_research:'Investigación multirruta', secondary_provider:'Proveedor secundario', multi_provider:'Gateway multimodelo', consensus_verified:'Consejo de calidad', similar_cache:'Caché similar', resilient_web:'Búsqueda resistente', resilient_local:'Resolución local', resilient_documents:'Biblioteca local', verified_repair:'Respuesta reparada' })[route] || route;
   }
 
   function humanToolName(name) {

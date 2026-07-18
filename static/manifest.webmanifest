@@ -1,7 +1,7 @@
 {
-  "name": "J.A.R.V.I.S. Clean Agent Edition",
+  "name": "J.A.R.V.I.S. Unified Intelligence Core",
   "short_name": "JARVIS",
-  "description": "Asistente resistente con múltiples rutas, caché, trabajos persistentes y verificación.",
+  "description": "Asistente multimodelo con Claude, agentes, caché, herramientas, resiliencia y verificación.",
   "start_url": "../",
   "scope": "../",
   "display": "standalone",
@@ -9,7 +9,17 @@
   "theme_color": "#070b11",
   "orientation": "any",
   "icons": [
-    {"src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
-    {"src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
   ]
 }

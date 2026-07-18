@@ -2290,6 +2290,7 @@ body.app-ready .app {
   font-weight: 800;
 }
 .provider-openai { box-shadow: inset 0 0 20px rgba(255,255,255,.025); }
+.provider-anthropic { color: #f0bdff; box-shadow: inset 0 0 22px rgba(211,139,255,.09); }
 .provider-gemini { color: #c7c3ff; box-shadow: inset 0 0 22px rgba(155,135,255,.08); }
 .provider-groq { color: #ffe2b4; box-shadow: inset 0 0 22px rgba(244,203,105,.07); }
 .provider-ollama { color: #cde8d9; box-shadow: inset 0 0 22px rgba(115,214,161,.06); }
@@ -2376,7 +2377,7 @@ body.app-ready .app {
   .provider-metrics { grid-template-columns: 1fr 1fr; }
 }
 
-/* ===== v20 Clean Agent Edition ===== */
+/* ===== v21 Unified Intelligence Core ===== */
 :root {
   --drawer-w: 360px;
   --clean-surface: rgba(15, 22, 32, .96);
