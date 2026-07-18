@@ -1,11 +1,11 @@
 services:
   - type: web
-    name: jarvis-execution-core
+    name: jarvis-stability-core
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
-    healthCheckPath: /api/health
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --proxy-headers --timeout-keep-alive 10
+    healthCheckPath: /api/health/ready
     autoDeploy: true
     envVars:
       - key: GROQ_API_KEY
@@ -23,9 +23,9 @@ services:
       - key: JARVIS_DIRECT_ROUTES
         value: "true"
       - key: JARVIS_HISTORY_MESSAGES
-        value: "10"
+        value: "12"
       - key: JARVIS_MAX_COMPLETION_TOKENS
-        value: "1200"
+        value: "1400"
       - key: JARVIS_CACHE_TTL_SECONDS
         value: "3600"
       - key: JARVIS_DB_FILE
@@ -38,10 +38,30 @@ services:
         value: "10"
       - key: JARVIS_PROVIDER_TIMEOUT_SECONDS
         value: "45"
+      - key: JARVIS_REQUEST_TIMEOUT_SECONDS
+        value: "120"
       - key: JARVIS_VERIFY_RESULTS
         value: "true"
       - key: JARVIS_ALWAYS_RETURN_RESULT
         value: "true"
+      - key: JARVIS_CONTEXT_MAX_CHARS
+        value: "60000"
+      - key: JARVIS_L1_CACHE_ITEMS
+        value: "512"
+      - key: JARVIS_CIRCUIT_FAILURE_THRESHOLD
+        value: "3"
+      - key: JARVIS_CIRCUIT_RECOVERY_SECONDS
+        value: "45"
+      - key: JARVIS_JOB_WORKERS
+        value: "2"
+      - key: JARVIS_JOB_MAX_ATTEMPTS
+        value: "3"
+      - key: JARVIS_JOB_RETRY_BASE_SECONDS
+        value: "4"
+      - key: JARVIS_METRICS_SAMPLES
+        value: "500"
+      - key: JARVIS_REDIS_URL
+        sync: false
       - key: JARVIS_OPENAI_COMPAT_BASE_URL
         sync: false
       - key: JARVIS_OPENAI_COMPAT_API_KEY

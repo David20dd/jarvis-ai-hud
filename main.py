@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import asyncio
 import base64
 import io
 import json
@@ -14,6 +15,7 @@ import sqlite3
 import time
 import threading
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -23,10 +25,16 @@ import httpx
 import sympy as sp
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from groq import Groq
+try:
+    from groq import Groq
+except ImportError:  # El núcleo local sigue funcionando sin el SDK opcional.
+    Groq = None  # type: ignore
 from pydantic import BaseModel, Field
+
+from jarvis_core import RuntimeSupport, compact_messages, disk_status
 
 try:
     from zoneinfo import ZoneInfo
@@ -80,6 +88,40 @@ OPENAI_COMPAT_API_KEY = os.getenv("JARVIS_OPENAI_COMPAT_API_KEY", "").strip()
 OPENAI_COMPAT_MODELS = [m.strip() for m in os.getenv("JARVIS_OPENAI_COMPAT_MODELS", "").split(",") if m.strip()]
 OLLAMA_BASE_URL = os.getenv("JARVIS_OLLAMA_BASE_URL", "").strip().rstrip("/")
 OLLAMA_MODELS = [m.strip() for m in os.getenv("JARVIS_OLLAMA_MODELS", "llama3.1:8b").split(",") if m.strip()]
+REDIS_URL = os.getenv("JARVIS_REDIS_URL", os.getenv("REDIS_URL", "")).strip()
+REQUEST_TIMEOUT_SECONDS = max(30, min(int(os.getenv("JARVIS_REQUEST_TIMEOUT_SECONDS", "120")), 600))
+CONTEXT_MAX_CHARS = max(12000, min(int(os.getenv("JARVIS_CONTEXT_MAX_CHARS", "60000")), 240000))
+L1_CACHE_ITEMS = max(64, min(int(os.getenv("JARVIS_L1_CACHE_ITEMS", "512")), 10000))
+CIRCUIT_FAILURE_THRESHOLD = max(1, min(int(os.getenv("JARVIS_CIRCUIT_FAILURE_THRESHOLD", "3")), 20))
+CIRCUIT_RECOVERY_SECONDS = max(5, min(int(os.getenv("JARVIS_CIRCUIT_RECOVERY_SECONDS", "45")), 900))
+JOB_WORKERS = max(1, min(int(os.getenv("JARVIS_JOB_WORKERS", "2")), 12))
+JOB_MAX_ATTEMPTS = max(1, min(int(os.getenv("JARVIS_JOB_MAX_ATTEMPTS", "3")), 10))
+JOB_RETRY_BASE_SECONDS = max(1, min(int(os.getenv("JARVIS_JOB_RETRY_BASE_SECONDS", "4")), 120))
+METRICS_SAMPLES = max(50, min(int(os.getenv("JARVIS_METRICS_SAMPLES", "500")), 5000))
+TELEMETRY_SAMPLE_RATE = max(0.0, min(float(os.getenv("JARVIS_TELEMETRY_SAMPLE_RATE", "0.25")), 1.0))
+MAINTENANCE_INTERVAL_SECONDS = max(30, min(int(os.getenv("JARVIS_MAINTENANCE_INTERVAL_SECONDS", "300")), 3600))
+
+runtime = RuntimeSupport(
+    redis_url=REDIS_URL,
+    l1_items=L1_CACHE_ITEMS,
+    circuit_failures=CIRCUIT_FAILURE_THRESHOLD,
+    circuit_recovery_seconds=CIRCUIT_RECOVERY_SECONDS,
+    metrics_samples=METRICS_SAMPLES,
+)
+JOB_EXECUTOR = ThreadPoolExecutor(max_workers=JOB_WORKERS, thread_name_prefix="jarvis-job")
+_job_submit_lock = threading.RLock()
+_job_futures: Dict[str, Any] = {}
+_maintenance_stop = threading.Event()
+_maintenance_thread: Optional[threading.Thread] = None
+
+
+def _ensure_job_executor() -> ThreadPoolExecutor:
+    global JOB_EXECUTOR
+    with _job_submit_lock:
+        if getattr(JOB_EXECUTOR, "_shutdown", False):
+            JOB_EXECUTOR = ThreadPoolExecutor(max_workers=JOB_WORKERS, thread_name_prefix="jarvis-job")
+            _job_futures.clear()
+        return JOB_EXECUTOR
 _rate_lock = threading.Lock()
 _rate_windows: Dict[str, List[float]] = {}
 
@@ -88,7 +130,7 @@ ALLOWED_ORIGINS = [origin.strip() for origin in _raw_origins.split(",") if origi
 if not ALLOWED_ORIGINS:
     ALLOWED_ORIGINS = ["*"]
 
-client: Optional[Groq] = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
+client: Any = Groq(api_key=GROQ_API_KEY) if (Groq is not None and GROQ_API_KEY) else None
 
 
 def ensure_database_directory() -> None:
@@ -103,6 +145,10 @@ def db_connection():
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA synchronous = NORMAL")
+    conn.execute("PRAGMA busy_timeout = 30000")
+    conn.execute("PRAGMA temp_store = MEMORY")
+    conn.execute("PRAGMA cache_size = -12000")
     try:
         yield conn
         conn.commit()
@@ -271,6 +317,19 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_resolution_steps_run
                 ON resolution_steps(run_id, step_index);
 
+            CREATE TABLE IF NOT EXISTS telemetry_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                request_id TEXT NOT NULL DEFAULT '',
+                session_id TEXT NOT NULL DEFAULT '',
+                operation TEXT NOT NULL,
+                status TEXT NOT NULL,
+                duration_ms REAL NOT NULL DEFAULT 0,
+                detail TEXT NOT NULL DEFAULT '',
+                created_at REAL NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_telemetry_created
+                ON telemetry_events(created_at, operation);
+
             CREATE TABLE IF NOT EXISTS whatsapp_state (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
                 connected INTEGER NOT NULL DEFAULT 0,
@@ -281,19 +340,97 @@ def init_db() -> None:
             VALUES (1, 0, NULL, 0);
             """
         )
+        # Migraciones compatibles con bases v17 existentes.
+        job_columns = {row[1] for row in conn.execute("PRAGMA table_info(jobs)").fetchall()}
+        migrations = {
+            "attempt": "ALTER TABLE jobs ADD COLUMN attempt INTEGER NOT NULL DEFAULT 0",
+            "max_attempts": f"ALTER TABLE jobs ADD COLUMN max_attempts INTEGER NOT NULL DEFAULT {JOB_MAX_ATTEMPTS}",
+            "control": "ALTER TABLE jobs ADD COLUMN control TEXT NOT NULL DEFAULT ''",
+            "checkpoint": "ALTER TABLE jobs ADD COLUMN checkpoint TEXT NOT NULL DEFAULT ''",
+            "next_run_at": "ALTER TABLE jobs ADD COLUMN next_run_at REAL NOT NULL DEFAULT 0",
+        }
+        for column, statement in migrations.items():
+            if column not in job_columns:
+                conn.execute(statement)
+
+
+def _maintenance_cycle() -> Dict[str, Any]:
+    started = time.perf_counter()
+    now = time.time()
+    cleaned: Dict[str, int] = {}
+    with db_connection() as conn:
+        cleaned["response_cache"] = conn.execute("DELETE FROM response_cache WHERE expires_at < ?", (now,)).rowcount
+        cleaned["request_results"] = conn.execute("DELETE FROM request_results WHERE created_at < ?", (now - 86400,)).rowcount
+        cleaned["telemetry_events"] = conn.execute("DELETE FROM telemetry_events WHERE created_at < ?", (now - 30 * 86400,)).rowcount
+        cleaned["activity_log"] = conn.execute("DELETE FROM activity_log WHERE created_at < ?", (now - 90 * 86400,)).rowcount
+        conn.execute("PRAGMA wal_checkpoint(PASSIVE)")
+        conn.execute("PRAGMA optimize")
+        stale = conn.execute(
+            """
+            SELECT id FROM jobs
+            WHERE status IN ('running','retrying','cancelling') AND updated_at < ?
+            LIMIT 50
+            """,
+            (now - max(REQUEST_TIMEOUT_SECONDS * 2, 300),),
+        ).fetchall()
+        for row in stale:
+            conn.execute(
+                "UPDATE jobs SET status = 'queued', control = '', checkpoint = 'recuperado por mantenimiento', updated_at = ? WHERE id = ?",
+                (now, row["id"]),
+            )
+    recovered = 0
+    for row in stale:
+        if _submit_job(row["id"]):
+            recovered += 1
+    runtime.metrics.record("maintenance", (time.perf_counter() - started) * 1000, "success")
+    return {"cleaned": cleaned, "recovered_jobs": recovered}
+
+
+def _maintenance_loop() -> None:
+    while not _maintenance_stop.wait(MAINTENANCE_INTERVAL_SECONDS):
+        try:
+            result = _maintenance_cycle()
+            logger.info("Mantenimiento JARVIS completado: %s", result)
+        except Exception:
+            logger.exception("Falló el ciclo de mantenimiento")
+
+
+def _start_maintenance() -> None:
+    global _maintenance_thread
+    if _maintenance_thread is not None and _maintenance_thread.is_alive():
+        return
+    _maintenance_stop.clear()
+    _maintenance_thread = threading.Thread(target=_maintenance_loop, name="jarvis-maintenance", daemon=True)
+    _maintenance_thread.start()
+
+
+def _stop_maintenance() -> None:
+    _maintenance_stop.set()
+    if _maintenance_thread is not None and _maintenance_thread.is_alive():
+        _maintenance_thread.join(timeout=2.0)
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
-    logger.info("J.A.R.V.I.S. Execution Core v17 iniciado | public_mode=%s", PUBLIC_MODE)
+    _ensure_job_executor()
+    _start_maintenance()
+    recovered = _recover_interrupted_jobs()
+    logger.info(
+        "J.A.R.V.I.S. Stability Core v18 iniciado | public_mode=%s | redis=%s | jobs_recuperados=%s",
+        PUBLIC_MODE,
+        bool(REDIS_URL),
+        recovered,
+    )
     yield
-    logger.info("J.A.R.V.I.S. Execution Core v17 detenido")
+    _stop_maintenance()
+    JOB_EXECUTOR.shutdown(wait=False, cancel_futures=True)
+    logger.info("J.A.R.V.I.S. Stability Core v18 detenido")
 
 
 app = FastAPI(
-    title="J.A.R.V.I.S. Execution Core",
-    version="17.0.0",
+    title="J.A.R.V.I.S. Stability Core",
+    version="18.0.0",
     lifespan=lifespan,
 )
 
@@ -305,10 +442,78 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.add_middleware(GZipMiddleware, minimum_size=900, compresslevel=5)
+
 # Sirve la interfaz y sus recursos visuales desde el mismo dominio que la API.
 # Esto evita errores 404/405 y problemas de CORS entre frontend y backend.
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
+def record_telemetry(
+    operation: str,
+    status: str,
+    duration_ms: float,
+    *,
+    request_id: str = "",
+    session_id: str = "",
+    detail: Any = "",
+) -> None:
+    runtime.metrics.record(operation, duration_ms, status)
+    # Los errores siempre se persisten; los éxitos se muestrean para reducir escrituras.
+    if status == "success" and TELEMETRY_SAMPLE_RATE < 1.0 and random.random() > TELEMETRY_SAMPLE_RATE:
+        return
+    try:
+        with db_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO telemetry_events(request_id, session_id, operation, status, duration_ms, detail, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    request_id[:160],
+                    session_id[:160],
+                    operation[:120],
+                    status[:30],
+                    float(duration_ms),
+                    str(detail)[:1000],
+                    time.time(),
+                ),
+            )
+            conn.execute("DELETE FROM telemetry_events WHERE created_at < ?", (time.time() - 30 * 86400,))
+    except Exception:
+        logger.debug("No se pudo persistir telemetría", exc_info=True)
+
+
+@app.middleware("http")
+async def request_observability(request: Request, call_next):
+    started = time.perf_counter()
+    request_id = re.sub(r"[^a-zA-Z0-9_.:-]", "_", request.headers.get("x-request-id", "") or str(uuid.uuid4()))[:160]
+    request.state.request_id = request_id
+    status = "success"
+    detail = ""
+    try:
+        response = await call_next(request)
+        if response.status_code >= 500:
+            status = "error"
+        elif response.status_code >= 400:
+            status = "cancelled" if response.status_code == 499 else "error"
+        response.headers["X-Request-ID"] = request_id
+        response.headers["X-JARVIS-Version"] = "18.0.0"
+        if request.url.path.startswith("/api/"):
+            response.headers.setdefault("Cache-Control", "no-store")
+        return response
+    except asyncio.CancelledError:
+        status = "cancelled"
+        detail = "cliente desconectado"
+        raise
+    except Exception as exc:
+        status = "error"
+        detail = str(exc)[:300]
+        raise
+    finally:
+        duration = (time.perf_counter() - started) * 1000
+        record_telemetry(f"http:{request.method}:{request.url.path}", status, duration, request_id=request_id, detail=detail)
 
 
 # -----------------------------------------------------------------------------
@@ -461,6 +666,13 @@ def _cache_key(session_id: str, prompt: str) -> str:
 
 def cache_get(session_id: str, prompt: str) -> Optional[Dict[str, Any]]:
     key = _cache_key(session_id, prompt)
+    runtime_key = f"response:{key}"
+    cached, layer = runtime.cache_get(runtime_key)
+    if isinstance(cached, dict):
+        cached["cached"] = True
+        cached["cache_layer"] = layer
+        return cached
+
     now = time.time()
     with db_connection() as conn:
         row = conn.execute(
@@ -473,7 +685,10 @@ def cache_get(session_id: str, prompt: str) -> Optional[Dict[str, Any]]:
     try:
         data = json.loads(row["response_json"])
         if isinstance(data, dict):
+            remaining_ttl = max(1, int(float(row["expires_at"]) - now))
+            runtime.cache_set(runtime_key, data, remaining_ttl)
             data["cached"] = True
+            data["cache_layer"] = "database"
             return data
     except Exception:
         return None
@@ -484,6 +699,9 @@ def cache_set(session_id: str, prompt: str, response: Dict[str, Any], ttl: int =
     key = _cache_key(session_id, prompt)
     payload = dict(response)
     payload.pop("cached", None)
+    payload.pop("cache_layer", None)
+    normalized_ttl = max(60, int(ttl))
+    runtime.cache_set(f"response:{key}", payload, normalized_ttl)
     with db_connection() as conn:
         conn.execute(
             """
@@ -499,7 +717,7 @@ def cache_set(session_id: str, prompt: str, response: Dict[str, Any], ttl: int =
                 safe_session_id(session_id),
                 prompt[:8000],
                 json.dumps(payload, ensure_ascii=False, default=str),
-                time.time() + max(60, ttl),
+                time.time() + normalized_ttl,
                 time.time(),
             ),
         )
@@ -943,57 +1161,91 @@ def _wikipedia_search(query: str, limit: int = 5) -> List[Dict[str, str]]:
 
 
 def web_search(session_id: str, query: str, max_results: int = WEB_SEARCH_RESULTS) -> Dict[str, Any]:
-    """Búsqueda resistente con variaciones, reintentos y respaldo enciclopédico."""
+    """Búsqueda resistente con caché, circuit breaker, variaciones y respaldo enciclopédico."""
+    started = time.perf_counter()
     limit = max(1, min(int(max_results), WEB_SEARCH_RESULTS))
+    normalized_query = _clean_search_query(query)
+    web_key = "web:" + hashlib.sha256(f"{normalized_query.lower()}::{limit}".encode("utf-8")).hexdigest()
+    cached, layer = runtime.cache_get(web_key)
+    if isinstance(cached, dict) and cached.get("results"):
+        cached["cached"] = True
+        cached["cache_layer"] = layer
+        record_telemetry("tool:web_search", "success", (time.perf_counter() - started) * 1000, session_id=safe_session_id(session_id), detail=f"cache:{layer}")
+        return cached
+
     variants = _search_query_variants(query)
     collected: List[Dict[str, str]] = []
     attempts: List[Dict[str, Any]] = []
     last_error = ""
+    circuit_name = "search:ddgs"
 
-    try:
+    if runtime.circuits.allow(circuit_name):
         try:
-            from ddgs import DDGS
-        except ImportError:
-            from duckduckgo_search import DDGS  # type: ignore
-
-        for attempt_index in range(WEB_SEARCH_ATTEMPTS):
-            variant = variants[min(attempt_index, len(variants) - 1)]
             try:
-                with DDGS() as ddgs:
-                    raw = ddgs.text(variant, max_results=min(limit * 2, 20))
-                    batch = [
-                        {
-                            "title": str(item.get("title", "")),
-                            "snippet": str(item.get("body", item.get("snippet", ""))),
-                            "url": str(item.get("href", item.get("url", ""))),
-                        }
-                        for item in raw
-                    ]
-                collected.extend(batch)
-                attempts.append({"provider": "ddgs", "query": variant, "status": "completed", "count": len(batch)})
-                deduped = _dedupe_search_results(collected, limit)
-                if len(deduped) >= min(4, limit):
-                    collected = deduped
-                    break
-            except Exception as exc:
-                last_error = safe_error_text(exc, 300)
-                attempts.append({"provider": "ddgs", "query": variant, "status": "failed", "detail": last_error})
-                time.sleep(min(0.4 * (2 ** attempt_index) + random.random() * 0.2, 2.0))
-    except Exception as exc:
-        last_error = safe_error_text(exc, 300)
-        attempts.append({"provider": "ddgs", "query": query, "status": "unavailable", "detail": last_error})
+                from ddgs import DDGS
+            except ImportError:
+                from duckduckgo_search import DDGS  # type: ignore
+
+            for attempt_index in range(WEB_SEARCH_ATTEMPTS):
+                variant = variants[min(attempt_index, len(variants) - 1)]
+                attempt_started = time.perf_counter()
+                try:
+                    with DDGS() as ddgs:
+                        raw = ddgs.text(variant, max_results=min(limit * 2, 20))
+                        batch = [
+                            {
+                                "title": str(item.get("title", "")),
+                                "snippet": str(item.get("body", item.get("snippet", ""))),
+                                "url": str(item.get("href", item.get("url", ""))),
+                            }
+                            for item in raw
+                        ]
+                    runtime.circuits.success(circuit_name)
+                    runtime.metrics.record("provider:ddgs", (time.perf_counter() - attempt_started) * 1000, "success")
+                    collected.extend(batch)
+                    attempts.append({"provider": "ddgs", "query": variant, "status": "completed", "count": len(batch)})
+                    deduped = _dedupe_search_results(collected, limit)
+                    if len(deduped) >= min(4, limit):
+                        collected = deduped
+                        break
+                except Exception as exc:
+                    last_error = safe_error_text(exc, 300)
+                    runtime.circuits.failure(circuit_name, last_error)
+                    runtime.metrics.record("provider:ddgs", (time.perf_counter() - attempt_started) * 1000, "error")
+                    attempts.append({"provider": "ddgs", "query": variant, "status": "failed", "detail": last_error})
+                    if not runtime.circuits.allow(circuit_name):
+                        break
+                    time.sleep(min(0.4 * (2 ** attempt_index) + random.random() * 0.2, 2.0))
+        except Exception as exc:
+            last_error = safe_error_text(exc, 300)
+            runtime.circuits.failure(circuit_name, last_error)
+            attempts.append({"provider": "ddgs", "query": query, "status": "unavailable", "detail": last_error})
+    else:
+        attempts.append({"provider": "ddgs", "query": query, "status": "circuit_open", "detail": "Proveedor temporalmente aislado para evitar demoras repetidas."})
 
     deduped = _dedupe_search_results(collected, limit)
     if len(deduped) < min(3, limit):
+        wiki_started = time.perf_counter()
         wiki = _wikipedia_search(query, limit=min(5, limit))
-        attempts.append({"provider": "wikipedia", "query": _clean_search_query(query), "status": "completed" if wiki else "empty", "count": len(wiki)})
+        runtime.metrics.record("provider:wikipedia", (time.perf_counter() - wiki_started) * 1000, "success" if wiki else "error")
+        attempts.append({"provider": "wikipedia", "query": normalized_query, "status": "completed" if wiki else "empty", "count": len(wiki)})
         deduped = _dedupe_search_results([*deduped, *wiki], limit)
 
     status = "completed" if deduped else "failed"
     log_activity(session_id, "tool", "Búsqueda web resistente", json.dumps(attempts, ensure_ascii=False), status)
+    duration_ms = (time.perf_counter() - started) * 1000
+    record_telemetry("tool:web_search", "success" if deduped else "error", duration_ms, session_id=safe_session_id(session_id), detail=json.dumps(attempts, ensure_ascii=False)[:1000])
     if not deduped:
         raise RuntimeError(f"No se obtuvieron resultados web después de {len(attempts)} rutas. {last_error}".strip())
-    return {"query": query, "results": deduped, "attempts": attempts, "providers_used": sorted({item["provider"] for item in attempts if item.get("status") == "completed"})}
+    result = {
+        "query": query,
+        "results": deduped,
+        "attempts": attempts,
+        "providers_used": sorted({item["provider"] for item in attempts if item.get("status") == "completed"}),
+        "cached": False,
+    }
+    runtime.cache_set(web_key, result, min(CACHE_TTL_SECONDS, 1800))
+    return result
 
 
 ALLOWED_AST_NODES = (
@@ -1498,17 +1750,19 @@ def _call_model_with_fallback(
     errors: List[str] = []
     retry_values: List[int] = []
     now = time.time()
+    compacted_messages = compact_messages(messages, CONTEXT_MAX_CHARS, MAX_HISTORY_MESSAGES + 6)
 
     for model in MODEL_CHAIN:
+        circuit_name = f"provider:groq:{model}"
         blocked_until = model_blocked_until(model)
-        if blocked_until > now:
-            retry_values.append(max(1, int(math.ceil(blocked_until - now))))
+        if blocked_until > now or not runtime.circuits.allow(circuit_name):
+            retry_values.append(max(1, int(math.ceil(max(blocked_until - now, CIRCUIT_RECOVERY_SECONDS)))))
             errors.append(f"{model}: circuito temporalmente bloqueado")
             continue
 
         kwargs: Dict[str, Any] = {
             "model": model,
-            "messages": messages,
+            "messages": compacted_messages,
             "temperature": temperature,
             "max_completion_tokens": max_tokens,
         }
@@ -1517,16 +1771,23 @@ def _call_model_with_fallback(
             kwargs["tool_choice"] = tool_choice or "auto"
             kwargs["parallel_tool_calls"] = False
 
+        started = time.perf_counter()
         try:
             completion = client.chat.completions.create(**kwargs)
+            elapsed = (time.perf_counter() - started) * 1000
             clear_model_block(model)
+            runtime.circuits.success(circuit_name)
+            runtime.metrics.record(circuit_name, elapsed, "success")
             usage = record_usage(session_id, model, completion)
             return completion, model, usage
         except Exception as exc:
+            elapsed = (time.perf_counter() - started) * 1000
             kind, retry_after = classify_provider_error(exc)
             retry_values.append(retry_after)
             safe = safe_error_text(exc)
             errors.append(f"{model}: {safe}")
+            runtime.circuits.failure(circuit_name, safe)
+            runtime.metrics.record(circuit_name, elapsed, "timeout" if "timeout" in safe.lower() else "error")
             logger.warning("Modelo %s falló (%s): %s", model, kind, safe)
 
             if kind == "authentication":
@@ -1538,8 +1799,6 @@ def _call_model_with_fallback(
                 block_model(model, retry_after, kind)
                 continue
 
-            # Un error 400 puede depender del formato de herramientas o del modelo.
-            # Se prueba el siguiente modelo sin repetir innecesariamente la misma llamada.
             if kind in {"bad_request", "unknown"}:
                 block_model(model, min(retry_after, 30), kind)
                 continue
@@ -1612,6 +1871,33 @@ def _direct_calculation(prompt: str, session_id: str) -> Optional[Dict[str, Any]
             "model": None,
             "usage": {"total_tokens": 0},
         }
+
+    # Expresiones aritméticas simples escritas dentro de una frase.
+    cleaned = normalized.replace("×", "*").replace("÷", "/").replace("^", "**")
+    cleaned = re.sub(
+        r"\b(calcula|calcular|cuanto|cuánto|es|resultado|resuelve|resolver|por favor|dame|de)\b",
+        " ",
+        cleaned,
+    )
+    candidates = re.findall(r"(?<![a-z])[-+*/().0-9\s]{3,120}(?![a-z])", cleaned)
+    for candidate in sorted(candidates, key=len, reverse=True):
+        expression = re.sub(r"\s+", "", candidate).strip(".")
+        if not expression or not re.search(r"[+*/-]", expression) or not re.search(r"\d", expression):
+            continue
+        if not re.fullmatch(r"[0-9+*/().-]+", expression):
+            continue
+        try:
+            data = calculator(session_id, expression)
+            result = data.get("result")
+            return {
+                "reply": f"El resultado de **{expression}** es **{result}**.",
+                "tools": [{"name": "calculator", "arguments": {"expression": expression}, "status": "completed"}],
+                "mode": "direct",
+                "model": None,
+                "usage": {"total_tokens": 0},
+            }
+        except Exception:
+            continue
     return None
 
 
@@ -1869,8 +2155,9 @@ def _provider_messages(messages: List[Dict[str, Any]]) -> List[Dict[str, str]]:
             content = json.dumps(content, ensure_ascii=False)
         content = str(content or "").strip()
         if content:
-            output.append({"role": role, "content": content[:30000]})
-    return output[-MAX_HISTORY_MESSAGES - 2 :]
+            output.append({"role": role, "content": content[:40000]})
+    compacted = compact_messages(output, CONTEXT_MAX_CHARS, MAX_HISTORY_MESSAGES + 2)
+    return [{"role": str(item.get("role", "user")), "content": str(item.get("content", ""))} for item in compacted]
 
 
 def _call_openai_compatible_text(messages: List[Dict[str, Any]]) -> Tuple[str, str, Dict[str, int]]:
@@ -1882,6 +2169,11 @@ def _call_openai_compatible_text(messages: List[Dict[str, Any]]) -> Tuple[str, s
         headers["Authorization"] = f"Bearer {OPENAI_COMPAT_API_KEY}"
     errors: List[str] = []
     for model in OPENAI_COMPAT_MODELS:
+        circuit_name = f"provider:compat:{model}"
+        if not runtime.circuits.allow(circuit_name):
+            errors.append(f"{model}: circuito abierto")
+            continue
+        started = time.perf_counter()
         try:
             with httpx.Client(timeout=PROVIDER_TIMEOUT_SECONDS, follow_redirects=True) as http:
                 response = http.post(
@@ -1906,9 +2198,14 @@ def _call_openai_compatible_text(messages: List[Dict[str, Any]]) -> Tuple[str, s
                 "completion_tokens": int(raw_usage.get("completion_tokens", 0) or 0),
                 "total_tokens": int(raw_usage.get("total_tokens", 0) or 0),
             }
+            runtime.circuits.success(circuit_name)
+            runtime.metrics.record(circuit_name, (time.perf_counter() - started) * 1000, "success")
             return text, f"compat:{model}", usage
         except Exception as exc:
-            errors.append(f"{model}: {safe_error_text(exc, 220)}")
+            safe = safe_error_text(exc, 220)
+            runtime.circuits.failure(circuit_name, safe)
+            runtime.metrics.record(circuit_name, (time.perf_counter() - started) * 1000, "timeout" if "timeout" in safe.lower() else "error")
+            errors.append(f"{model}: {safe}")
     raise RuntimeError("; ".join(errors) or "Proveedor compatible no disponible")
 
 
@@ -1917,6 +2214,11 @@ def _call_ollama_text(messages: List[Dict[str, Any]]) -> Tuple[str, str, Dict[st
         raise RuntimeError("Ollama no configurado")
     errors: List[str] = []
     for model in OLLAMA_MODELS:
+        circuit_name = f"provider:ollama:{model}"
+        if not runtime.circuits.allow(circuit_name):
+            errors.append(f"{model}: circuito abierto")
+            continue
+        started = time.perf_counter()
         try:
             with httpx.Client(timeout=PROVIDER_TIMEOUT_SECONDS, follow_redirects=True) as http:
                 response = http.post(
@@ -1938,9 +2240,14 @@ def _call_ollama_text(messages: List[Dict[str, Any]]) -> Tuple[str, str, Dict[st
                 "completion_tokens": int(payload.get("eval_count", 0) or 0),
                 "total_tokens": int(payload.get("prompt_eval_count", 0) or 0) + int(payload.get("eval_count", 0) or 0),
             }
+            runtime.circuits.success(circuit_name)
+            runtime.metrics.record(circuit_name, (time.perf_counter() - started) * 1000, "success")
             return text, f"ollama:{model}", usage
         except Exception as exc:
-            errors.append(f"{model}: {safe_error_text(exc, 220)}")
+            safe = safe_error_text(exc, 220)
+            runtime.circuits.failure(circuit_name, safe)
+            runtime.metrics.record(circuit_name, (time.perf_counter() - started) * 1000, "timeout" if "timeout" in safe.lower() else "error")
+            errors.append(f"{model}: {safe}")
     raise RuntimeError("; ".join(errors) or "Ollama no disponible")
 
 
@@ -2509,7 +2816,11 @@ def save_document(session_id: str, file_name: str, file_b64: str) -> Dict[str, A
 @app.post("/api/jarvis")
 async def consultar_jarvis(data: ChatInput, request: Request):
     started_at = time.perf_counter()
-    request_id = re.sub(r"[^a-zA-Z0-9_.:-]", "_", (data.request_id or str(uuid.uuid4())))[:160]
+    request_id = re.sub(
+        r"[^a-zA-Z0-9_.:-]",
+        "_",
+        (data.request_id or getattr(request.state, "request_id", "") or str(uuid.uuid4())),
+    )[:160]
     enforce_request_guard(request)
     sid = safe_session_id(data.session_id)
     replay = request_result_get(request_id, sid)
@@ -2528,20 +2839,42 @@ async def consultar_jarvis(data: ChatInput, request: Request):
     try:
         for attached in data.files[:3]:
             if attached.file_b64 and attached.file_name:
-                save_document(sid, attached.file_name, attached.file_b64)
+                await asyncio.to_thread(save_document, sid, attached.file_name, attached.file_b64)
 
-        result = resilient_resolve(
-            sid,
-            prompt,
-            project_name=project_name,
-            mode=requested_mode,
-            intent_info=intent_info,
-        )
+        flight_key = hashlib.sha256(
+            f"{sid}::{project_name}::{requested_mode}::{_normalize_prompt_for_cache(prompt)}".encode("utf-8")
+        ).hexdigest()
+
+        def resolve_once() -> Dict[str, Any]:
+            return resilient_resolve(
+                sid,
+                prompt,
+                project_name=project_name,
+                mode=requested_mode,
+                intent_info=intent_info,
+            )
+
+        operation_started = time.perf_counter()
+        try:
+            result = await asyncio.wait_for(
+                asyncio.to_thread(
+                    runtime.singleflight.run,
+                    flight_key,
+                    resolve_once,
+                    float(REQUEST_TIMEOUT_SECONDS),
+                ),
+                timeout=float(REQUEST_TIMEOUT_SECONDS),
+            )
+            runtime.metrics.record("chat:resolve", (time.perf_counter() - operation_started) * 1000, "success")
+        except asyncio.TimeoutError as exc:
+            runtime.metrics.record("chat:resolve", (time.perf_counter() - operation_started) * 1000, "timeout")
+            raise TimeoutError(f"La resolución superó {REQUEST_TIMEOUT_SECONDS} segundos") from exc
+
         if result.get("reply") and not result.get("degraded"):
-            cache_set(sid, prompt, result)
+            await asyncio.to_thread(cache_set, sid, prompt, result)
 
-        guardar_mensaje_db(sid, "user", prompt)
-        guardar_mensaje_db(sid, "assistant", result["reply"])
+        await asyncio.to_thread(guardar_mensaje_db, sid, "user", prompt)
+        await asyncio.to_thread(guardar_mensaje_db, sid, "assistant", result["reply"])
         log_activity(
             sid,
             "response",
@@ -2555,8 +2888,14 @@ async def consultar_jarvis(data: ChatInput, request: Request):
         result.setdefault("project_name", project_name)
         result.setdefault("request_id", request_id)
         result["latency_ms"] = round((time.perf_counter() - started_at) * 1000)
+        result["stability"] = {
+            "singleflight": True,
+            "request_timeout_seconds": REQUEST_TIMEOUT_SECONDS,
+            "context_limit_chars": CONTEXT_MAX_CHARS,
+        }
         response_payload = {"status": "degraded" if result.get("degraded") else "success", **result}
-        request_result_set(request_id, sid, response_payload)
+        await asyncio.to_thread(request_result_set, request_id, sid, response_payload)
+        record_telemetry("chat:request", "success", (time.perf_counter() - started_at) * 1000, request_id=request_id, session_id=sid, detail=result.get("route", ""))
         return response_payload
 
     except Exception as exc:
@@ -2564,10 +2903,6 @@ async def consultar_jarvis(data: ChatInput, request: Request):
         logger.exception("J.A.R.V.I.S. no pudo completar la solicitud")
         log_activity(sid, "error", "Error al generar respuesta", detail, "failed")
         kind, retry_after = classify_provider_error(exc)
-        user_reply = (
-            "⚠️ El núcleo encontró un problema temporal. Las funciones locales siguen disponibles. "
-            "Revisa el estado del backend si el problema continúa."
-        )
         emergency = _local_last_resort(sid, prompt, intent_info.get("intent", "general"))
         content = {
             "status": "degraded",
@@ -2579,9 +2914,67 @@ async def consultar_jarvis(data: ChatInput, request: Request):
             "request_id": request_id,
             "latency_ms": round((time.perf_counter() - started_at) * 1000),
             "recovered": True,
+            "technical_error_hidden": True,
         }
-        request_result_set(request_id, sid, content)
-        return JSONResponse(status_code=200 if ALWAYS_RETURN_RESULT else (503 if kind in {"temporary", "rate_limit"} else 500), content=content)
+        await asyncio.to_thread(request_result_set, request_id, sid, content)
+        record_telemetry(
+            "chat:request",
+            "timeout" if isinstance(exc, TimeoutError) else "error",
+            (time.perf_counter() - started_at) * 1000,
+            request_id=request_id,
+            session_id=sid,
+            detail=detail,
+        )
+        return JSONResponse(
+            status_code=200 if ALWAYS_RETURN_RESULT else (503 if kind in {"temporary", "rate_limit"} else 500),
+            content=content,
+        )
+
+
+@app.post("/api/jarvis/stream")
+async def consultar_jarvis_stream(data: ChatInput, request: Request):
+    """NDJSON con latidos de progreso para evitar una conexión silenciosa durante tareas largas."""
+
+    async def generate():
+        states = [
+            "Comprendiendo la solicitud",
+            "Seleccionando rutas de resolución",
+            "Ejecutando herramientas disponibles",
+            "Probando alternativas y caché",
+            "Verificando el resultado",
+        ]
+        yield json.dumps({"type": "progress", "stage": states[0], "version": "18.0.0"}, ensure_ascii=False) + "\n"
+        task = asyncio.create_task(consultar_jarvis(data, request))
+        index = 1
+        while not task.done():
+            try:
+                await asyncio.wait_for(asyncio.shield(task), timeout=2.2)
+            except asyncio.TimeoutError:
+                if await request.is_disconnected():
+                    task.cancel()
+                    record_telemetry("chat:stream", "cancelled", 0, request_id=getattr(request.state, "request_id", ""), detail="cliente desconectado")
+                    return
+                yield json.dumps({"type": "progress", "stage": states[index % len(states)], "heartbeat": True}, ensure_ascii=False) + "\n"
+                index += 1
+        result = await task
+        if isinstance(result, JSONResponse):
+            try:
+                payload = json.loads(bytes(result.body).decode("utf-8"))
+            except Exception:
+                payload = {"status": "degraded", "reply": "JARVIS completó la ruta, pero no pudo serializar el resultado."}
+        else:
+            payload = result
+        yield json.dumps({"type": "final", "data": payload}, ensure_ascii=False, default=str) + "\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="application/x-ndjson",
+        headers={
+            "Cache-Control": "no-cache, no-store",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @app.post("/api/library/upload")
@@ -2792,43 +3185,188 @@ def improvement_report(session_id: str, days: int = 7):
     }
 
 
-def execute_background_job(job_id: str, session_id: str, prompt: str) -> None:
-    sid = safe_session_id(session_id)
+def _job_row(job_id: str) -> Optional[Dict[str, Any]]:
+    with db_connection() as conn:
+        row = conn.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def _job_control(job_id: str) -> str:
+    row = _job_row(job_id)
+    return str((row or {}).get("control", "") or "").strip().lower()
+
+
+def _update_job(job_id: str, **values: Any) -> None:
+    allowed = {
+        "status", "result", "error", "progress", "updated_at", "attempt",
+        "max_attempts", "control", "checkpoint", "next_run_at",
+    }
+    payload = {key: value for key, value in values.items() if key in allowed}
+    if not payload:
+        return
+    payload.setdefault("updated_at", time.time())
+    clauses = ", ".join(f"{key} = ?" for key in payload)
+    params = [payload[key] for key in payload]
+    params.append(job_id)
+    with db_connection() as conn:
+        conn.execute(f"UPDATE jobs SET {clauses} WHERE id = ?", params)
+
+
+def _submit_job(job_id: str) -> bool:
+    row = _job_row(job_id)
+    if not row:
+        return False
+    with _job_submit_lock:
+        current = _job_futures.get(job_id)
+        if current is not None and not current.done():
+            return False
+        executor = _ensure_job_executor()
+        future = executor.submit(execute_background_job, job_id, row["session_id"], row["prompt"])
+        _job_futures[job_id] = future
+        return True
+
+
+def _recover_interrupted_jobs() -> int:
     try:
         with db_connection() as conn:
-            conn.execute(
-                "UPDATE jobs SET status = 'running', progress = 15, updated_at = ? WHERE id = ?",
-                (time.time(), job_id),
-            )
-        intent_info = classify_intent(prompt)
-        with db_connection() as conn:
-            conn.execute("UPDATE jobs SET progress = 35, updated_at = ? WHERE id = ?", (time.time(), job_id))
-        result = resilient_resolve(sid, prompt, project_name="Trabajo autónomo", mode="auto", intent_info=intent_info)
-        with db_connection() as conn:
-            conn.execute("UPDATE jobs SET progress = 85, updated_at = ? WHERE id = ?", (time.time(), job_id))
-        reply = str(result.get("reply", ""))
-        with db_connection() as conn:
-            conn.execute(
+            rows = conn.execute(
                 """
-                UPDATE jobs
-                SET status = 'completed', result = ?, progress = 100, updated_at = ?
-                WHERE id = ?
-                """,
-                (reply[:250000], time.time(), job_id),
-            )
-        log_activity(sid, "job", "Trabajo autónomo completado", job_id, "completed")
-    except Exception as exc:
-        detail = safe_error_text(exc)
-        with db_connection() as conn:
-            conn.execute(
+                SELECT id FROM jobs
+                WHERE status IN ('queued','running','retrying','cancelling')
+                ORDER BY created_at ASC LIMIT 100
                 """
-                UPDATE jobs
-                SET status = 'failed', error = ?, progress = 100, updated_at = ?
-                WHERE id = ?
-                """,
-                (detail, time.time(), job_id),
+            ).fetchall()
+            for row in rows:
+                conn.execute(
+                    "UPDATE jobs SET status = 'queued', control = '', checkpoint = 'recuperado después de reinicio', updated_at = ? WHERE id = ?",
+                    (time.time(), row["id"]),
+                )
+        recovered = 0
+        for row in rows:
+            if _submit_job(row["id"]):
+                recovered += 1
+        return recovered
+    except Exception:
+        logger.exception("No se pudieron recuperar trabajos interrumpidos")
+        return 0
+
+
+def _wait_job_retry(job_id: str, seconds: float) -> bool:
+    deadline = time.time() + max(0.0, seconds)
+    while time.time() < deadline:
+        control = _job_control(job_id)
+        if control in {"cancel", "pause"}:
+            return False
+        time.sleep(min(0.5, deadline - time.time()))
+    return True
+
+
+def execute_background_job(job_id: str, session_id: str, prompt: str) -> None:
+    sid = safe_session_id(session_id)
+    row = _job_row(job_id)
+    if not row:
+        return
+    max_attempts = max(1, int(row.get("max_attempts") or JOB_MAX_ATTEMPTS))
+    starting_attempt = max(0, int(row.get("attempt") or 0))
+
+    for attempt in range(starting_attempt + 1, max_attempts + 1):
+        control = _job_control(job_id)
+        if control == "cancel":
+            _update_job(job_id, status="cancelled", progress=100, checkpoint="cancelado por el usuario", control="")
+            log_activity(sid, "job", "Trabajo cancelado", job_id, "cancelled")
+            return
+        if control == "pause":
+            _update_job(job_id, status="paused", checkpoint="pausado por el usuario")
+            log_activity(sid, "job", "Trabajo pausado", job_id, "paused")
+            return
+
+        started = time.perf_counter()
+        _update_job(
+            job_id,
+            status="running",
+            progress=max(10, min(25, attempt * 8)),
+            attempt=attempt,
+            error="",
+            control="",
+            checkpoint=f"intento {attempt}: preparando plan",
+            next_run_at=0,
+        )
+        try:
+            intent_info = classify_intent(prompt)
+            _update_job(job_id, progress=32, checkpoint=f"intento {attempt}: ruta {intent_info.get('intent', 'general')}")
+
+            if _job_control(job_id) in {"cancel", "pause"}:
+                continue
+
+            result = resilient_resolve(
+                sid,
+                prompt,
+                project_name="Trabajo autónomo",
+                mode="auto",
+                intent_info=intent_info,
             )
-        log_activity(sid, "job", "Trabajo autónomo falló", detail, "failed")
+            _update_job(job_id, progress=86, checkpoint=f"intento {attempt}: verificando resultado")
+
+            control = _job_control(job_id)
+            if control == "cancel":
+                _update_job(job_id, status="cancelled", progress=100, checkpoint="cancelado antes de guardar", control="")
+                return
+            if control == "pause":
+                _update_job(job_id, status="paused", checkpoint="resultado listo; pendiente de reanudar")
+                return
+
+            reply = str(result.get("reply", ""))
+            if not reply.strip():
+                raise RuntimeError("El trabajo terminó sin contenido utilizable")
+            _update_job(
+                job_id,
+                status="completed",
+                result=reply[:250000],
+                error="",
+                progress=100,
+                checkpoint="resultado verificado y guardado",
+                control="",
+            )
+            record_telemetry("job:execute", "success", (time.perf_counter() - started) * 1000, session_id=sid, detail=f"attempt:{attempt}")
+            log_activity(sid, "job", "Trabajo autónomo completado", job_id, "completed")
+            return
+        except Exception as exc:
+            detail = safe_error_text(exc)
+            record_telemetry("job:execute", "error", (time.perf_counter() - started) * 1000, session_id=sid, detail=detail)
+            if attempt < max_attempts:
+                delay = min(JOB_RETRY_BASE_SECONDS * (2 ** (attempt - 1)) + random.random(), 120)
+                _update_job(
+                    job_id,
+                    status="retrying",
+                    error=detail,
+                    progress=min(75, 20 + attempt * 15),
+                    checkpoint=f"intento {attempt} falló; nueva ruta en {round(delay, 1)} s",
+                    next_run_at=time.time() + delay,
+                )
+                log_activity(sid, "job", "Trabajo reintentando", detail, "retrying")
+                if not _wait_job_retry(job_id, delay):
+                    control = _job_control(job_id)
+                    _update_job(
+                        job_id,
+                        status="cancelled" if control == "cancel" else "paused",
+                        progress=100 if control == "cancel" else min(90, 20 + attempt * 15),
+                        checkpoint="cancelado durante espera" if control == "cancel" else "pausado durante espera",
+                        control="" if control == "cancel" else "pause",
+                    )
+                    return
+                continue
+
+            _update_job(
+                job_id,
+                status="failed",
+                error=detail,
+                progress=100,
+                checkpoint=f"agotados {max_attempts} intentos controlados",
+                control="",
+            )
+            log_activity(sid, "job", "Trabajo autónomo falló", detail, "failed")
+            return
+
 
 
 @app.post("/api/whatsapp/update_qr")
@@ -2850,7 +3388,7 @@ def get_whatsapp_status():
 
 
 @app.post("/api/jobs")
-def create_job(data: JobInput, background_tasks: BackgroundTasks, request: Request):
+def create_job(data: JobInput, request: Request):
     enforce_request_guard(request)
     sid = safe_session_id(data.session_id)
     title = data.title.strip()[:300] or "Trabajo autónomo"
@@ -2862,14 +3400,17 @@ def create_job(data: JobInput, background_tasks: BackgroundTasks, request: Reque
     with db_connection() as conn:
         conn.execute(
             """
-            INSERT INTO jobs(id, session_id, title, prompt, status, progress, created_at, updated_at)
-            VALUES (?, ?, ?, ?, 'queued', 0, ?, ?)
+            INSERT INTO jobs(
+                id, session_id, title, prompt, status, progress, created_at, updated_at,
+                attempt, max_attempts, control, checkpoint, next_run_at
+            )
+            VALUES (?, ?, ?, ?, 'queued', 0, ?, ?, 0, ?, '', 'en cola', 0)
             """,
-            (job_id, sid, title, prompt[:30000], now, now),
+            (job_id, sid, title, prompt[:30000], now, now, JOB_MAX_ATTEMPTS),
         )
-    background_tasks.add_task(execute_background_job, job_id, sid, prompt)
+    _submit_job(job_id)
     log_activity(sid, "job", "Trabajo autónomo creado", title, "queued")
-    return {"status": "queued", "job_id": job_id, "title": title}
+    return {"status": "queued", "job_id": job_id, "title": title, "max_attempts": JOB_MAX_ATTEMPTS}
 
 
 @app.get("/api/jobs")
@@ -2879,12 +3420,98 @@ def list_jobs(session_id: str, limit: int = 30):
     with db_connection() as conn:
         rows = conn.execute(
             """
-            SELECT id, title, prompt, status, result, error, progress, created_at, updated_at
+            SELECT id, title, prompt, status, result, error, progress, created_at, updated_at,
+                   attempt, max_attempts, control, checkpoint, next_run_at
             FROM jobs WHERE session_id = ? ORDER BY created_at DESC LIMIT ?
             """,
             (sid, limit),
         ).fetchall()
-    return {"jobs": [dict(row) for row in rows]}
+    return {"jobs": [dict(row) for row in rows], "workers": JOB_WORKERS}
+
+
+@app.get("/api/jobs/{job_id}")
+def get_job(job_id: str, session_id: str):
+    sid = safe_session_id(session_id)
+    with db_connection() as conn:
+        row = conn.execute("SELECT * FROM jobs WHERE id = ? AND session_id = ?", (job_id, sid)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Trabajo no encontrado")
+    return {"job": dict(row)}
+
+
+@app.post("/api/jobs/{job_id}/pause")
+def pause_job(job_id: str, session_id: str, request: Request):
+    enforce_request_guard(request)
+    sid = safe_session_id(session_id)
+    with db_connection() as conn:
+        row = conn.execute("SELECT status FROM jobs WHERE id = ? AND session_id = ?", (job_id, sid)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Trabajo no encontrado")
+        if row["status"] in {"completed", "failed", "cancelled"}:
+            return {"status": row["status"], "changed": False}
+        conn.execute(
+            "UPDATE jobs SET control = 'pause', checkpoint = 'solicitud de pausa recibida', updated_at = ? WHERE id = ?",
+            (time.time(), job_id),
+        )
+    return {"status": "pausing", "changed": True}
+
+
+@app.post("/api/jobs/{job_id}/resume")
+def resume_job(job_id: str, session_id: str, request: Request):
+    enforce_request_guard(request)
+    sid = safe_session_id(session_id)
+    with db_connection() as conn:
+        row = conn.execute("SELECT status FROM jobs WHERE id = ? AND session_id = ?", (job_id, sid)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Trabajo no encontrado")
+        if row["status"] == "completed":
+            return {"status": "completed", "changed": False}
+        conn.execute(
+            "UPDATE jobs SET status = 'queued', control = '', checkpoint = 'reanudar desde último punto seguro', updated_at = ? WHERE id = ?",
+            (time.time(), job_id),
+        )
+    submitted = _submit_job(job_id)
+    return {"status": "queued", "changed": True, "submitted": submitted}
+
+
+@app.post("/api/jobs/{job_id}/cancel")
+def cancel_job(job_id: str, session_id: str, request: Request):
+    enforce_request_guard(request)
+    sid = safe_session_id(session_id)
+    with db_connection() as conn:
+        row = conn.execute("SELECT status FROM jobs WHERE id = ? AND session_id = ?", (job_id, sid)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Trabajo no encontrado")
+        if row["status"] in {"completed", "failed", "cancelled"}:
+            return {"status": row["status"], "changed": False}
+        conn.execute(
+            "UPDATE jobs SET status = 'cancelling', control = 'cancel', checkpoint = 'cancelación solicitada', updated_at = ? WHERE id = ?",
+            (time.time(), job_id),
+        )
+    future = _job_futures.get(job_id)
+    if future is None or future.done():
+        _update_job(job_id, status="cancelled", progress=100, checkpoint="cancelado", control="")
+    return {"status": "cancelling", "changed": True}
+
+
+@app.post("/api/jobs/{job_id}/retry")
+def retry_job(job_id: str, session_id: str, request: Request):
+    enforce_request_guard(request)
+    sid = safe_session_id(session_id)
+    with db_connection() as conn:
+        row = conn.execute("SELECT status FROM jobs WHERE id = ? AND session_id = ?", (job_id, sid)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Trabajo no encontrado")
+        conn.execute(
+            """
+            UPDATE jobs SET status = 'queued', progress = 0, result = '', error = '', attempt = 0,
+                            control = '', checkpoint = 'reintento manual', next_run_at = 0, updated_at = ?
+            WHERE id = ?
+            """,
+            (time.time(), job_id),
+        )
+    submitted = _submit_job(job_id)
+    return {"status": "queued", "submitted": submitted}
 
 
 @app.delete("/api/jobs/{job_id}")
@@ -2892,6 +3519,9 @@ def delete_job(job_id: str, session_id: str, request: Request):
     enforce_request_guard(request)
     sid = safe_session_id(session_id)
     with db_connection() as conn:
+        row = conn.execute("SELECT status FROM jobs WHERE id = ? AND session_id = ?", (job_id, sid)).fetchone()
+        if row and row["status"] in {"queued", "running", "retrying", "cancelling"}:
+            conn.execute("UPDATE jobs SET control = 'cancel' WHERE id = ?", (job_id,))
         cursor = conn.execute("DELETE FROM jobs WHERE id = ? AND session_id = ?", (job_id, sid))
     return {"deleted": cursor.rowcount > 0}
 
@@ -2914,6 +3544,7 @@ def reset_session(data: SettingsInput, request: Request):
             conn.execute("DELETE FROM historial WHERE session_id = ?", (sid,))
         if data.clear_cache:
             conn.execute("DELETE FROM response_cache WHERE session_id = ?", (sid,))
+            runtime.cache.clear()
     log_activity(sid, "system", "Sesión reiniciada", json.dumps(data.model_dump()), "completed")
     return {"status": "success", "history_cleared": data.clear_history, "cache_cleared": data.clear_cache}
 
@@ -2969,7 +3600,7 @@ def resilience_status(session_id: str = "default_session", limit: int = 12):
         ).fetchone()
     return {
         "status": "ok",
-        "version": "17.0.0",
+        "version": "18.0.0",
         "providers": resilience_provider_status(),
         "limits": {
             "max_resolution_attempts": MAX_RESOLUTION_ATTEMPTS,
@@ -2981,6 +3612,8 @@ def resilience_status(session_id: str = "default_session", limit: int = 12):
         },
         "summary_24h": dict(summary) if summary else {},
         "recent_runs": [dict(row) for row in runs],
+        "runtime": runtime.snapshot(),
+        "jobs": _job_health(),
     }
 
 
@@ -3002,14 +3635,16 @@ def dashboard(session_id: str):
             (sid, since),
         ).fetchone()
     return {
-        "version": "17.0.0",
+        "version": "18.0.0",
         "status": "online" if (GROQ_API_KEY or OPENAI_COMPAT_BASE_URL or OLLAMA_BASE_URL) else "local_only",
         "counts": counts,
         "usage_24h": dict(usage),
         "models": provider_status(),
         "providers": resilience_provider_status(),
         "database": {"ok": True, "path": DB_FILE},
-        "features": ["execution_planner", "resolution_trace", "local_verifier", "autonomous_agent", "smart_intent_router", "multi_provider_router", "tool_calling", "background_jobs", "project_workspaces", "memory", "documents", "reminders", "knowledge_search", "self_check"],
+        "features": ["execution_planner", "resolution_trace", "local_verifier", "autonomous_agent", "smart_intent_router", "multi_provider_router", "tool_calling", "persistent_background_jobs", "pause_resume_cancel", "multi_level_cache", "singleflight_deduplication", "circuit_breakers", "context_compaction", "performance_telemetry", "deep_health_checks", "project_workspaces", "memory", "documents", "reminders", "knowledge_search", "self_check"],
+        "runtime": runtime.snapshot(),
+        "jobs_health": _job_health(),
     }
 
 
@@ -3035,15 +3670,20 @@ def self_check():
     checks["groq_key"] = {"ok": bool(GROQ_API_KEY), "required_for": "proveedor principal"}
     checks["secondary_provider"] = {"ok": bool(OPENAI_COMPAT_BASE_URL and OPENAI_COMPAT_MODELS) or bool(OLLAMA_BASE_URL and OLLAMA_MODELS), "optional": True}
     checks["resilient_search"] = {"ok": True, "attempts": WEB_SEARCH_ATTEMPTS, "max_results": WEB_SEARCH_RESULTS}
-    overall = all(item.get("ok") for key, item in checks.items() if key not in {"groq_key", "secondary_provider"})
-    return {"status": "ok" if overall else "degraded", "checks": checks, "version": "17.0.0"}
+    checks["l1_cache"] = {"ok": True, **runtime.cache.stats()}
+    checks["redis"] = {**runtime.redis.ping(), "optional": True}
+    checks["job_engine"] = _job_health()
+    checks["disk"] = disk_status(str(BASE_DIR))
+    checks["context_compaction"] = {"ok": len(compact_messages([{"role":"system","content":"a"*1000},{"role":"user","content":"b"*20000}], 5000, 4)) >= 1}
+    overall = all(item.get("ok") for key, item in checks.items() if key not in {"groq_key", "secondary_provider", "redis"})
+    return {"status": "ok" if overall else "degraded", "checks": checks, "version": "18.0.0"}
 
 
 @app.get("/api/capabilities")
 def capabilities():
     return {
         "autonomous_core": True,
-        "version": "17.0.0",
+        "version": "18.0.0",
         "groq_configured": bool(GROQ_API_KEY),
         "model": GROQ_MODEL,
         "model_chain": MODEL_CHAIN,
@@ -3087,7 +3727,175 @@ def capabilities():
             "knowledge_search",
             "command_palette",
             "offline_pwa_shell",
+            "multi_level_cache",
+            "optional_redis_l2",
+            "singleflight_deduplication",
+            "provider_circuit_breakers",
+            "request_timeouts",
+            "context_compaction",
+            "persistent_job_recovery",
+            "job_pause_resume_cancel_retry",
+            "runtime_metrics",
+            "deep_health_checks",
+            "gzip_responses",
         ],
+        "stability": {
+            "request_timeout_seconds": REQUEST_TIMEOUT_SECONDS,
+            "context_max_chars": CONTEXT_MAX_CHARS,
+            "job_workers": JOB_WORKERS,
+            "job_max_attempts": JOB_MAX_ATTEMPTS,
+            "redis_configured": bool(REDIS_URL),
+        },
+    }
+
+
+def _database_probe() -> Dict[str, Any]:
+    started = time.perf_counter()
+    try:
+        with db_connection() as conn:
+            conn.execute("SELECT 1").fetchone()
+            journal = conn.execute("PRAGMA journal_mode").fetchone()[0]
+        return {"ok": True, "latency_ms": round((time.perf_counter() - started) * 1000, 2), "journal_mode": journal}
+    except Exception as exc:
+        return {"ok": False, "latency_ms": round((time.perf_counter() - started) * 1000, 2), "detail": safe_error_text(exc)}
+
+
+def _job_health() -> Dict[str, Any]:
+    try:
+        with db_connection() as conn:
+            rows = conn.execute(
+                "SELECT status, COUNT(*) AS count FROM jobs GROUP BY status"
+            ).fetchall()
+        counts = {row["status"]: int(row["count"]) for row in rows}
+    except Exception as exc:
+        return {"ok": False, "detail": safe_error_text(exc)}
+    with _job_submit_lock:
+        active_futures = sum(1 for future in _job_futures.values() if not future.done())
+    return {
+        "ok": True,
+        "workers": JOB_WORKERS,
+        "active_futures": active_futures,
+        "counts": counts,
+        "backlog": sum(counts.get(key, 0) for key in ("queued", "retrying")),
+    }
+
+
+@app.get("/api/health/live")
+def health_live():
+    return {
+        "status": "ok",
+        "version": "18.0.0",
+        "uptime_seconds": runtime.metrics.summary().get("uptime_seconds", 0),
+        "timestamp": time.time(),
+    }
+
+
+@app.get("/api/health/ready")
+def health_ready():
+    database = _database_probe()
+    static_ok = INDEX_FILE.exists() and STATIC_DIR.exists()
+    ready = bool(database.get("ok") and static_ok)
+    return JSONResponse(
+        status_code=200 if ready else 503,
+        content={
+            "status": "ready" if ready else "not_ready",
+            "version": "18.0.0",
+            "database": database,
+            "static_ui": {"ok": static_ok},
+            "generative_route_configured": bool(
+                GROQ_API_KEY
+                or (OPENAI_COMPAT_BASE_URL and OPENAI_COMPAT_MODELS)
+                or (OLLAMA_BASE_URL and OLLAMA_MODELS)
+            ),
+            "local_routes_available": True,
+        },
+    )
+
+
+@app.get("/api/health/deep")
+def health_deep():
+    database = _database_probe()
+    redis = runtime.redis.ping()
+    disk = disk_status(str(BASE_DIR))
+    jobs = _job_health()
+    circuits = runtime.circuits.snapshot()
+    open_circuits = [name for name, state in circuits.items() if state.get("state") == "open"]
+    static_required = [
+        INDEX_FILE,
+        STATIC_DIR / "app.js",
+        STATIC_DIR / "styles.css",
+        STATIC_DIR / "config.js",
+    ]
+    missing_static = [str(path.name) for path in static_required if not path.exists()]
+    required_ok = bool(database.get("ok") and disk.get("ok") and not missing_static and jobs.get("ok"))
+    status = "ok" if required_ok and not open_circuits else ("degraded" if required_ok else "failed")
+    payload = {
+        "status": status,
+        "version": "18.0.0",
+        "database": database,
+        "redis": redis,
+        "disk": disk,
+        "jobs": jobs,
+        "static_ui": {"ok": not missing_static, "missing": missing_static},
+        "providers": resilience_provider_status(),
+        "circuits": circuits,
+        "open_circuits": open_circuits,
+        "runtime": runtime.snapshot(),
+    }
+    return JSONResponse(status_code=200 if required_ok else 503, content=payload)
+
+
+@app.get("/api/performance")
+def performance(session_id: str = "default_session", hours: int = 24):
+    sid = safe_session_id(session_id)
+    hours = max(1, min(int(hours), 24 * 30))
+    since = time.time() - hours * 3600
+    with db_connection() as conn:
+        aggregate = conn.execute(
+            """
+            SELECT operation,
+                   COUNT(*) AS requests,
+                   SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) AS successful,
+                   SUM(CASE WHEN status IN ('error','timeout') THEN 1 ELSE 0 END) AS failed,
+                   AVG(duration_ms) AS average_ms,
+                   MAX(duration_ms) AS maximum_ms
+            FROM telemetry_events
+            WHERE created_at >= ?
+            GROUP BY operation
+            ORDER BY requests DESC
+            LIMIT 50
+            """,
+            (since,),
+        ).fetchall()
+        recent = conn.execute(
+            """
+            SELECT operation, status, duration_ms, detail, created_at
+            FROM telemetry_events
+            WHERE session_id IN (?, '') AND created_at >= ?
+            ORDER BY id DESC LIMIT 30
+            """,
+            (sid, since),
+        ).fetchall()
+    return {
+        "status": "ok",
+        "version": "18.0.0",
+        "hours": hours,
+        "runtime": runtime.snapshot(),
+        "jobs": _job_health(),
+        "database": _database_probe(),
+        "operations": [dict(row) for row in aggregate],
+        "recent": [dict(row) for row in recent],
+        "configuration": {
+            "request_timeout_seconds": REQUEST_TIMEOUT_SECONDS,
+            "provider_timeout_seconds": PROVIDER_TIMEOUT_SECONDS,
+            "context_max_chars": CONTEXT_MAX_CHARS,
+            "l1_cache_items": L1_CACHE_ITEMS,
+            "job_workers": JOB_WORKERS,
+            "job_max_attempts": JOB_MAX_ATTEMPTS,
+            "redis_configured": bool(REDIS_URL),
+            "telemetry_sample_rate": TELEMETRY_SAMPLE_RATE,
+            "maintenance_interval_seconds": MAINTENANCE_INTERVAL_SECONDS,
+        },
     }
 
 
@@ -3114,6 +3922,13 @@ def health():
         "models": provider_status(),
         "providers": resilience_provider_status(),
         "public_mode": PUBLIC_MODE,
+        "version": "18.0.0",
+        "runtime": {
+            "cache": runtime.snapshot().get("cache", {}),
+            "singleflight": runtime.singleflight.stats(),
+            "jobs": _job_health(),
+        },
+        "health_endpoints": ["/api/health/live", "/api/health/ready", "/api/health/deep"],
     }
 
 
@@ -3121,15 +3936,22 @@ def health():
 def system_info():
     return {
         "status": "JARVIS Core Interface Active",
-        "version": "17.0.0",
+        "version": "18.0.0",
         "groq_configured": bool(GROQ_API_KEY),
         "model": GROQ_MODEL,
         "model_chain": MODEL_CHAIN,
         "public_mode": PUBLIC_MODE,
         "database": DB_FILE,
         "health_endpoint": "/api/health",
+        "health_live_endpoint": "/api/health/live",
+        "health_ready_endpoint": "/api/health/ready",
+        "health_deep_endpoint": "/api/health/deep",
+        "performance_endpoint": "/api/performance",
         "capabilities_endpoint": "/api/capabilities",
         "dashboard_endpoint": "/api/dashboard",
+        "redis_configured": bool(REDIS_URL),
+        "job_workers": JOB_WORKERS,
+        "request_timeout_seconds": REQUEST_TIMEOUT_SECONDS,
     }
 
 

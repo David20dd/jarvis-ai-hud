@@ -1,26 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <defs>
-    <linearGradient id="m" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#dbe3ea"/>
-      <stop offset="0.5" stop-color="#7e8894"/>
-      <stop offset="1" stop-color="#edf3f8"/>
-    </linearGradient>
-    <radialGradient id="c" cx="50%" cy="42%" r="60%">
-      <stop offset="0" stop-color="#ffffff"/>
-      <stop offset="0.45" stop-color="#9feeff"/>
-      <stop offset="1" stop-color="#29c6ee"/>
-    </radialGradient>
-    <filter id="g" x="-50%" y="-50%" width="200%" height="200%">
-      <feDropShadow dx="0" dy="0" stdDeviation="2" flood-color="#5fe6ff" flood-opacity="0.9"/>
-    </filter>
-  </defs>
-  <rect width="64" height="64" rx="14" fill="#07111a"/>
-  <circle cx="32" cy="32" r="22" fill="#0a1620" stroke="url(#m)" stroke-width="4"/>
-  <circle cx="32" cy="32" r="18" fill="#09121a" stroke="#1b2c39" stroke-width="2"/>
-  <polygon points="32,19 45,19 38.5,42 25.5,42" fill="none" opacity="0"/>
-  <polygon points="22,23 42,23 32,43" fill="#0d1620" stroke="url(#m)" stroke-width="2.2"/>
-  <polygon points="24,25 40,25 32,40" fill="url(#c)" stroke="#7fefff" stroke-width="1.3" filter="url(#g)"/>
-  <path d="M16 20 24 24 31 38" stroke="#5fe6ff" stroke-width="2.4" stroke-linecap="round" fill="none" filter="url(#g)"/>
-  <path d="M48 20 40 24 33 38" stroke="#5fe6ff" stroke-width="2.4" stroke-linecap="round" fill="none" filter="url(#g)"/>
-  <path d="M32 38v10" stroke="#5fe6ff" stroke-width="2.2" stroke-linecap="round" fill="none" filter="url(#g)"/>
+  <defs><radialGradient id="g"><stop stop-color="#dffcff"/><stop offset=".45" stop-color="#58ddf7"/><stop offset="1" stop-color="#0a4256"/></radialGradient></defs>
+  <circle cx="32" cy="32" r="29" fill="#061018" stroke="#9beeff" stroke-width="2"/>
+  <path d="M32 49 13 18h38L32 49Z" fill="none" stroke="url(#g)" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M32 40 22 23h20L32 40Z" fill="url(#g)"/>
 </svg>

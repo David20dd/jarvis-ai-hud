@@ -2062,3 +2062,150 @@ body.app-ready .app {
   .resilience-icon { width: 38px; height: 38px; border-radius: 12px; }
   .resilience-grid { grid-template-columns: 1fr; }
 }
+
+/* ===== v18 Stability & Performance Core ===== */
+.jobs-hero,
+.performance-hero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+  padding: 16px;
+  border: 1px solid rgba(88,221,247,.12);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(88,221,247,.08), transparent 35%),
+    linear-gradient(145deg, rgba(88,221,247,.045), rgba(255,255,255,.015));
+}
+.jobs-hero h3,
+.performance-hero h3 { margin: 0 0 5px; font-size: 1rem; }
+.jobs-hero p,
+.performance-hero p { margin: 0; color: var(--muted); font-size: .8rem; line-height: 1.55; }
+.jobs-hero-icon,
+.performance-icon {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(88,221,247,.16);
+  border-radius: 15px;
+  color: var(--cyan-bright);
+  background: rgba(88,221,247,.06);
+  box-shadow: 0 0 24px rgba(88,221,247,.08);
+  font-size: 1.15rem;
+}
+.job-card {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(20,28,39,.94), rgba(15,21,30,.98));
+  box-shadow: 0 12px 28px rgba(0,0,0,.16);
+}
+.job-card.status-running,
+.job-card.status-retrying { border-color: rgba(88,221,247,.16); }
+.job-card.status-completed { border-color: rgba(115,214,161,.16); }
+.job-card.status-failed,
+.job-card.status-cancelled { border-color: rgba(255,133,143,.14); }
+.job-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.job-state {
+  flex: none;
+  padding: 5px 9px;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 999px;
+  color: var(--muted);
+  background: rgba(255,255,255,.025);
+  font-size: .67rem;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.job-checkpoint {
+  margin-top: 9px;
+  color: var(--text-soft);
+  font-size: .76rem;
+  line-height: 1.5;
+}
+.job-error,
+.job-result {
+  margin-top: 10px;
+  padding: 10px 11px;
+  border-radius: 12px;
+  font-size: .74rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+.job-error {
+  color: #ffc0c5;
+  border: 1px solid rgba(255,133,143,.12);
+  background: rgba(255,133,143,.05);
+}
+.job-result {
+  color: #cde8d9;
+  border: 1px solid rgba(115,214,161,.12);
+  background: rgba(115,214,161,.045);
+}
+.job-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 12px;
+}
+.job-actions .soft-btn,
+.job-actions .primary-btn,
+.job-actions .danger-btn { padding: 7px 10px; font-size: .73rem; }
+.performance-grid { grid-template-columns: repeat(3, minmax(0,1fr)); }
+.metric-card { min-height: 112px; }
+.metric-card span,
+.metric-card small { display: block; color: var(--muted); }
+.metric-card span { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; }
+.metric-card strong {
+  display: block;
+  margin: 10px 0 4px;
+  color: #fff;
+  font-size: 1.45rem;
+  line-height: 1;
+}
+.metric-card small { font-size: .7rem; }
+.performance-table {
+  display: grid;
+  gap: 7px;
+}
+.performance-row {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto;
+  gap: 4px 14px;
+  align-items: center;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255,255,255,.018);
+}
+.performance-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-soft);
+  font-size: .78rem;
+}
+.performance-row strong { color: var(--cyan-bright); font-size: .78rem; }
+.performance-row small {
+  grid-column: 1 / -1;
+  color: var(--faint);
+  font-size: .67rem;
+}
+@media (max-width: 720px) {
+  .performance-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .jobs-hero,
+  .performance-hero { align-items: flex-start; }
+}
+@media (max-width: 480px) {
+  .performance-grid { grid-template-columns: 1fr; }
+  .job-card-head { align-items: stretch; flex-direction: column; }
+  .job-state { align-self: flex-start; }
+}

@@ -98,7 +98,7 @@
   document.addEventListener('DOMContentLoaded', init);
 
   function init() {
-    document.title = window.JARVIS_CONFIG?.APP_NAME || 'J.A.R.V.I.S. — Execution Core';
+    document.title = window.JARVIS_CONFIG?.APP_NAME || 'J.A.R.V.I.S. — Stability Core';
     ensureProjects();
     migrateChatsToProjects();
     if (!state.activeChatId || !state.chats[state.activeChatId] || currentChat()?.projectId !== state.activeProjectId) {
@@ -664,29 +664,15 @@
 
     try {
       const clientRequestId = createRequestId();
-      const response = await resilientFetch(apiUrl('/api/jarvis'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: text || 'Analiza los archivos adjuntos.',
-          session_id: backendConversationId(),
-          project_name: currentProject()?.name || 'General',
-          mode: state.mode,
-          files: outgoingFiles,
-          request_id: clientRequestId
-        }),
-        signal: state.abortController.signal
-      }, { attempts: 4, retryStatuses: [429, 502, 503, 504] });
-
-      const raw = await response.text();
-      let data;
-      try { data = JSON.parse(raw); }
-      catch { throw new Error(`El servidor respondió con contenido no válido (HTTP ${response.status}).`); }
-
-      if (!response.ok) {
-        const retry = data.retry_after_seconds ? ` Intenta nuevamente en ${data.retry_after_seconds} segundos.` : '';
-        throw new Error((data.detail || data.reply || `Error HTTP ${response.status}`) + retry);
-      }
+      const payload = {
+        message: text || 'Analiza los archivos adjuntos.',
+        session_id: backendConversationId(),
+        project_name: currentProject()?.name || 'General',
+        mode: state.mode,
+        files: outgoingFiles,
+        request_id: clientRequestId
+      };
+      const data = await requestJarvis(payload, state.abortController.signal);
 
       hideThinking();
       const reply = data.reply || data.response || 'El núcleo no devolvió contenido.';
@@ -800,7 +786,7 @@
     const avatarWrap = document.createElement('div');
     avatarWrap.className = 'assistant-avatar';
     const avatar = document.createElement('img');
-    const reactorRef = document.querySelector('.brand-reactor')?.getAttribute('src') || './static/jarvis-reactor-v10.png';
+    const reactorRef = document.querySelector('.brand-reactor')?.getAttribute('src') || './static/jarvis-reactor-v18.png';
     avatar.src = new URL(reactorRef, document.baseURI).href;
     avatar.alt = 'JARVIS';
     avatarWrap.appendChild(avatar);
@@ -1011,6 +997,7 @@
       { id:'search', icon:'⌕', title:'Buscar conocimiento', sub:'Memoria, documentos y conversaciones', run:() => openPanel('search') },
       { id:'export', icon:'⇩', title:'Exportar conversación', sub:'Descargar Markdown o JSON', shortcut:'Ctrl+E', run:() => openPanel('export') },
       { id:'resilience', icon:'⟲', title:'Resiliencia y rutas', sub:'Proveedores, verificaciones y recuperaciones', run:() => openPanel('resilience') },
+      { id:'performance', icon:'⌁', title:'Rendimiento', sub:'Velocidad, caché, circuitos y trabajos', run:() => openPanel('performance') },
       { id:'system', icon:'⚙', title:'Estado del núcleo', sub:'Diagnóstico, modelos y conexión', run:() => openPanel('system') },
       { id:'focus', icon:'/', title:'Escribir una pregunta', sub:'Enfocar el campo de conversación', shortcut:'/', run:() => els.userInput.focus() },
       { id:'mode', icon:'◎', title:'Cambiar modo', sub:MODES.find(item => item.id === state.mode)?.label || 'Modo automático', run:cycleMode },
@@ -1118,6 +1105,7 @@
       else if (panel === 'search') await renderKnowledgeSearch();
       else if (panel === 'export') await renderExport();
       else if (panel === 'resilience') await renderResilience();
+      else if (panel === 'performance') await renderPerformance();
       else await renderSystem();
     } catch (error) {
       els.sheetBody.innerHTML = `<div class="empty-note">${escapeHtml(error.message || 'No se pudo cargar esta sección.')}</div>`;
@@ -1125,7 +1113,7 @@
   }
 
   function panelTitle(panel) {
-    return ({ overview: 'Centro JARVIS', projects: 'Proyectos', library: 'Biblioteca', memory: 'Memoria', reminders: 'Recordatorios', jobs: 'Trabajos autónomos', search: 'Buscar conocimiento', export: 'Exportar conversación', resilience: 'Resiliencia y rutas', system: 'Estado y ajustes' })[panel] || 'JARVIS';
+    return ({ overview: 'Centro JARVIS', projects: 'Proyectos', library: 'Biblioteca', memory: 'Memoria', reminders: 'Recordatorios', jobs: 'Trabajos autónomos', search: 'Buscar conocimiento', export: 'Exportar conversación', resilience: 'Resiliencia y rutas', performance: 'Rendimiento y estabilidad', system: 'Estado y ajustes' })[panel] || 'JARVIS';
   }
 
   async function renderOverview() {
@@ -1139,7 +1127,7 @@
         ${panelCard('Trabajos', `${c.jobs || 0} registrados`, 'jobs')}
       </div>
       <div style="height:14px"></div>
-      <div class="panel-card"><h3>Estado del núcleo</h3><p>Versión ${escapeHtml(data.version || '17.0.0')} · ${escapeHtml(data.status || 'operativo')} · ${Number(data.usage_24h?.total_tokens || 0).toLocaleString()} tokens en 24 horas.</p></div>`;
+      <div class="panel-card"><h3>Estado del núcleo</h3><p>Versión ${escapeHtml(data.version || '18.0.0')} · ${escapeHtml(data.status || 'operativo')} · ${Number(data.usage_24h?.total_tokens || 0).toLocaleString()} tokens en 24 horas.</p></div>`;
     $$('[data-open-panel]', els.sheetBody).forEach(btn => btn.addEventListener('click', () => openPanel(btn.dataset.openPanel)));
   }
 
@@ -1206,11 +1194,36 @@
   async function renderJobs() {
     const data = await apiFetch(`/api/jobs?session_id=${encodeURIComponent(backendConversationId())}`);
     const jobs = data.jobs || [];
+    const workerCount = Number(data.workers || 0);
     els.sheetBody.innerHTML = `
+      <div class="jobs-hero">
+        <div class="jobs-hero-icon">◉</div>
+        <div><h3>Trabajos persistentes</h3><p>${workerCount || '—'} worker(s) disponibles. Los trabajos guardan intentos, checkpoints y pueden pausarse, reanudarse o recuperarse.</p></div>
+      </div>
       <div class="form-row"><input class="text-input" id="jobTitleInput" placeholder="Nombre del trabajo"/><input class="text-input" id="jobPromptInput" placeholder="Instrucción que JARVIS ejecutará"/><button class="primary-btn" id="createJobBtn">Ejecutar</button></div>
       <div style="height:14px"></div>
-      <div class="list-stack">${jobs.length ? jobs.map(job => `
-        <div class="list-item"><div class="list-main"><div class="list-title">${escapeHtml(job.title)}</div><div class="list-sub">${escapeHtml(job.status || '')} · ${Number(job.progress || 0)}%</div><div class="job-progress"><span style="width:${Math.max(0,Math.min(100,Number(job.progress || 0)))}%"></span></div>${job.result ? `<div class="list-sub">${escapeHtml(String(job.result).slice(0,220))}</div>` : ''}</div><button class="danger-btn" data-delete-job="${escapeHtml(job.id)}">Eliminar</button></div>`).join('') : '<div class="empty-note">Todavía no hay trabajos autónomos en este proyecto.</div>'}</div>`;
+      <div class="list-stack">${jobs.length ? jobs.map(job => {
+        const status = String(job.status || 'queued');
+        const progress = Math.max(0,Math.min(100,Number(job.progress || 0)));
+        const canPause = ['queued','running','retrying'].includes(status);
+        const canResume = ['paused'].includes(status);
+        const canCancel = ['queued','running','retrying','paused','cancelling'].includes(status);
+        const canRetry = ['failed','cancelled'].includes(status);
+        return `<article class="job-card status-${escapeHtml(status)}">
+          <div class="job-card-head"><div><div class="list-title">${escapeHtml(job.title)}</div><div class="list-sub">${escapeHtml(status)} · ${progress}% · intento ${Number(job.attempt || 0)}/${Number(job.max_attempts || 0)}</div></div><span class="job-state">${escapeHtml(status)}</span></div>
+          <div class="job-progress"><span style="width:${progress}%"></span></div>
+          <div class="job-checkpoint">${escapeHtml(job.checkpoint || 'Esperando ejecución')}</div>
+          ${job.error ? `<div class="job-error">${escapeHtml(String(job.error).slice(0,300))}</div>` : ''}
+          ${job.result ? `<div class="job-result">${escapeHtml(String(job.result).slice(0,420))}</div>` : ''}
+          <div class="job-actions">
+            ${canPause ? `<button class="soft-btn" data-job-action="pause" data-job-id="${escapeHtml(job.id)}">Pausar</button>` : ''}
+            ${canResume ? `<button class="primary-btn" data-job-action="resume" data-job-id="${escapeHtml(job.id)}">Reanudar</button>` : ''}
+            ${canCancel ? `<button class="danger-btn" data-job-action="cancel" data-job-id="${escapeHtml(job.id)}">Cancelar</button>` : ''}
+            ${canRetry ? `<button class="soft-btn" data-job-action="retry" data-job-id="${escapeHtml(job.id)}">Reintentar</button>` : ''}
+            <button class="danger-btn" data-delete-job="${escapeHtml(job.id)}">Eliminar</button>
+          </div>
+        </article>`;
+      }).join('') : '<div class="empty-note">Todavía no hay trabajos autónomos en este proyecto.</div>'}</div>`;
     $('#createJobBtn', els.sheetBody)?.addEventListener('click', async () => {
       const title = $('#jobTitleInput', els.sheetBody).value.trim() || 'Trabajo autónomo';
       const promptText = $('#jobPromptInput', els.sheetBody).value.trim();
@@ -1219,6 +1232,13 @@
       toast('Trabajo enviado al núcleo');
       renderJobs();
     });
+    $$('[data-job-action]', els.sheetBody).forEach(btn => btn.addEventListener('click', async () => {
+      const action = btn.dataset.jobAction;
+      const id = btn.dataset.jobId;
+      await apiFetch(`/api/jobs/${encodeURIComponent(id)}/${encodeURIComponent(action)}?session_id=${encodeURIComponent(backendConversationId())}`, { method:'POST' });
+      toast(`Acción ${action} registrada`);
+      setTimeout(renderJobs, 350);
+    }));
     $$('[data-delete-job]', els.sheetBody).forEach(btn => btn.addEventListener('click', async () => {
       await apiFetch(`/api/jobs/${encodeURIComponent(btn.dataset.deleteJob)}?session_id=${encodeURIComponent(backendConversationId())}`, { method:'DELETE' });
       renderJobs();
@@ -1430,6 +1450,38 @@
         </div>`).join('') : '<div class="empty-note">Todavía no hay ejecuciones registradas.</div>'}</div>`;
   }
 
+  async function renderPerformance() {
+    const data = await apiFetch(`/api/performance?session_id=${encodeURIComponent(backendConversationId())}&hours=24`);
+    const runtime = data.runtime || {};
+    const memory = runtime.cache?.memory || {};
+    const redis = runtime.cache?.redis || {};
+    const metrics = runtime.metrics?.operations || {};
+    const circuits = runtime.circuits || {};
+    const circuitEntries = Object.entries(circuits);
+    const openCircuits = circuitEntries.filter(([,value]) => value.state === 'open');
+    const chatMetric = metrics['chat:resolve'] || {};
+    const jobs = data.jobs || {};
+    els.sheetBody.innerHTML = `
+      <div class="performance-hero">
+        <div class="performance-icon">⌁</div>
+        <div><h3>Stability & Performance Core</h3><p>Telemetría local para detectar lentitud, reutilizar resultados y aislar proveedores que fallen repetidamente.</p></div>
+      </div>
+      <div class="panel-grid performance-grid">
+        <div class="panel-card metric-card"><span>Latencia media</span><strong>${Number(chatMetric.avg_ms || 0).toFixed(0)} ms</strong><small>P95 ${Number(chatMetric.p95_ms || 0).toFixed(0)} ms</small></div>
+        <div class="panel-card metric-card"><span>Caché L1</span><strong>${Math.round(Number(memory.hit_rate || 0) * 100)}%</strong><small>${Number(memory.items || 0)} objetos activos</small></div>
+        <div class="panel-card metric-card"><span>Solicitudes unificadas</span><strong>${Number(runtime.singleflight?.collapsed_requests || 0)}</strong><small>trabajos duplicados evitados</small></div>
+        <div class="panel-card metric-card"><span>Circuitos abiertos</span><strong>${openCircuits.length}</strong><small>${circuitEntries.length} rutas observadas</small></div>
+        <div class="panel-card metric-card"><span>Workers</span><strong>${Number(jobs.workers || 0)}</strong><small>${Number(jobs.active_futures || 0)} activos</small></div>
+        <div class="panel-card metric-card"><span>Redis</span><strong>${redis.configured ? (redis.connected ? 'Activo' : 'Respaldo') : 'Opcional'}</strong><small>${Number(redis.hits || 0)} aciertos</small></div>
+      </div>
+      <div style="height:16px"></div>
+      <div class="section-panel-title">Operaciones observadas</div>
+      <div class="performance-table">${Object.entries(metrics).length ? Object.entries(metrics).sort((a,b) => Number(b[1].requests || 0) - Number(a[1].requests || 0)).slice(0,14).map(([name,item]) => `<div class="performance-row"><span>${escapeHtml(name)}</span><strong>${Number(item.avg_ms || 0).toFixed(0)} ms</strong><small>${Math.round(Number(item.success_rate || 0)*100)}% éxito · ${Number(item.requests || 0)} solicitudes</small></div>`).join('') : '<div class="empty-note">La telemetría aparecerá después de utilizar JARVIS.</div>'}</div>
+      <div style="height:16px"></div>
+      <div class="section-panel-title">Circuitos de protección</div>
+      <div class="list-stack">${circuitEntries.length ? circuitEntries.map(([name,item]) => `<div class="list-item"><div class="list-main"><div class="list-title">${escapeHtml(name)}</div><div class="list-sub">${escapeHtml(item.state || 'closed')} · ${Number(item.failures || 0)} fallos · ${Number(item.successes || 0)} éxitos</div></div><span class="run-status ${item.state === 'open' ? 'partial' : 'verified'}">${item.state === 'open' ? '!' : '✓'}</span></div>`).join('') : '<div class="empty-note">No hay circuitos registrados todavía.</div>'}</div>`;
+  }
+
   async function renderSystem() {
     const [health, checks] = await Promise.all([apiFetch('/api/health'), apiFetch('/api/self-check')]);
     const configured = health.groq_configured ? 'Configurado' : 'No configurado';
@@ -1468,6 +1520,73 @@
     catch { throw new Error(`Respuesta no válida del servidor (HTTP ${response.status}).`); }
     if (!response.ok) throw new Error(data.detail || data.reply || `Error HTTP ${response.status}`);
     return data;
+  }
+
+  async function requestJarvis(payload, signal) {
+    const requestOptions = {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json', 'Accept':'application/x-ndjson, application/json' },
+      body: JSON.stringify(payload),
+      signal
+    };
+
+    const parseStandardResponse = async response => {
+      const raw = await response.text();
+      let data = {};
+      try { data = raw ? JSON.parse(raw) : {}; }
+      catch { throw new Error(`El servidor respondió con contenido no válido (HTTP ${response.status}).`); }
+      if (!response.ok) {
+        const retry = data.retry_after_seconds ? ` Intenta nuevamente en ${data.retry_after_seconds} segundos.` : '';
+        throw new Error((data.detail || data.reply || `Error HTTP ${response.status}`) + retry);
+      }
+      return data;
+    };
+
+    try {
+      const response = await resilientFetch(apiUrl('/api/jarvis/stream'), requestOptions, { attempts: 3, retryStatuses: [429, 502, 503, 504] });
+      const contentType = response.headers.get('content-type') || '';
+      if (!response.ok || !response.body || !contentType.includes('application/x-ndjson')) {
+        return parseStandardResponse(response);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let finalData = null;
+      while (true) {
+        const { value, done } = await reader.read();
+        buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          let event;
+          try { event = JSON.parse(line); }
+          catch { continue; }
+          if (event.type === 'progress') {
+            const stage = event.stage || 'Trabajando';
+            els.thinkingText.textContent = stage;
+            setStatus(stage, 'warning');
+          } else if (event.type === 'final') {
+            finalData = event.data || {};
+          }
+        }
+        if (done) break;
+      }
+      if (buffer.trim()) {
+        try {
+          const event = JSON.parse(buffer);
+          if (event.type === 'final') finalData = event.data || {};
+        } catch {}
+      }
+      if (!finalData) throw new Error('La conexión terminó antes de recibir el resultado final.');
+      return finalData;
+    } catch (error) {
+      if (error.name === 'AbortError') throw error;
+      setStatus('Recuperando resultado por ruta compatible', 'warning');
+      const fallback = await resilientFetch(apiUrl('/api/jarvis'), requestOptions, { attempts: 3, retryStatuses: [429, 502, 503, 504] });
+      return parseStandardResponse(fallback);
+    }
   }
 
   function createRequestId() {
