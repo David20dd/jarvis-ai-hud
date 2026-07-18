@@ -4,14 +4,14 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#070b11" />
-  <meta name="description" content="J.A.R.V.I.S. Multi-Provider Gateway Core: resolución resistente, caché multinivel, trabajos persistentes, verificación y recuperación automática." />
+  <meta name="description" content="J.A.R.V.I.S. Clean Agent Edition: planificación, ejecución por etapas, interfaz limpia, proveedores múltiples y recuperación automática." />
   <meta name="referrer" content="strict-origin-when-cross-origin" />
-  <title>J.A.R.V.I.S. — Multi-Provider Core</title>
-  <link rel="icon" href="./favicon-32.png?v=19" sizes="32x32" type="image/png" />
-  <link rel="shortcut icon" href="./favicon-32.png?v=19" type="image/png" />
+  <title>J.A.R.V.I.S. — Clean Agent Edition</title>
+  <link rel="icon" href="./favicon-32.png?v=20" sizes="32x32" type="image/png" />
+  <link rel="shortcut icon" href="./favicon-32.png?v=20" type="image/png" />
   <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
-  <link rel="manifest" href="./manifest.webmanifest?v=19" />
-  <link rel="stylesheet" href="./styles.css?v=19" />
+  <link rel="manifest" href="./manifest.webmanifest?v=20" />
+  <link rel="stylesheet" href="./styles.css?v=20" />
 
   <script defer src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
@@ -24,8 +24,8 @@
     };
   </script>
   <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
-  <script src="./config.js?v=19"></script>
-  <script defer src="./app.js?v=19"></script>
+  <script src="./config.js?v=20"></script>
+  <script defer src="./app.js?v=20"></script>
 </head>
 <body>
   <div class="ambient" id="ambientGlow" aria-hidden="true"></div>
@@ -150,34 +150,52 @@
   <div class="backdrop" id="backdrop"></div>
 
   <aside class="drawer" id="drawer" aria-label="Menú lateral">
-    <div class="drawer-head">
-      <div class="drawer-brand">J.A.R.V.I.S.</div>
+    <div class="drawer-head drawer-head-clean">
+      <div class="drawer-identity">
+        <picture class="drawer-reactor" aria-hidden="true">
+          <source srcset="./jarvis-reactor-v18.webp" type="image/webp" />
+          <img src="./jarvis-reactor-v18.png" alt="" />
+        </picture>
+        <div><div class="drawer-brand">J.A.R.V.I.S.</div><div class="drawer-subtitle">Clean Agent Edition</div></div>
+      </div>
       <button class="icon-btn" id="closeDrawerBtn" aria-label="Cerrar menú"><svg viewBox="0 0 24 24"><path d="m18.3 5.7-1.4-1.4L12 9.2 7.1 4.3 5.7 5.7l4.9 4.9-4.9 4.9 1.4 1.4 4.9-4.9 4.9 4.9 1.4-1.4-4.9-4.9z"/></svg></button>
     </div>
-    <div class="drawer-body">
-      <button class="new-chat" id="newChatBtn"><svg viewBox="0 0 24 24" width="19" height="19" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></svg>Nueva conversación</button>
-      <div class="drawer-search-wrap">
+    <div class="drawer-body drawer-body-clean">
+      <button class="new-chat clean-new-chat" id="newChatBtn"><svg viewBox="0 0 24 24" width="19" height="19" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></svg><span>Nueva conversación</span><kbd>⌘⇧N</kbd></button>
+      <div class="drawer-search-wrap clean-search">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 3a6.5 6.5 0 1 0 3.98 11.64L19.85 21 21 19.85l-6.36-6.37A6.5 6.5 0 0 0 9.5 3zm0 2a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9z"/></svg>
         <input id="drawerSearch" type="search" placeholder="Buscar conversaciones..." autocomplete="off" />
       </div>
-      <div class="section-label section-label-row"><span>Proyectos</span><button id="quickNewProjectBtn" type="button" title="Nuevo proyecto">+</button></div>
-      <div class="project-list" id="projectList"></div>
-      <div class="section-label">Conversaciones</div>
-      <div class="chat-list" id="chatList"></div>
+      <div class="drawer-section compact-project-section">
+        <div class="section-label section-label-row"><span>Proyecto activo</span><button id="quickNewProjectBtn" type="button" title="Nuevo proyecto">+</button></div>
+        <div class="project-list compact-project-list" id="projectList"></div>
+      </div>
+      <div class="drawer-section chat-history-section">
+        <div class="section-label section-label-row"><span>Conversaciones</span><button type="button" data-panel="search" title="Buscar conocimiento">⌕</button></div>
+        <div class="chat-list grouped-chat-list" id="chatList"></div>
+      </div>
     </div>
-    <div class="drawer-foot">
-      <button class="drawer-link" data-panel="projects"><span>◆</span> Proyectos</button>
-      <button class="drawer-link" data-panel="library"><span>▣</span> Biblioteca</button>
-      <button class="drawer-link" data-panel="memory"><span>◈</span> Memoria</button>
-      <button class="drawer-link" data-panel="reminders"><span>◷</span> Recordatorios</button>
-      <button class="drawer-link" data-panel="jobs"><span>◉</span> Trabajos autónomos</button>
-      <button class="drawer-link" data-panel="search"><span>⌕</span> Buscar conocimiento</button>
-      <button class="drawer-link" data-panel="export"><span>⇩</span> Exportar conversación</button>
-      <button class="drawer-link" data-panel="providers"><span>◫</span> Proveedores IA</button>
-      <button class="drawer-link" data-panel="resilience"><span>⟲</span> Resiliencia y rutas</button>
-      <button class="drawer-link" data-panel="performance"><span>⌁</span> Rendimiento y estabilidad</button>
-      <button class="drawer-link" data-panel="system"><span>⚙</span> Estado y ajustes</button>
-    </div>
+    <nav class="drawer-foot drawer-foot-clean" aria-label="Navegación principal">
+      <div class="drawer-primary-nav">
+        <button class="drawer-link primary-nav-link" data-panel="projects"><span>◆</span><span>Proyectos</span></button>
+        <button class="drawer-link primary-nav-link" data-panel="library"><span>▣</span><span>Biblioteca</span></button>
+        <button class="drawer-link primary-nav-link agent-nav-link" data-panel="agent"><span>✦</span><span>Agente de trabajo</span><small>Nuevo</small></button>
+        <button class="drawer-link primary-nav-link" data-panel="jobs"><span>◉</span><span>Trabajos</span></button>
+        <button class="drawer-link primary-nav-link" data-panel="system"><span>⚙</span><span>Ajustes</span></button>
+      </div>
+      <button class="more-tools-toggle" id="moreToolsBtn" type="button" aria-expanded="false">
+        <span>Más herramientas</span><svg viewBox="0 0 24 24"><path d="m7 10 5 5 5-5z"/></svg>
+      </button>
+      <div class="more-tools-group" id="moreToolsGroup" hidden>
+        <button class="drawer-link" data-panel="memory"><span>◈</span> Memoria</button>
+        <button class="drawer-link" data-panel="reminders"><span>◷</span> Recordatorios</button>
+        <button class="drawer-link" data-panel="search"><span>⌕</span> Buscar conocimiento</button>
+        <button class="drawer-link" data-panel="export"><span>⇩</span> Exportar conversación</button>
+        <button class="drawer-link" data-panel="providers"><span>◫</span> Proveedores IA</button>
+        <button class="drawer-link" data-panel="resilience"><span>⟲</span> Resiliencia y rutas</button>
+        <button class="drawer-link" data-panel="performance"><span>⌁</span> Rendimiento</button>
+      </div>
+    </nav>
   </aside>
 
   <section class="sheet" id="sheet" aria-modal="true" role="dialog" aria-labelledby="sheetTitle">

@@ -36,6 +36,8 @@
     projectList: $('#projectList'),
     drawerSearch: $('#drawerSearch'),
     chatList: $('#chatList'),
+    moreToolsBtn: $('#moreToolsBtn'),
+    moreToolsGroup: $('#moreToolsGroup'),
     sheet: $('#sheet'),
     sheetTitle: $('#sheetTitle'),
     sheetBody: $('#sheetBody'),
@@ -56,7 +58,8 @@
     apiBase: 'jarvis_pages_api_base_v11',
     mode: 'jarvis_nexus_mode',
     projects: 'jarvis_nexus_projects_v11',
-    activeProject: 'jarvis_nexus_active_project_v11'
+    activeProject: 'jarvis_nexus_active_project_v11',
+    moreToolsOpen: 'jarvis_clean_more_tools_v20'
   };
 
   const MODES = [
@@ -90,7 +93,8 @@
     lastPrompt: '',
     wakeRetrying: false,
     commandIndex: 0,
-    commandItems: []
+    commandItems: [],
+    moreToolsOpen: localStorage.getItem(STORE.moreToolsOpen) === '1'
   };
 
   localStorage.setItem(STORE.client, state.clientId);
@@ -98,7 +102,7 @@
   document.addEventListener('DOMContentLoaded', init);
 
   function init() {
-    document.title = window.JARVIS_CONFIG?.APP_NAME || 'J.A.R.V.I.S. — Multi-Provider Core';
+    document.title = window.JARVIS_CONFIG?.APP_NAME || 'J.A.R.V.I.S. — Clean Agent Edition';
     ensureProjects();
     migrateChatsToProjects();
     if (!state.activeChatId || !state.chats[state.activeChatId] || currentChat()?.projectId !== state.activeProjectId) {
@@ -112,6 +116,7 @@
     renderProjectList();
     renderChatList();
     renderActiveChat();
+    syncMoreTools();
     restoreDraft();
     autoResize();
     bindHeroFx();
@@ -134,8 +139,9 @@
     els.newChatBtn.addEventListener('click', () => createChat(true));
     els.quickNewProjectBtn?.addEventListener('click', createProjectFlow);
     els.drawerSearch?.addEventListener('input', () => renderChatList(els.drawerSearch.value));
+    els.moreToolsBtn?.addEventListener('click', toggleMoreTools);
 
-    $$('.drawer-link').forEach(btn => btn.addEventListener('click', () => openPanel(btn.dataset.panel)));
+    $$('[data-panel]').forEach(btn => btn.addEventListener('click', () => openPanel(btn.dataset.panel)));
     $$('.suggestion').forEach(btn => btn.addEventListener('click', () => {
       els.userInput.value = btn.dataset.prompt || '';
       saveDraft();
@@ -173,6 +179,19 @@
     window.addEventListener('keydown', handleGlobalKeys);
   }
 
+
+  function syncMoreTools() {
+    if (!els.moreToolsBtn || !els.moreToolsGroup) return;
+    els.moreToolsBtn.setAttribute('aria-expanded', state.moreToolsOpen ? 'true' : 'false');
+    els.moreToolsBtn.classList.toggle('open', state.moreToolsOpen);
+    els.moreToolsGroup.hidden = !state.moreToolsOpen;
+  }
+
+  function toggleMoreTools() {
+    state.moreToolsOpen = !state.moreToolsOpen;
+    localStorage.setItem(STORE.moreToolsOpen, state.moreToolsOpen ? '1' : '0');
+    syncMoreTools();
+  }
 
   function activateCoreVisual() {
     const node = els.reactorFx;
@@ -378,6 +397,7 @@
     renderProjectList();
     renderChatList();
     renderActiveChat();
+    syncMoreTools();
     restoreDraft();
     closeOverlays();
     toast(`Proyecto activo: ${currentProject()?.name || 'General'}`);
@@ -434,6 +454,7 @@
     renderProjectList();
     renderChatList();
     renderActiveChat();
+    syncMoreTools();
     restoreDraft();
     closeOverlays();
     if (showToast) toast('Nueva conversación creada');
@@ -459,6 +480,7 @@
     saveChats();
     renderChatList();
     renderActiveChat();
+    syncMoreTools();
     restoreDraft();
     closeOverlays();
   }
@@ -471,23 +493,32 @@
       .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
     els.chatList.innerHTML = '';
     if (!items.length) {
-      els.chatList.innerHTML = '<div class="history-empty"><span>◇</span><strong>Sin conversaciones</strong><small>Inicia un chat nuevo dentro de este proyecto.</small></div>';
+      els.chatList.innerHTML = '<div class="history-empty clean-history-empty"><span>◇</span><strong>Sin conversaciones</strong><small>Comienza una conversación nueva en este proyecto.</small></div>';
       return;
     }
+    let currentGroup = '';
     items.forEach(chat => {
+      const group = chatDateGroup(chat.updatedAt);
+      if (group !== currentGroup) {
+        currentGroup = group;
+        const label = document.createElement('div');
+        label.className = 'chat-date-group';
+        label.textContent = group;
+        els.chatList.appendChild(label);
+      }
       const btn = document.createElement('button');
-      const preview = chatPreview(chat);
       const count = chat.messages?.length || 0;
-      btn.className = `chat-item${chat.id === state.activeChatId ? ' active' : ''}`;
+      btn.className = `chat-item compact-chat-item${chat.id === state.activeChatId ? ' active' : ''}`;
       btn.title = chat.title || 'Conversación';
       btn.innerHTML = `
-        <span class="chat-item-icon" aria-hidden="true">${chat.id === state.activeChatId ? '◆' : '◇'}</span>
+        <span class="chat-item-status" aria-hidden="true"></span>
         <span class="chat-item-copy">
           <span class="chat-item-title">${escapeHtml(chat.title || 'Conversación')}</span>
-          <span class="chat-item-preview">${escapeHtml(preview)}</span>
           <span class="chat-item-meta">${count} ${count === 1 ? 'mensaje' : 'mensajes'} · ${escapeHtml(formatRelativeTime(chat.updatedAt))}</span>
         </span>
-        <span class="chat-item-delete" role="button" aria-label="Eliminar conversación" title="Eliminar">×</span>`;
+        <span class="chat-item-actions">
+          <span class="chat-item-delete" role="button" aria-label="Eliminar conversación" title="Eliminar">×</span>
+        </span>`;
       btn.addEventListener('click', event => {
         if (event.target.closest('.chat-item-delete')) {
           event.stopPropagation();
@@ -496,12 +527,23 @@
         }
         switchChat(chat.id);
       });
-      btn.addEventListener('contextmenu', e => {
-        e.preventDefault();
-        if (confirm('¿Eliminar esta conversación?')) removeChat(chat.id);
-      });
       els.chatList.appendChild(btn);
     });
+  }
+
+  function chatDateGroup(value) {
+    const time = Number(value || 0);
+    if (!time) return 'Recientes';
+    const now = new Date();
+    const date = new Date(time);
+    const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const startDate = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+    const days = Math.floor((startToday - startDate) / 86400000);
+    if (days <= 0) return 'Hoy';
+    if (days === 1) return 'Ayer';
+    if (days < 7) return 'Esta semana';
+    if (days < 31) return 'Este mes';
+    return 'Anteriores';
   }
 
   function chatPreview(chat) {
@@ -992,6 +1034,7 @@
       { id:'new-project', icon:'◆', title:'Nuevo proyecto', sub:'Crear un espacio de trabajo independiente', run:createProjectFlow },
       { id:'projects', icon:'◇', title:'Administrar proyectos', sub:'Cambiar, crear o eliminar proyectos', run:() => openPanel('projects') },
       { id:'library', icon:'▣', title:'Abrir biblioteca', sub:'Documentos del proyecto activo', run:() => openPanel('library') },
+      { id:'agent', icon:'✦', title:'Agente de trabajo', sub:'Planificar, ejecutar y verificar un objetivo', run:() => openPanel('agent') },
       { id:'memory', icon:'◈', title:'Abrir memoria', sub:'Recuerdos y preferencias del proyecto', run:() => openPanel('memory') },
       { id:'jobs', icon:'◉', title:'Trabajos autónomos', sub:'Crear y revisar tareas en segundo plano', run:() => openPanel('jobs') },
       { id:'search', icon:'⌕', title:'Buscar conocimiento', sub:'Memoria, documentos y conversaciones', run:() => openPanel('search') },
@@ -1098,6 +1141,7 @@
     els.sheetBody.innerHTML = '<div class="empty-note">Cargando...</div>';
     try {
       if (panel === 'overview') await renderOverview();
+      else if (panel === 'agent') await renderAgentCenter();
       else if (panel === 'projects') await renderProjects();
       else if (panel === 'library') await renderLibrary();
       else if (panel === 'memory') await renderMemory();
@@ -1115,7 +1159,7 @@
   }
 
   function panelTitle(panel) {
-    return ({ overview: 'Centro JARVIS', projects: 'Proyectos', library: 'Biblioteca', memory: 'Memoria', reminders: 'Recordatorios', jobs: 'Trabajos autónomos', search: 'Buscar conocimiento', export: 'Exportar conversación', providers: 'Proveedores IA', resilience: 'Resiliencia y rutas', performance: 'Rendimiento y estabilidad', system: 'Estado y ajustes' })[panel] || 'JARVIS';
+    return ({ overview: 'Centro JARVIS', agent: 'Agente de trabajo', projects: 'Proyectos', library: 'Biblioteca', memory: 'Memoria', reminders: 'Recordatorios', jobs: 'Trabajos autónomos', search: 'Buscar conocimiento', export: 'Exportar conversación', providers: 'Proveedores IA', resilience: 'Resiliencia y rutas', performance: 'Rendimiento y estabilidad', system: 'Estado y ajustes' })[panel] || 'JARVIS';
   }
 
   async function renderOverview() {
@@ -1129,7 +1173,7 @@
         ${panelCard('Trabajos', `${c.jobs || 0} registrados`, 'jobs')}
       </div>
       <div style="height:14px"></div>
-      <div class="panel-card"><h3>Estado del núcleo</h3><p>Versión ${escapeHtml(data.version || '19.0.0')} · ${escapeHtml(data.status || 'operativo')} · ${Number(data.usage_24h?.total_tokens || 0).toLocaleString()} tokens en 24 horas.</p></div>`;
+      <div class="panel-card"><h3>Estado del núcleo</h3><p>Versión ${escapeHtml(data.version || '20.0.0')} · ${escapeHtml(data.status || 'operativo')} · ${Number(data.usage_24h?.total_tokens || 0).toLocaleString()} tokens en 24 horas.</p></div>`;
     $$('[data-open-panel]', els.sheetBody).forEach(btn => btn.addEventListener('click', () => openPanel(btn.dataset.openPanel)));
   }
 
@@ -1191,6 +1235,84 @@
       deleteProject(btn.dataset.deleteProject);
       renderProjects();
     }));
+  }
+
+  async function renderAgentCenter() {
+    const jobsData = await apiFetch(`/api/jobs?session_id=${encodeURIComponent(backendConversationId())}&limit=4`).catch(() => ({ jobs: [] }));
+    const recentJobs = jobsData.jobs || [];
+    els.sheetBody.innerHTML = `
+      <section class="agent-hero">
+        <div class="agent-hero-mark">✦</div>
+        <div><span class="agent-kicker">Execution Core</span><h3>Convierta un objetivo en trabajo verificable</h3><p>JARVIS analiza la solicitud, crea un plan, selecciona rutas, ejecuta en segundo plano y conserva checkpoints.</p></div>
+      </section>
+      <div class="agent-template-row" aria-label="Plantillas de trabajo">
+        <button data-agent-template="Investiga este tema con fuentes recientes, compara hallazgos y entrega un informe verificable.">Investigación</button>
+        <button data-agent-template="Analiza estos datos o documentos, identifica hallazgos, riesgos y conclusiones accionables.">Análisis</button>
+        <button data-agent-template="Resuelve este problema técnico, propone una solución, verifica riesgos y entrega pasos ejecutables.">Programación</button>
+        <button data-agent-template="Convierte este objetivo en un plan priorizado con responsables, dependencias y criterios de éxito.">Planificación</button>
+      </div>
+      <div class="agent-builder">
+        <label class="agent-field"><span>Nombre del trabajo</span><input class="text-input" id="agentTitleInput" placeholder="Ej. Informe económico semanal" /></label>
+        <label class="agent-field agent-field-wide"><span>Objetivo</span><textarea class="text-input agent-objective" id="agentObjectiveInput" placeholder="Describe claramente qué debe lograr JARVIS..."></textarea></label>
+        <div class="agent-controls">
+          <button class="soft-btn" id="previewAgentPlanBtn">Analizar plan</button>
+          <button class="primary-btn" id="executeAgentBtn">Iniciar trabajo</button>
+        </div>
+      </div>
+      <div class="agent-plan-output" id="agentPlanOutput"><div class="agent-plan-empty">El plan aparecerá aquí antes de ejecutarse.</div></div>
+      <div class="agent-recent-head"><div><strong>Actividad reciente</strong><small>Trabajos guardados en el proyecto activo</small></div><button class="soft-btn" id="openAllJobsBtn">Ver todos</button></div>
+      <div class="agent-recent-list">${recentJobs.length ? recentJobs.map(agentRecentJobCard).join('') : '<div class="empty-note">No hay trabajos recientes.</div>'}</div>`;
+
+    $$('[data-agent-template]', els.sheetBody).forEach(btn => btn.addEventListener('click', () => {
+      $('#agentObjectiveInput', els.sheetBody).value = btn.dataset.agentTemplate || '';
+      $('#agentObjectiveInput', els.sheetBody).focus();
+    }));
+    $('#openAllJobsBtn', els.sheetBody)?.addEventListener('click', () => openPanel('jobs'));
+    $$('[data-open-job-list]', els.sheetBody).forEach(btn => btn.addEventListener('click', () => openPanel('jobs')));
+    $('#previewAgentPlanBtn', els.sheetBody)?.addEventListener('click', async () => {
+      const objective = $('#agentObjectiveInput', els.sheetBody).value.trim();
+      if (!objective) return toast('Describe primero el objetivo');
+      const output = $('#agentPlanOutput', els.sheetBody);
+      output.innerHTML = '<div class="agent-plan-empty">Analizando objetivo...</div>';
+      try {
+        const plan = await apiFetch('/api/agents/plan', { method:'POST', body:JSON.stringify({ session_id:backendConversationId(), objective, mode:state.mode, project_name:currentProject()?.name || 'General' }) });
+        output.innerHTML = renderAgentPlan(plan);
+      } catch (error) {
+        output.innerHTML = `<div class="agent-plan-error">${escapeHtml(error.message || 'No se pudo crear el plan.')}</div>`;
+      }
+    });
+    $('#executeAgentBtn', els.sheetBody)?.addEventListener('click', async () => {
+      const objective = $('#agentObjectiveInput', els.sheetBody).value.trim();
+      const title = $('#agentTitleInput', els.sheetBody).value.trim() || objective.slice(0,72) || 'Trabajo JARVIS';
+      if (!objective) return toast('Describe primero el objetivo');
+      const button = $('#executeAgentBtn', els.sheetBody);
+      button.disabled = true;
+      button.textContent = 'Enviando...';
+      try {
+        await apiFetch('/api/agents/execute', { method:'POST', body:JSON.stringify({ session_id:backendConversationId(), title, objective, mode:state.mode, project_name:currentProject()?.name || 'General' }) });
+        toast('El agente comenzó a trabajar');
+        setTimeout(() => openPanel('jobs'), 450);
+      } catch (error) {
+        toast(error.message || 'No se pudo iniciar el trabajo');
+        button.disabled = false;
+        button.textContent = 'Iniciar trabajo';
+      }
+    });
+  }
+
+  function renderAgentPlan(data) {
+    const steps = data.steps || [];
+    const budget = data.budget || {};
+    return `<div class="agent-plan-card">
+      <div class="agent-plan-summary"><div><span>Ruta detectada</span><strong>${escapeHtml(data.intent_label || data.intent || 'General')}</strong></div><div><span>Complejidad</span><strong>${escapeHtml(data.complexity || 'media')}</strong></div><div><span>Tiempo objetivo</span><strong>${escapeHtml(String(budget.target_minutes || 5))} min</strong></div></div>
+      <ol class="agent-plan-steps">${steps.map((step,index) => `<li><span>${index + 1}</span><div><strong>${escapeHtml(step.label || step.name || `Paso ${index+1}`)}</strong><small>${escapeHtml(step.detail || 'Se guardará un checkpoint al completar este paso.')}</small></div></li>`).join('')}</ol>
+      <div class="agent-plan-foot"><span>Máx. ${Number(budget.max_attempts || 5)} intentos controlados</span><span>${data.requires_approval ? 'Requiere aprobación para acciones sensibles' : 'Ejecución segura automática'}</span></div>
+    </div>`;
+  }
+
+  function agentRecentJobCard(job) {
+    const progress = Math.max(0, Math.min(100, Number(job.progress || 0)));
+    return `<button class="agent-recent-job" data-open-job-list="1"><span class="agent-job-orb status-${escapeHtml(job.status || 'queued')}"></span><span><strong>${escapeHtml(job.title || 'Trabajo')}</strong><small>${escapeHtml(job.checkpoint || job.status || 'En cola')}</small></span><em>${progress}%</em></button>`;
   }
 
   async function renderJobs() {

@@ -1,8 +1,8 @@
-const CACHE_NAME = 'jarvis-multiprovider-core-v19';
+const CACHE_NAME = 'jarvis-multiprovider-core-v20';
 const CORE = [
   './', './index.html', './404.html',
-  './static/styles.css?v=19', './static/app.js?v=19', './static/config.js?v=19',
-  './static/manifest.webmanifest?v=19', './static/favicon-32.png',
+  './static/styles.css?v=20', './static/app.js?v=20', './static/config.js?v=20',
+  './static/manifest.webmanifest?v=20', './static/favicon-32.png',
   './static/jarvis-reactor-v18.webp', './static/jarvis-reactor-v18.png'
 ];
 self.addEventListener('install', event => {

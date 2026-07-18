@@ -461,7 +461,7 @@ async def lifespan(_: FastAPI):
     _start_maintenance()
     recovered = _recover_interrupted_jobs()
     logger.info(
-        "J.A.R.V.I.S. Multi-Provider Core v19 iniciado | public_mode=%s | redis=%s | jobs_recuperados=%s",
+        "J.A.R.V.I.S. Clean Agent Edition v20 iniciado | public_mode=%s | redis=%s | jobs_recuperados=%s",
         PUBLIC_MODE,
         bool(REDIS_URL),
         recovered,
@@ -470,12 +470,12 @@ async def lifespan(_: FastAPI):
     _stop_maintenance()
     JOB_EXECUTOR.shutdown(wait=False, cancel_futures=True)
     provider_gateway.close()
-    logger.info("J.A.R.V.I.S. Multi-Provider Core v19 detenido")
+    logger.info("J.A.R.V.I.S. Clean Agent Edition v20 detenido")
 
 
 app = FastAPI(
-    title="J.A.R.V.I.S. Multi-Provider Core",
-    version="19.0.0",
+    title="J.A.R.V.I.S. Clean Agent Edition",
+    version="20.0.0",
     lifespan=lifespan,
 )
 
@@ -544,7 +544,7 @@ async def request_observability(request: Request, call_next):
         elif response.status_code >= 400:
             status = "cancelled" if response.status_code == 499 else "error"
         response.headers["X-Request-ID"] = request_id
-        response.headers["X-JARVIS-Version"] = "19.0.0"
+        response.headers["X-JARVIS-Version"] = "20.0.0"
         if request.url.path.startswith("/api/"):
             response.headers.setdefault("Cache-Control", "no-store")
         return response
@@ -611,6 +611,17 @@ class JobInput(BaseModel):
     session_id: str
     title: str
     prompt: str
+
+
+class AgentPlanInput(BaseModel):
+    session_id: str
+    objective: str = Field(min_length=1, max_length=30000)
+    mode: str = "auto"
+    project_name: str = "General"
+
+
+class AgentExecuteInput(AgentPlanInput):
+    title: str = "Trabajo JARVIS"
 
 
 class SettingsInput(BaseModel):
@@ -2407,6 +2418,67 @@ def build_execution_plan(intent: str, prompt: str) -> List[Dict[str, str]]:
     ])]
 
 
+def build_agent_plan(objective: str, mode: str = "auto", project_name: str = "General") -> Dict[str, Any]:
+    prompt = (objective or "").strip()
+    intent_info = classify_intent(prompt)
+    intent = str(intent_info.get("intent") or "general")
+    base_steps = build_execution_plan(intent, prompt)
+    detail_map = {
+        "understand": "Delimitar objetivo, restricciones, formato y criterio de éxito.",
+        "search": "Consultar varias rutas y conservar resultados parciales útiles.",
+        "compare": "Eliminar duplicados y contrastar datos o fuentes.",
+        "synthesize": "Organizar hallazgos en una respuesta clara y accionable.",
+        "verify": "Comprobar cobertura, coherencia, cálculos y formato solicitado.",
+        "parse": "Interpretar variables, unidades y operación requerida.",
+        "solve": "Aplicar la herramienta exacta o el proveedor más adecuado.",
+        "retrieve": "Recuperar archivos, recuerdos y contexto del proyecto.",
+        "analyze": "Extraer hallazgos, riesgos y relaciones relevantes.",
+        "inspect": "Identificar causa raíz, archivos implicados y restricciones técnicas.",
+        "decompose": "Dividir el objetivo en subtareas independientes y verificables.",
+        "prioritize": "Ordenar dependencias, riesgos y secuencia de ejecución.",
+        "resolve": "Resolver por la mejor ruta disponible y activar alternativas si falla.",
+    }
+    steps = [
+        {**step, "detail": detail_map.get(step.get("name", ""), "Guardar un checkpoint y verificar el resultado del paso.")}
+        for step in base_steps
+    ]
+    word_count = len(prompt.split())
+    complexity = "alta" if word_count > 80 or intent in {"research", "documents", "code"} else "media" if word_count > 25 else "baja"
+    target_minutes = 12 if complexity == "alta" else 6 if complexity == "media" else 3
+    if mode == "fast":
+        target_minutes = max(2, target_minutes // 2)
+    intent_labels = {
+        "research": "Investigación",
+        "documents": "Documentos",
+        "math": "Matemática",
+        "code": "Programación",
+        "planning": "Planificación",
+        "writing": "Redacción",
+        "memory": "Memoria",
+        "reminders": "Recordatorios",
+        "general": "Resolución general",
+    }
+    sensitive_terms = ("enviar", "eliminar", "publicar", "comprar", "pagar", "borrar", "correo", "base de datos")
+    requires_approval = any(term in prompt.lower() for term in sensitive_terms)
+    return {
+        "status": "planned",
+        "intent": intent,
+        "intent_label": intent_labels.get(intent, intent.replace("_", " ").title()),
+        "confidence": float(intent_info.get("confidence") or 0.5),
+        "complexity": complexity,
+        "project_name": (project_name or "General")[:120],
+        "mode": mode or "auto",
+        "steps": steps,
+        "requires_approval": requires_approval,
+        "budget": {
+            "target_minutes": target_minutes,
+            "max_attempts": JOB_MAX_ATTEMPTS,
+            "max_provider_routes": max(1, min(PROVIDER_MAX_ATTEMPTS, 8)),
+            "checkpoint_each_step": True,
+        },
+    }
+
+
 def resolution_start(session_id: str, prompt: str, intent: str) -> str:
     run_id = str(uuid.uuid4())
     with db_connection() as conn:
@@ -3020,7 +3092,7 @@ async def consultar_jarvis_stream(data: ChatInput, request: Request):
             "Probando alternativas y caché",
             "Verificando el resultado",
         ]
-        yield json.dumps({"type": "progress", "stage": states[0], "version": "19.0.0"}, ensure_ascii=False) + "\n"
+        yield json.dumps({"type": "progress", "stage": states[0], "version": "20.0.0"}, ensure_ascii=False) + "\n"
         task = asyncio.create_task(consultar_jarvis(data, request))
         index = 1
         while not task.done():
@@ -3464,6 +3536,48 @@ def get_whatsapp_status():
     return dict(row) if row else {"connected": 0, "qr_raw": None, "updated_at": 0}
 
 
+@app.post("/api/agents/plan")
+def agent_plan(data: AgentPlanInput, request: Request):
+    enforce_request_guard(request)
+    plan = build_agent_plan(data.objective, mode=data.mode, project_name=data.project_name)
+    log_activity(safe_session_id(data.session_id), "agent", "Plan de agente creado", plan.get("intent_label", "General"), "planned")
+    return plan
+
+
+@app.post("/api/agents/execute")
+def agent_execute(data: AgentExecuteInput, request: Request):
+    enforce_request_guard(request)
+    plan = build_agent_plan(data.objective, mode=data.mode, project_name=data.project_name)
+    step_text = "\n".join(f"{index + 1}. {step.get('label', step.get('name', 'Paso'))}" for index, step in enumerate(plan["steps"]))
+    prompt = (
+        f"OBJETIVO DEL AGENTE:\n{data.objective.strip()}\n\n"
+        f"PROYECTO: {data.project_name or 'General'}\n"
+        f"MODO: {data.mode or 'auto'}\n\n"
+        f"PLAN APROBADO:\n{step_text}\n\n"
+        "Ejecuta el objetivo por etapas. Conserva resultados parciales, verifica la respuesta final y explica cualquier limitación real sin exponer errores técnicos internos."
+    )
+    result = create_job(JobInput(session_id=data.session_id, title=data.title, prompt=prompt), request)
+    result["plan"] = plan
+    result["agent_mode"] = True
+    return result
+
+
+@app.get("/api/agents/status")
+def agent_status(session_id: str):
+    sid = safe_session_id(session_id)
+    with db_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT status, COUNT(*) AS total
+            FROM jobs WHERE session_id = ? GROUP BY status
+            """,
+            (sid,),
+        ).fetchall()
+    counts = {row["status"]: row["total"] for row in rows}
+    active = sum(counts.get(status, 0) for status in ("queued", "running", "retrying", "paused", "cancelling"))
+    return {"status": "ok", "active": active, "counts": counts, "version": "20.0.0"}
+
+
 @app.post("/api/jobs")
 def create_job(data: JobInput, request: Request):
     enforce_request_guard(request)
@@ -3677,7 +3791,7 @@ def resilience_status(session_id: str = "default_session", limit: int = 12):
         ).fetchone()
     return {
         "status": "ok",
-        "version": "19.0.0",
+        "version": "20.0.0",
         "providers": resilience_provider_status(),
         "limits": {
             "max_resolution_attempts": MAX_RESOLUTION_ATTEMPTS,
@@ -3712,14 +3826,14 @@ def dashboard(session_id: str):
             (sid, since),
         ).fetchone()
     return {
-        "version": "19.0.0",
+        "version": "20.0.0",
         "status": "online" if provider_gateway.configured_names() else "local_only",
         "counts": counts,
         "usage_24h": dict(usage),
         "models": provider_status(),
         "providers": resilience_provider_status(),
         "database": {"ok": True, "path": DB_FILE},
-        "features": ["execution_planner", "resolution_trace", "local_verifier", "autonomous_agent", "smart_intent_router", "multi_provider_router", "tool_calling", "persistent_background_jobs", "pause_resume_cancel", "multi_level_cache", "singleflight_deduplication", "circuit_breakers", "context_compaction", "performance_telemetry", "deep_health_checks", "project_workspaces", "memory", "documents", "reminders", "knowledge_search", "self_check"],
+        "features": ["execution_planner", "resolution_trace", "local_verifier", "autonomous_agent", "smart_intent_router", "multi_provider_router", "agent_execution_core", "agent_plan_preview", "agent_checkpoints", "human_approval_signals", "tool_calling", "persistent_background_jobs", "pause_resume_cancel", "multi_level_cache", "singleflight_deduplication", "circuit_breakers", "context_compaction", "performance_telemetry", "deep_health_checks", "project_workspaces", "memory", "documents", "reminders", "knowledge_search", "self_check"],
         "runtime": runtime.snapshot(),
         "jobs_health": _job_health(),
     }
@@ -3753,14 +3867,14 @@ def self_check():
     checks["disk"] = disk_status(str(BASE_DIR))
     checks["context_compaction"] = {"ok": len(compact_messages([{"role":"system","content":"a"*1000},{"role":"user","content":"b"*20000}], 5000, 4)) >= 1}
     overall = all(item.get("ok") for key, item in checks.items() if key not in {"groq_key", "secondary_provider", "redis"})
-    return {"status": "ok" if overall else "degraded", "checks": checks, "version": "19.0.0"}
+    return {"status": "ok" if overall else "degraded", "checks": checks, "version": "20.0.0"}
 
 
 @app.get("/api/capabilities")
 def capabilities():
     return {
         "autonomous_core": True,
-        "version": "19.0.0",
+        "version": "20.0.0",
         "groq_configured": bool(GROQ_API_KEY),
         "model": GROQ_MODEL,
         "model_chain": MODEL_CHAIN,
@@ -3780,6 +3894,13 @@ def capabilities():
             "provider_route_preview",
             "provider_usage_telemetry",
             "execution_planner",
+            "agent_plan_preview",
+            "agent_execution_core",
+            "agent_checkpoints",
+            "agent_pause_resume_cancel",
+            "human_approval_signals",
+            "clean_navigation_ui",
+            "grouped_chat_history",
             "resolution_trace",
             "result_verification",
             "similar_cache_recovery",
@@ -3867,7 +3988,7 @@ def providers_status():
     snapshot = provider_gateway.snapshot()
     return {
         "status": "ok",
-        "version": "19.0.0",
+        "version": "20.0.0",
         "gateway": snapshot,
         "configured_count": len(snapshot.get("configured", [])),
         "local_routes_available": True,
@@ -3899,7 +4020,7 @@ def providers_route_preview(data: ProviderRouteInput):
 def health_live():
     return {
         "status": "ok",
-        "version": "19.0.0",
+        "version": "20.0.0",
         "uptime_seconds": runtime.metrics.summary().get("uptime_seconds", 0),
         "timestamp": time.time(),
     }
@@ -3914,7 +4035,7 @@ def health_ready():
         status_code=200 if ready else 503,
         content={
             "status": "ready" if ready else "not_ready",
-            "version": "19.0.0",
+            "version": "20.0.0",
             "database": database,
             "static_ui": {"ok": static_ok},
             "generative_route_configured": bool(
@@ -3944,7 +4065,7 @@ def health_deep():
     status = "ok" if required_ok and not open_circuits else ("degraded" if required_ok else "failed")
     payload = {
         "status": status,
-        "version": "19.0.0",
+        "version": "20.0.0",
         "database": database,
         "redis": redis,
         "disk": disk,
@@ -3991,7 +4112,7 @@ def performance(session_id: str = "default_session", hours: int = 24):
         ).fetchall()
     return {
         "status": "ok",
-        "version": "19.0.0",
+        "version": "20.0.0",
         "hours": hours,
         "runtime": runtime.snapshot(),
         "jobs": _job_health(),
@@ -4035,7 +4156,7 @@ def health():
         "models": provider_status(),
         "providers": resilience_provider_status(),
         "public_mode": PUBLIC_MODE,
-        "version": "19.0.0",
+        "version": "20.0.0",
         "runtime": {
             "cache": runtime.snapshot().get("cache", {}),
             "singleflight": runtime.singleflight.stats(),
@@ -4049,7 +4170,7 @@ def health():
 def system_info():
     return {
         "status": "JARVIS Core Interface Active",
-        "version": "19.0.0",
+        "version": "20.0.0",
         "groq_configured": bool(GROQ_API_KEY),
         "model": GROQ_MODEL,
         "model_chain": MODEL_CHAIN,
