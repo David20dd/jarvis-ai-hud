@@ -5736,7 +5736,7 @@ body.drawer-visible {
 }
 
 /* =========================================================
-   v29 — Final Experience: smarter chats, live agents, mobile
+   v30 — Response Recovery: smarter chats, live agents, mobile
    ========================================================= */
 :root {
   --mobile-dock-h: 68px;
@@ -6130,5 +6130,56 @@ body.is-generating .status-pill {
   .composer-foot {
     min-height: 30px;
     padding-bottom: 6px;
+  }
+}
+
+/* =========================================================
+   v30 — response recovery and visible failure states
+   ========================================================= */
+.boot-failure .composer-zone { opacity: .55; pointer-events: none; }
+.boot-error-code {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  color: #ffb5bd;
+  background: rgba(255, 90, 108, .08);
+  border: 1px solid rgba(255, 120, 135, .14);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .78rem;
+  overflow-wrap: anywhere;
+}
+
+.message.message-enter {
+  opacity: 0;
+  transform: translateY(9px) scale(.99);
+}
+.message.message-enter.message-enter-active {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition: opacity .34s ease, transform .34s cubic-bezier(.2,.8,.2,1);
+}
+
+.tool-chip.recovery-chip,
+.message .tool-chip.recovered-chip {
+  color: #ffdda0;
+  border-color: rgba(255, 205, 105, .18);
+  background: rgba(255, 205, 105, .07);
+}
+
+.status-pill.warning {
+  border-color: rgba(255, 205, 105, .18);
+}
+.status-pill.warning .status-dot {
+  background: #ffcc69;
+  box-shadow: 0 0 12px rgba(255, 204, 105, .35);
+}
+
+.composer.is-generating {
+  border-color: rgba(88, 221, 247, .22);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .message.message-enter.message-enter-active {
+    transition: none !important;
   }
 }

@@ -4,6 +4,27 @@
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
+  function createSafeStorage() {
+    const memory = new Map();
+    try {
+      const testKey = '__jarvis_storage_test__';
+      window.storage.setItem(testKey, '1');
+      window.storage.removeItem(testKey);
+      return window.localStorage;
+    } catch {
+      return {
+        getItem(key) { return memory.has(String(key)) ? memory.get(String(key)) : null; },
+        setItem(key, value) { memory.set(String(key), String(value)); },
+        removeItem(key) { memory.delete(String(key)); },
+        clear() { memory.clear(); },
+        key(index) { return [...memory.keys()][Number(index)] || null; },
+        get length() { return memory.size; }
+      };
+    }
+  }
+
+  const storage = createSafeStorage();
+
   const els = {
     ambient: $('#ambientGlow'),
     statusPill: $('#statusPill'),
@@ -69,9 +90,9 @@
     mode: 'jarvis_nexus_mode',
     projects: 'jarvis_nexus_projects_v11',
     activeProject: 'jarvis_nexus_active_project_v11',
-    moreToolsOpen: 'jarvis_clean_more_tools_v29',
-    focusMode: 'jarvis_focus_mode_v29',
-    chatFilter: 'jarvis_chat_filter_v29'
+    moreToolsOpen: 'jarvis_clean_more_tools_v30',
+    focusMode: 'jarvis_focus_mode_v30',
+    chatFilter: 'jarvis_chat_filter_v30'
   };
 
   const MODES = [
@@ -90,35 +111,52 @@
     : normalizeBase(location.origin || CONFIGURED_API_BASE);
 
   const state = {
-    clientId: localStorage.getItem(STORE.client) || uid('client'),
+    clientId: storage.getItem(STORE.client) || uid('client'),
     chats: loadJSON(STORE.chats, {}),
     projects: loadJSON(STORE.projects, {}),
-    activeProjectId: localStorage.getItem(STORE.activeProject) || '',
-    activeChatId: localStorage.getItem(STORE.active) || '',
+    activeProjectId: storage.getItem(STORE.activeProject) || '',
+    activeChatId: storage.getItem(STORE.active) || '',
     files: [],
     isGenerating: false,
     abortController: null,
     thinkingTimer: null,
     statusTimers: [],
     followOutput: true,
-    mode: localStorage.getItem(STORE.mode) || 'auto',
-    apiBase: normalizeBase(localStorage.getItem(STORE.apiBase) || DEFAULT_API_BASE),
+    mode: storage.getItem(STORE.mode) || 'auto',
+    apiBase: normalizeBase(storage.getItem(STORE.apiBase) || DEFAULT_API_BASE),
     lastPrompt: '',
     wakeRetrying: false,
     commandIndex: 0,
     commandItems: [],
-    moreToolsOpen: localStorage.getItem(STORE.moreToolsOpen) === '1',
-    focusMode: localStorage.getItem(STORE.focusMode) === '1',
-    chatFilter: localStorage.getItem(STORE.chatFilter) || 'all',
+    moreToolsOpen: storage.getItem(STORE.moreToolsOpen) === '1',
+    focusMode: storage.getItem(STORE.focusMode) === '1',
+    chatFilter: storage.getItem(STORE.chatFilter) || 'all',
     chatSwitchTimer: null
   };
 
-  localStorage.setItem(STORE.client, state.clientId);
+  storage.setItem(STORE.client, state.clientId);
 
-  document.addEventListener('DOMContentLoaded', init);
+  document.addEventListener('DOMContentLoaded', () => {
+    try {
+      init();
+    } catch (error) {
+      console.error('JARVIS no pudo iniciar:', error);
+      showBootFailure(error);
+    }
+  });
+
+  function showBootFailure(error) {
+    document.body.classList.add('app-ready', 'boot-failure');
+    const messages = document.querySelector('#messages');
+    const welcome = document.querySelector('#welcome');
+    if (welcome) welcome.style.display = 'none';
+    if (messages) {
+      messages.innerHTML = `<div class="message assistant"><div class="assistant-row"><div class="assistant-body"><div class="assistant-content"><h3>JARVIS necesita reiniciar la interfaz</h3><p>Se detectó un problema local del navegador. Recarga la página con <strong>Ctrl + F5</strong>. Tus conversaciones guardadas no se eliminan.</p><p class="boot-error-code">${escapeHtml(error?.message || 'Error de inicio')}</p></div></div></div></div>`;
+    }
+  }
 
   function init() {
-    document.title = window.JARVIS_CONFIG?.APP_NAME || 'J.A.R.V.I.S. — Cinematic Intelligence v29';
+    document.title = window.JARVIS_CONFIG?.APP_NAME || 'J.A.R.V.I.S. — Reliable Intelligence v30';
     ensureProjects();
     migrateChatsToProjects();
     if (!state.activeChatId || !state.chats[state.activeChatId] || currentChat()?.projectId !== state.activeProjectId) {
@@ -147,22 +185,22 @@
   }
 
   function bindEvents() {
-    els.menuBtn.addEventListener('click', openDrawer);
-    els.closeDrawerBtn.addEventListener('click', closeOverlays);
-    els.backdrop.addEventListener('click', closeOverlays);
-    els.workspaceBtn.addEventListener('click', () => openPanel('overview'));
+    els.menuBtn?.addEventListener('click', openDrawer);
+    els.closeDrawerBtn?.addEventListener('click', closeOverlays);
+    els.backdrop?.addEventListener('click', closeOverlays);
+    els.workspaceBtn?.addEventListener('click', () => openPanel('overview'));
     els.projectBtn?.addEventListener('click', () => openPanel('projects'));
     els.commandBtn?.addEventListener('click', openCommandPalette);
-    els.closeSheetBtn.addEventListener('click', closeOverlays);
-    els.newChatTopBtn.addEventListener('click', () => createChat(true));
-    els.newChatBtn.addEventListener('click', () => createChat(true));
+    els.closeSheetBtn?.addEventListener('click', closeOverlays);
+    els.newChatTopBtn?.addEventListener('click', () => createChat(true));
+    els.newChatBtn?.addEventListener('click', () => createChat(true));
     els.quickNewProjectBtn?.addEventListener('click', createProjectFlow);
     els.drawerSearch?.addEventListener('input', () => renderChatList(els.drawerSearch.value));
     els.chatFilterBar?.addEventListener('click', event => {
       const button = event.target.closest('[data-chat-filter]');
       if (!button) return;
       state.chatFilter = button.dataset.chatFilter || 'all';
-      localStorage.setItem(STORE.chatFilter, state.chatFilter);
+      storage.setItem(STORE.chatFilter, state.chatFilter);
       renderChatFilters();
       renderChatList(els.drawerSearch?.value || '');
     });
@@ -181,27 +219,27 @@
       els.userInput.focus();
     }));
 
-    els.attachBtn.addEventListener('click', () => els.fileInput.click());
-    els.fileInput.addEventListener('change', handleFiles);
-    els.sendBtn.addEventListener('click', handlePrimaryAction);
-    els.micBtn.addEventListener('click', startVoiceInput);
-    els.modeBtn.addEventListener('click', cycleMode);
-    els.jumpBtn.addEventListener('click', () => scrollToBottom(true));
-    els.statusPill.addEventListener('click', () => openPanel('system'));
+    els.attachBtn?.addEventListener('click', () => els.fileInput.click());
+    els.fileInput?.addEventListener('change', handleFiles);
+    els.sendBtn?.addEventListener('click', handlePrimaryAction);
+    els.micBtn?.addEventListener('click', startVoiceInput);
+    els.modeBtn?.addEventListener('click', cycleMode);
+    els.jumpBtn?.addEventListener('click', () => scrollToBottom(true));
+    els.statusPill?.addEventListener('click', () => openPanel('system'));
     els.reactorFx?.addEventListener('click', activateCoreVisual);
     els.commandPalette?.addEventListener('click', event => { if (event.target === els.commandPalette) closeCommandPalette(); });
     els.commandInput?.addEventListener('input', renderCommandPalette);
     els.commandInput?.addEventListener('keydown', handleCommandKeydown);
 
-    els.userInput.addEventListener('input', () => { autoResize(); saveDraft(); });
-    els.userInput.addEventListener('keydown', e => {
+    els.userInput?.addEventListener('input', () => { autoResize(); saveDraft(); });
+    els.userInput?.addEventListener('keydown', e => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         handlePrimaryAction();
       }
     });
 
-    els.chatScroll.addEventListener('scroll', () => {
+    els.chatScroll?.addEventListener('scroll', () => {
       state.followOutput = isNearBottom();
       els.jumpBtn.classList.toggle('show', !state.followOutput && state.isGenerating);
     });
@@ -235,7 +273,7 @@
 
   function toggleMoreTools() {
     state.moreToolsOpen = !state.moreToolsOpen;
-    localStorage.setItem(STORE.moreToolsOpen, state.moreToolsOpen ? '1' : '0');
+    storage.setItem(STORE.moreToolsOpen, state.moreToolsOpen ? '1' : '0');
     syncMoreTools();
   }
 
@@ -252,7 +290,7 @@
 
   function toggleFocusMode() {
     state.focusMode = !state.focusMode;
-    localStorage.setItem(STORE.focusMode, state.focusMode ? '1' : '0');
+    storage.setItem(STORE.focusMode, state.focusMode ? '1' : '0');
     syncFocusMode();
     closeOverlays();
     toast(state.focusMode ? 'Modo enfoque activado' : 'Modo enfoque desactivado');
@@ -356,13 +394,13 @@
   }
 
   function loadJSON(key, fallback) {
-    try { return JSON.parse(localStorage.getItem(key) || '') || fallback; }
+    try { return JSON.parse(storage.getItem(key) || '') || fallback; }
     catch { return fallback; }
   }
 
   function saveProjects() {
-    localStorage.setItem(STORE.projects, JSON.stringify(state.projects));
-    localStorage.setItem(STORE.activeProject, state.activeProjectId);
+    storage.setItem(STORE.projects, JSON.stringify(state.projects));
+    storage.setItem(STORE.activeProject, state.activeProjectId);
   }
 
   function ensureProjects() {
@@ -486,7 +524,7 @@
     Object.keys(state.chats).forEach(chatId => {
       if (state.chats[chatId].projectId === projectId) {
         delete state.chats[chatId];
-        localStorage.removeItem(STORE.draftPrefix + chatId);
+        storage.removeItem(STORE.draftPrefix + chatId);
       }
     });
     delete state.projects[projectId];
@@ -502,8 +540,8 @@
   }
 
   function saveChats() {
-    localStorage.setItem(STORE.chats, JSON.stringify(state.chats));
-    localStorage.setItem(STORE.active, state.activeChatId);
+    storage.setItem(STORE.chats, JSON.stringify(state.chats));
+    storage.setItem(STORE.active, state.activeChatId);
   }
 
   function currentChat() {
@@ -536,7 +574,7 @@
 
   function removeChat(id) {
     delete state.chats[id];
-    localStorage.removeItem(STORE.draftPrefix + id);
+    storage.removeItem(STORE.draftPrefix + id);
     const remaining = Object.values(state.chats).filter(chat => chat.projectId === state.activeProjectId);
     state.activeChatId = remaining[0]?.id || '';
     if (!state.activeChatId) createChat(false);
@@ -710,16 +748,16 @@
   }
 
   function saveDraft() {
-    localStorage.setItem(STORE.draftPrefix + state.activeChatId, els.userInput.value);
+    storage.setItem(STORE.draftPrefix + state.activeChatId, els.userInput.value);
   }
 
   function restoreDraft() {
-    els.userInput.value = localStorage.getItem(STORE.draftPrefix + state.activeChatId) || '';
+    els.userInput.value = storage.getItem(STORE.draftPrefix + state.activeChatId) || '';
     autoResize();
   }
 
   function clearDraft() {
-    localStorage.removeItem(STORE.draftPrefix + state.activeChatId);
+    storage.removeItem(STORE.draftPrefix + state.activeChatId);
   }
 
   function autoResize() {
@@ -730,7 +768,7 @@
   function cycleMode() {
     const index = MODES.findIndex(m => m.id === state.mode);
     state.mode = MODES[(index + 1) % MODES.length].id;
-    localStorage.setItem(STORE.mode, state.mode);
+    storage.setItem(STORE.mode, state.mode);
     renderMode();
   }
 
@@ -785,34 +823,37 @@
   }
 
   async function sendMessage(textOverride = '') {
-    const text = (textOverride || els.userInput.value).trim();
+    const text = (textOverride || els.userInput?.value || '').trim();
     if ((!text && !state.files.length) || state.isGenerating) return;
 
-    state.isGenerating = true;
-    state.lastPrompt = text;
-    state.followOutput = true;
-    state.abortController = new AbortController();
-    setSendState(true);
-    dismissWelcome(true);
-
-    const fileNames = state.files.map(f => f.file_name);
-    appendUser(text || 'Analiza los archivos adjuntos.', true, fileNames);
-    persistMessage({ role: 'user', content: text || 'Analiza los archivos adjuntos.', files: fileNames });
-
-    const outgoingFiles = state.files.map(({ file_name, file_b64 }) => ({ file_name, file_b64 }));
-    state.files = [];
-    renderAttachments();
-    els.userInput.value = '';
-    clearDraft();
-    autoResize();
-
-    scheduleThinking();
-    startStatusSequence();
-
+    let userPersisted = false;
+    let displayPrompt = text || 'Analiza los archivos adjuntos.';
     try {
+      state.isGenerating = true;
+      state.lastPrompt = text;
+      state.followOutput = true;
+      state.abortController = new AbortController();
+      setSendState(true);
+      dismissWelcome(true);
+
+      const fileNames = state.files.map(file => file.file_name);
+      appendUser(displayPrompt, true, fileNames);
+      persistMessage({ role: 'user', content: displayPrompt, files: fileNames });
+      userPersisted = true;
+
+      const outgoingFiles = state.files.map(({ file_name, file_b64 }) => ({ file_name, file_b64 }));
+      state.files = [];
+      renderAttachments();
+      if (els.userInput) els.userInput.value = '';
+      clearDraft();
+      autoResize();
+
+      scheduleThinking();
+      startStatusSequence();
+
       const clientRequestId = createRequestId();
       const payload = {
-        message: text || 'Analiza los archivos adjuntos.',
+        message: displayPrompt,
         session_id: backendConversationId(),
         project_name: currentProject()?.name || 'General',
         mode: state.mode,
@@ -822,47 +863,113 @@
       const data = await requestJarvis(payload, state.abortController.signal);
 
       hideThinking();
-      const reply = data.reply || data.response || 'El núcleo no devolvió contenido.';
+      const reply = String(data?.reply || data?.response || '').trim() || buildLocalRecoveryReply(displayPrompt, new Error('El núcleo no devolvió contenido.'));
       const meta = {
-        tools: data.tools || [],
-        model: data.model || '',
-        cached: Boolean(data.cached),
-        degraded: Boolean(data.degraded),
-        mode: data.mode || '',
-        intent: data.intent || '',
-        route: data.route || '',
-        latencyMs: Number(data.latency_ms || 0),
-        requestId: data.request_id || '',
-        verified: Boolean(data.verified),
-        verification: data.verification || {},
-        resolutionAttempts: Number(data.resolution_attempts || 0),
-        resolutionTrace: Array.isArray(data.resolution_trace) ? data.resolution_trace : [],
-        recoveredErrors: Array.isArray(data.recovered_errors) ? data.recovered_errors : [],
-        recovered: Boolean(data.recovered),
-        similarCache: Boolean(data.similar_cache),
-        idempotentReplay: Boolean(data.idempotent_replay)
+        tools: data?.tools || [],
+        model: data?.model || '',
+        cached: Boolean(data?.cached),
+        degraded: Boolean(data?.degraded),
+        mode: data?.mode || '',
+        intent: data?.intent || '',
+        route: data?.route || '',
+        latencyMs: Number(data?.latency_ms || 0),
+        requestId: data?.request_id || '',
+        verified: Boolean(data?.verified),
+        verification: data?.verification || {},
+        resolutionAttempts: Number(data?.resolution_attempts || 0),
+        resolutionTrace: Array.isArray(data?.resolution_trace) ? data.resolution_trace : [],
+        recoveredErrors: Array.isArray(data?.recovered_errors) ? data.recovered_errors : [],
+        recovered: Boolean(data?.recovered),
+        similarCache: Boolean(data?.similar_cache),
+        idempotentReplay: Boolean(data?.idempotent_replay)
       };
       appendAssistant(reply, meta, true, true);
       persistMessage({ role: 'assistant', content: reply, meta });
       updateChatTitle(text);
+      setStatus('Núcleo operativo', 'online');
     } catch (error) {
       hideThinking();
-      if (error.name === 'AbortError') {
+      if (error?.name === 'AbortError') {
         const partial = 'Generación detenida por el usuario.';
-        appendAssistant(partial, { cancelled: true }, true, false);
-        persistMessage({ role: 'assistant', content: partial, meta: { cancelled: true } });
+        appendAssistant(partial, { cancelled: true, route: 'cancelled' }, true, false);
+        persistMessage({ role: 'assistant', content: partial, meta: { cancelled: true, route: 'cancelled' } });
       } else {
-        const friendly = `⚠️ **No fue posible completar la solicitud.**\n\n${error.message || 'Error desconocido.'}\n\nJARVIS conservará las funciones locales y puedes volver a intentarlo.`;
-        appendAssistant(friendly, { error: true }, true, false);
-        persistMessage({ role: 'assistant', content: friendly, meta: { error: true } });
+        console.error('Fallo de respuesta JARVIS:', error);
+        const recovery = buildLocalRecoveryReply(displayPrompt, error);
+        appendAssistant(recovery, { degraded: true, recovered: true, route: 'local_recovery', error: true }, true, false);
+        persistMessage({ role: 'assistant', content: recovery, meta: { degraded: true, recovered: true, route: 'local_recovery', error: true } });
+        if (!userPersisted) {
+          try { persistMessage({ role: 'user', content: displayPrompt, files: [] }); } catch {}
+        }
+        updateChatTitle(text);
+        setStatus('Modo de recuperación local', 'warning');
       }
     } finally {
       state.isGenerating = false;
       state.abortController = null;
       setSendState(false);
       clearStatusSequence();
-      els.ambient.classList.remove('active');
-      els.jumpBtn.classList.remove('show');
+      els.ambient?.classList.remove('active');
+      els.jumpBtn?.classList.remove('show');
+    }
+  }
+
+  function buildLocalRecoveryReply(prompt, error) {
+    const value = String(prompt || '').trim();
+    const lower = value.toLowerCase();
+    const reason = humanConnectionError(error);
+
+    if (/^(hola|buenas|buenos días|buenas tardes|buenas noches|hey|hello)[!. ]*$/i.test(value)) {
+      return `Hola. Estoy operativo en modo de recuperación local. La conexión con el núcleo remoto no respondió correctamente, pero la interfaz ya no quedará en silencio.
+
+Estado detectado: **${reason}**.`;
+    }
+    if (/^(gracias|muchas gracias|thanks)[!. ]*$/i.test(value)) {
+      return 'Con gusto. JARVIS permanece disponible y volverá a utilizar el núcleo remoto automáticamente cuando la conexión esté operativa.';
+    }
+    const calculation = tryLocalCalculation(value);
+    if (calculation !== null) {
+      return `Resultado local: **${calculation}**
+
+El cálculo se resolvió directamente en el navegador porque el núcleo remoto no respondió. Estado: **${reason}**.`;
+    }
+    if (lower.includes('quién eres') || lower.includes('que eres') || lower.includes('qué eres')) {
+      return `Soy J.A.R.V.I.S., una interfaz de asistencia con herramientas, memoria, documentos y proveedores de IA. Ahora estoy usando la ruta de recuperación local porque el backend no respondió.
+
+Estado detectado: **${reason}**.`;
+    }
+    return `⚠️ **JARVIS recibió tu mensaje, pero el núcleo remoto no respondió a tiempo.**
+
+No se perdió tu solicitud. La interfaz activó la recuperación local para evitar quedarse silenciosa.
+
+**Diagnóstico:** ${reason}.
+
+Revisa que Render esté en estado **Live**, que \`static/config.js\` apunte a la URL correcta y que al menos un proveedor tenga una clave y un modelo válidos. Después pulsa **Regenerar**.`;
+  }
+
+  function humanConnectionError(error) {
+    const message = String(error?.message || '').trim();
+    if (/timeout|tiempo de espera/i.test(message)) return 'tiempo de espera agotado';
+    if (/failed to fetch|network|conexión|fetch/i.test(message)) return 'backend inaccesible o bloqueado por red/CORS';
+    if (/respuesta.*no válida|contenido no válido/i.test(message)) return 'respuesta inválida del servidor';
+    return message.slice(0, 160) || 'conexión no disponible';
+  }
+
+  function tryLocalCalculation(input) {
+    const normalized = String(input || '')
+      .replace(/,/g, '.')
+      .replace(/×/g, '*')
+      .replace(/÷/g, '/')
+      .replace(/\^/g, '**')
+      .trim();
+    const candidate = normalized.match(/^[\d\s()+\-*/.%*]+$/) ? normalized : null;
+    if (!candidate || candidate.length > 120) return null;
+    try {
+      const result = Function(`"use strict"; return (${candidate});`)();
+      if (typeof result !== 'number' || !Number.isFinite(result)) return null;
+      return Number.isInteger(result) ? String(result) : String(Number(result.toFixed(10)));
+    } catch {
+      return null;
     }
   }
 
@@ -965,6 +1072,13 @@
     state.statusTimers = [];
   }
 
+  function animateMessageEntry(node) {
+    if (!node || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    node.classList.add('message-enter');
+    requestAnimationFrame(() => node.classList.add('message-enter-active'));
+    setTimeout(() => node.classList.remove('message-enter', 'message-enter-active'), 460);
+  }
+
   function appendUser(text, scroll = true, files = []) {
     const row = document.createElement('div');
     row.className = 'message user';
@@ -981,8 +1095,8 @@
     const avatarWrap = document.createElement('div');
     avatarWrap.className = 'assistant-avatar';
     const avatar = document.createElement('img');
-    const reactorRef = document.querySelector('.brand-reactor')?.getAttribute('src') || './static/jarvis-reactor-v29.svg';
-    avatar.src = new URL(reactorRef, document.baseURI).href;
+    const reactorRef = document.querySelector('.brand-reactor')?.getAttribute('src') || './static/jarvis-reactor-v30.svg';
+    avatar.src = resolveAssetUrl(reactorRef);
     avatar.alt = 'JARVIS';
     avatarWrap.appendChild(avatar);
 
@@ -1034,8 +1148,19 @@
     const actions = buildActions(text, meta);
     body.appendChild(actions);
     requestAnimationFrame(() => actions.classList.add('visible'));
+    animateMessageEntry(row);
 
     if (scroll) followBottom();
+  }
+
+  function resolveAssetUrl(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    try {
+      return new URL(raw, document.baseURI || window.location.href).href;
+    } catch {
+      return raw;
+    }
   }
 
   function formatModelName(model) {
@@ -1351,7 +1476,7 @@
         ${panelCard('Trabajos', `${c.jobs || 0} registrados`, 'jobs')}
       </div>
       <div style="height:14px"></div>
-      <div class="panel-card"><h3>Estado del núcleo</h3><p>Versión ${escapeHtml(data.version || '25.0.0')} · ${escapeHtml(data.status || 'operativo')} · ${Number(data.usage_24h?.total_tokens || 0).toLocaleString()} tokens en 24 horas.</p></div>`;
+      <div class="panel-card"><h3>Estado del núcleo</h3><p>Versión ${escapeHtml(data.version || '30.0.0')} · ${escapeHtml(data.status || 'operativo')} · ${Number(data.usage_24h?.total_tokens || 0).toLocaleString()} tokens en 24 horas.</p></div>`;
     $$('[data-open-panel]', els.sheetBody).forEach(btn => btn.addEventListener('click', () => openPanel(btn.dataset.openPanel)));
   }
 
@@ -1424,7 +1549,7 @@
         <div class="professional-hero-glow" aria-hidden="true"></div>
         <div class="professional-hero-mark">✦</div>
         <div class="professional-hero-copy">
-          <span class="professional-kicker">Cinematic Intelligence v29</span>
+          <span class="professional-kicker">Reliable Intelligence v30</span>
           <h3>Convierta objetivos en misiones verificables</h3>
           <p>JARVIS forma un equipo de especialistas, define hitos, utiliza varios proveedores y audita el resultado antes de entregarlo.</p>
         </div>
@@ -1979,7 +2104,7 @@
       </div>`;
     $('#saveApiBase', els.sheetBody)?.addEventListener('click', () => {
       state.apiBase = normalizeBase($('#apiBaseInput', els.sheetBody).value);
-      if (state.apiBase) localStorage.setItem(STORE.apiBase, state.apiBase); else localStorage.removeItem(STORE.apiBase);
+      if (state.apiBase) storage.setItem(STORE.apiBase, state.apiBase); else storage.removeItem(STORE.apiBase);
       toast('Conexión guardada');
       checkHealth({ wake:true });
     });
@@ -2019,7 +2144,7 @@
     };
 
     try {
-      const response = await resilientFetch(apiUrl('/api/jarvis/stream'), requestOptions, { attempts: 3, retryStatuses: [429, 502, 503, 504] });
+      const response = await resilientFetch(apiUrl('/api/jarvis/stream'), requestOptions, { attempts: 2, timeoutMs: 45000, retryStatuses: [408, 425, 429, 500, 502, 503, 504] });
       const contentType = response.headers.get('content-type') || '';
       if (!response.ok || !response.body || !contentType.includes('application/x-ndjson')) {
         return parseStandardResponse(response);
@@ -2060,7 +2185,7 @@
     } catch (error) {
       if (error.name === 'AbortError') throw error;
       setStatus('Recuperando resultado por ruta compatible', 'warning');
-      const fallback = await resilientFetch(apiUrl('/api/jarvis'), requestOptions, { attempts: 3, retryStatuses: [429, 502, 503, 504] });
+      const fallback = await resilientFetch(apiUrl('/api/jarvis'), requestOptions, { attempts: 2, timeoutMs: 50000, retryStatuses: [408, 425, 429, 500, 502, 503, 504] });
       return parseStandardResponse(fallback);
     }
   }
@@ -2072,22 +2197,41 @@
 
   async function resilientFetch(url, options = {}, config = {}) {
     const attempts = Math.max(1, Number(config.attempts || 3));
-    const retryStatuses = new Set(config.retryStatuses || [429, 502, 503, 504]);
+    const timeoutMs = Math.max(4000, Number(config.timeoutMs || 30000));
+    const retryStatuses = new Set(config.retryStatuses || [408, 425, 429, 500, 502, 503, 504]);
+    const outerSignal = options.signal;
     let lastError = null;
+
     for (let index = 0; index < attempts; index++) {
+      const controller = new AbortController();
+      let timedOut = false;
+      const forwardAbort = () => controller.abort(outerSignal?.reason);
+      if (outerSignal) {
+        if (outerSignal.aborted) throw new DOMException('Solicitud cancelada', 'AbortError');
+        outerSignal.addEventListener('abort', forwardAbort, { once: true });
+      }
+      const timer = setTimeout(() => {
+        timedOut = true;
+        controller.abort('timeout');
+      }, timeoutMs);
+
       try {
-        const response = await fetch(url, options);
+        const response = await fetch(url, { ...options, signal: controller.signal });
+        clearTimeout(timer);
+        outerSignal?.removeEventListener('abort', forwardAbort);
         if (!retryStatuses.has(response.status) || index === attempts - 1) return response;
         const retryHeader = Number(response.headers.get('Retry-After') || 0);
-        const waitMs = retryHeader > 0 ? retryHeader * 1000 : Math.min(900 * (2 ** index), 6000);
+        const waitMs = retryHeader > 0 ? retryHeader * 1000 : Math.min(850 * (2 ** index), 5000);
         setStatus(`Recuperando conexión · intento ${index + 2}`, 'warning');
         await sleep(waitMs);
       } catch (error) {
-        if (error.name === 'AbortError') throw error;
-        lastError = error;
-        if (index === attempts - 1) throw error;
+        clearTimeout(timer);
+        outerSignal?.removeEventListener('abort', forwardAbort);
+        if (outerSignal?.aborted) throw new DOMException('Solicitud cancelada', 'AbortError');
+        lastError = timedOut ? new Error(`Tiempo de espera agotado después de ${Math.round(timeoutMs / 1000)} segundos.`) : error;
+        if (index === attempts - 1) throw lastError;
         setStatus(`Buscando ruta alternativa · intento ${index + 2}`, 'warning');
-        await sleep(Math.min(900 * (2 ** index), 6000));
+        await sleep(Math.min(850 * (2 ** index), 5000));
       }
     }
     throw lastError || new Error('No fue posible establecer conexión.');

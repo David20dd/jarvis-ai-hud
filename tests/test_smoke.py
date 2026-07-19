@@ -58,8 +58,8 @@ def test_http_health_and_headers():
     with TestClient(main.app) as client:
         live = client.get("/api/health/live")
         assert live.status_code == 200
-        assert live.json()["version"] == "25.0.0"
-        assert live.headers["x-jarvis-version"] == "25.0.0"
+        assert live.json()["version"] == "30.0.0"
+        assert live.headers["x-jarvis-version"] == "30.0.0"
         assert live.headers.get("x-request-id")
 
         ready = client.get("/api/health/ready")
@@ -76,7 +76,7 @@ def test_http_health_and_headers():
 def test_capabilities_include_stability_features():
     with TestClient(main.app) as client:
         data = client.get("/api/capabilities").json()
-        assert data["version"] == "25.0.0"
+        assert data["version"] == "30.0.0"
         features = set(data["features"])
         assert "singleflight_deduplication" in features
         assert "persistent_job_recovery" in features
@@ -183,7 +183,7 @@ def test_provider_gateway_endpoints_and_route_preview():
         status = client.get("/api/providers")
         assert status.status_code == 200
         payload = status.json()
-        assert payload["version"] == "25.0.0"
+        assert payload["version"] == "30.0.0"
         assert "gateway" in payload
         assert "providers" in payload["gateway"]
 
@@ -322,7 +322,7 @@ def test_agent_plan_and_execute_endpoints():
 
         status = client.get('/api/agents/status', params={'session_id': 'agent-test'})
         assert status.status_code == 200
-        assert status.json()['version'] == '25.0.0'
+        assert status.json()['version'] == '30.0.0'
 
 
 
@@ -382,7 +382,7 @@ def test_provider_capability_matrix_and_tool_registry_endpoints():
         capabilities = client.get('/api/providers/capabilities')
         assert capabilities.status_code == 200
         payload = capabilities.json()
-        assert payload['version'] == '25.0.0'
+        assert payload['version'] == '30.0.0'
         assert 'anthropic' in payload['matrix']['providers']
         assert 'coding' in payload['matrix']['task_preferences']
         assert payload['quality_council']['max_providers'] >= 2
@@ -390,7 +390,7 @@ def test_provider_capability_matrix_and_tool_registry_endpoints():
         registry = client.get('/api/tools/registry')
         assert registry.status_code == 200
         tools = registry.json()
-        assert tools['version'] == '25.0.0'
+        assert tools['version'] == '30.0.0'
         assert tools['available_count'] >= 10
         names = {item['name'] for item in tools['tools'] if item['available']}
         assert {'web_search', 'calculator', 'document_search'}.issubset(names)
@@ -450,7 +450,7 @@ def test_professional_endpoints_expose_profiles_and_plan():
         profiles = client.get("/api/professional/profiles")
         assert profiles.status_code == 200
         payload = profiles.json()
-        assert payload["version"] == "25.0.0"
+        assert payload["version"] == "30.0.0"
         assert len(payload["profiles"]) >= 6
 
         planned = client.post(
@@ -472,7 +472,7 @@ def test_professional_endpoints_expose_profiles_and_plan():
 
         status = client.get("/api/professional/status?session_id=professional-test")
         assert status.status_code == 200
-        assert status.json()["version"] == "25.0.0"
+        assert status.json()["version"] == "30.0.0"
 
 
 def test_responsive_frontend_contract():
@@ -482,13 +482,13 @@ def test_responsive_frontend_contract():
     manifest = json.loads(Path("static/manifest.webmanifest").read_text(encoding="utf-8"))
 
     assert "viewport-fit=cover" in html
-    assert "?v=29" in html
-    assert "jarvis-reactor-v29.svg" in html
+    assert "?v=30" in html
+    assert "jarvis-reactor-v30.svg" in html
     assert "focusModeBtn" in html
     assert "mobileDock" in html
     assert "chatFilterBar" in html
     assert "thinking-stage-rail" in html
-    assert "jarvis_chat_filter_v29" in js
+    assert "jarvis_chat_filter_v30" in js
     assert "--app-height" in css
     assert "@media (max-width: 680px)" in css
     assert "@media (max-height: 540px)" in css
@@ -496,3 +496,19 @@ def test_responsive_frontend_contract():
     assert "visualViewport" in js
     assert "updateViewportMetrics" in js
     assert manifest["display"] == "standalone"
+
+
+def test_frontend_response_recovery_contract():
+    js = Path("static/app.js").read_text(encoding="utf-8")
+    assert "function animateMessageEntry" in js
+    assert "function buildLocalRecoveryReply" in js
+    assert "function createSafeStorage" in js
+    assert "timeoutMs: 45000" in js
+    assert "local_recovery" in js
+    assert "showBootFailure" in js
+
+
+def test_stream_has_emergency_final_fallback():
+    source = Path("main.py").read_text(encoding="utf-8")
+    assert "stream_emergency_fallback" in source
+    assert '"version": "30.0.0"' in source
