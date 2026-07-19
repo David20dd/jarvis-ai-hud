@@ -1,7 +1,7 @@
-const CACHE_NAME = 'jarvis-multiprovider-core-static-v21';
+const CACHE_NAME = 'jarvis-professional-core-static-v22';
 const CORE = [
-  './', './index.html', './styles.css?v=21', './app.js?v=21', './config.js?v=21',
-  './manifest.webmanifest?v=21', './favicon-32.png', './jarvis-reactor-v18.webp', './jarvis-reactor-v18.png'
+  './', './index.html', './styles.css?v=22', './app.js?v=22', './config.js?v=22',
+  './manifest.webmanifest?v=22', './favicon-32.png', './jarvis-reactor-v18.webp', './jarvis-reactor-v18.png'
 ];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(CORE)).then(() => self.skipWaiting()));

@@ -59,7 +59,7 @@
     mode: 'jarvis_nexus_mode',
     projects: 'jarvis_nexus_projects_v11',
     activeProject: 'jarvis_nexus_active_project_v11',
-    moreToolsOpen: 'jarvis_clean_more_tools_v21'
+    moreToolsOpen: 'jarvis_clean_more_tools_v22'
   };
 
   const MODES = [
@@ -67,7 +67,8 @@
     { id: 'fast', label: 'Modo rápido' },
     { id: 'research', label: 'Modo investigación' },
     { id: 'math', label: 'Modo matemática' },
-    { id: 'writing', label: 'Modo escritura' }
+    { id: 'writing', label: 'Modo escritura' },
+    { id: 'professional', label: 'Modo profesional' }
   ];
 
   const IS_GITHUB_PAGES = location.hostname.endsWith('.github.io');
@@ -102,7 +103,7 @@
   document.addEventListener('DOMContentLoaded', init);
 
   function init() {
-    document.title = window.JARVIS_CONFIG?.APP_NAME || 'J.A.R.V.I.S. — Unified Intelligence Core';
+    document.title = window.JARVIS_CONFIG?.APP_NAME || 'J.A.R.V.I.S. — Professional Intelligence Core';
     ensureProjects();
     migrateChatsToProjects();
     if (!state.activeChatId || !state.chats[state.activeChatId] || currentChat()?.projectId !== state.activeProjectId) {
@@ -1034,7 +1035,8 @@
       { id:'new-project', icon:'◆', title:'Nuevo proyecto', sub:'Crear un espacio de trabajo independiente', run:createProjectFlow },
       { id:'projects', icon:'◇', title:'Administrar proyectos', sub:'Cambiar, crear o eliminar proyectos', run:() => openPanel('projects') },
       { id:'library', icon:'▣', title:'Abrir biblioteca', sub:'Documentos del proyecto activo', run:() => openPanel('library') },
-      { id:'agent', icon:'✦', title:'Agente de trabajo', sub:'Planificar, ejecutar y verificar un objetivo', run:() => openPanel('agent') },
+      { id:'professional', icon:'✦', title:'Centro profesional', sub:'Equipo especializado, hitos y control de calidad', run:() => openPanel('professional') },
+      { id:'agent', icon:'◇', title:'Agente de trabajo', sub:'Planificación y ejecución básica por etapas', run:() => openPanel('agent') },
       { id:'memory', icon:'◈', title:'Abrir memoria', sub:'Recuerdos y preferencias del proyecto', run:() => openPanel('memory') },
       { id:'jobs', icon:'◉', title:'Trabajos autónomos', sub:'Crear y revisar tareas en segundo plano', run:() => openPanel('jobs') },
       { id:'search', icon:'⌕', title:'Buscar conocimiento', sub:'Memoria, documentos y conversaciones', run:() => openPanel('search') },
@@ -1141,6 +1143,7 @@
     els.sheetBody.innerHTML = '<div class="empty-note">Cargando...</div>';
     try {
       if (panel === 'overview') await renderOverview();
+      else if (panel === 'professional') await renderProfessionalCenter();
       else if (panel === 'agent') await renderAgentCenter();
       else if (panel === 'projects') await renderProjects();
       else if (panel === 'library') await renderLibrary();
@@ -1159,7 +1162,7 @@
   }
 
   function panelTitle(panel) {
-    return ({ overview: 'Centro JARVIS', agent: 'Agente de trabajo', projects: 'Proyectos', library: 'Biblioteca', memory: 'Memoria', reminders: 'Recordatorios', jobs: 'Trabajos autónomos', search: 'Buscar conocimiento', export: 'Exportar conversación', providers: 'Proveedores IA', resilience: 'Resiliencia y rutas', performance: 'Rendimiento y estabilidad', system: 'Estado y ajustes' })[panel] || 'JARVIS';
+    return ({ overview: 'Centro JARVIS', professional: 'Centro profesional', agent: 'Agente de trabajo', projects: 'Proyectos', library: 'Biblioteca', memory: 'Memoria', reminders: 'Recordatorios', jobs: 'Trabajos autónomos', search: 'Buscar conocimiento', export: 'Exportar conversación', providers: 'Proveedores IA', resilience: 'Resiliencia y rutas', performance: 'Rendimiento y estabilidad', system: 'Estado y ajustes' })[panel] || 'JARVIS';
   }
 
   async function renderOverview() {
@@ -1167,13 +1170,13 @@
     const c = data.counts || {};
     els.sheetBody.innerHTML = `
       <div class="panel-grid">
+        ${panelCard('Centro profesional', 'Equipo especializado y misiones verificables', 'professional')}
         ${panelCard('Proyecto activo', escapeHtml(currentProject()?.name || 'General'), 'projects')}
         ${panelCard('Biblioteca', `${c.documents || 0} documentos`, 'library')}
-        ${panelCard('Memoria', `${c.memories || 0} recuerdos`, 'memory')}
         ${panelCard('Trabajos', `${c.jobs || 0} registrados`, 'jobs')}
       </div>
       <div style="height:14px"></div>
-      <div class="panel-card"><h3>Estado del núcleo</h3><p>Versión ${escapeHtml(data.version || '21.0.0')} · ${escapeHtml(data.status || 'operativo')} · ${Number(data.usage_24h?.total_tokens || 0).toLocaleString()} tokens en 24 horas.</p></div>`;
+      <div class="panel-card"><h3>Estado del núcleo</h3><p>Versión ${escapeHtml(data.version || '22.0.0')} · ${escapeHtml(data.status || 'operativo')} · ${Number(data.usage_24h?.total_tokens || 0).toLocaleString()} tokens en 24 horas.</p></div>`;
     $$('[data-open-panel]', els.sheetBody).forEach(btn => btn.addEventListener('click', () => openPanel(btn.dataset.openPanel)));
   }
 
@@ -1235,6 +1238,107 @@
       deleteProject(btn.dataset.deleteProject);
       renderProjects();
     }));
+  }
+
+  async function renderProfessionalCenter() {
+    const status = await apiFetch(`/api/professional/status?session_id=${encodeURIComponent(backendConversationId())}`).catch(() => ({ active:0, counts:{}, profiles:8 }));
+    const profiles = await apiFetch('/api/professional/profiles').catch(() => ({ profiles:[] }));
+    const roleItems = profiles.profiles || [];
+    els.sheetBody.innerHTML = `
+      <section class="professional-hero">
+        <div class="professional-hero-glow" aria-hidden="true"></div>
+        <div class="professional-hero-mark">✦</div>
+        <div class="professional-hero-copy">
+          <span class="professional-kicker">Professional Intelligence Core</span>
+          <h3>Convierta objetivos en misiones verificables</h3>
+          <p>JARVIS forma un equipo de especialistas, define hitos, utiliza varios proveedores y audita el resultado antes de entregarlo.</p>
+        </div>
+        <div class="professional-status"><strong>${Number(status.active || 0)}</strong><span>misiones activas</span></div>
+      </section>
+      <div class="professional-role-strip" aria-label="Especialistas disponibles">
+        ${roleItems.slice(0,8).map(role => `<span title="${escapeHtml(role.mission || '')}"><b>${escapeHtml(role.icon || '◇')}</b>${escapeHtml(role.name || role.id || 'Especialista')}</span>`).join('')}
+      </div>
+      <div class="professional-template-grid">
+        <button data-professional-template="Investiga este tema con fuentes actuales, contrasta evidencia, analiza implicaciones y entrega un informe ejecutivo verificable."><span>⌕</span><strong>Investigación ejecutiva</strong><small>Fuentes, análisis, conclusiones y auditoría.</small></button>
+        <button data-professional-template="Analiza estos documentos o datos, identifica hallazgos, riesgos, inconsistencias y recomendaciones accionables."><span>▦</span><strong>Análisis profesional</strong><small>Documentos, datos, riesgos y decisiones.</small></button>
+        <button data-professional-template="Diseña e implementa una solución técnica completa, valida errores, ejecuta pruebas y entrega los archivos finales."><span>⌘</span><strong>Solución técnica</strong><small>Arquitectura, código, pruebas y entrega.</small></button>
+        <button data-professional-template="Convierte este objetivo en un plan ejecutable con hitos, dependencias, responsables, riesgos y criterios de éxito."><span>◆</span><strong>Dirección de proyecto</strong><small>Plan, prioridades, seguimiento y cierre.</small></button>
+      </div>
+      <div class="professional-builder">
+        <div class="professional-builder-head"><div><strong>Nueva misión</strong><small>Describe el resultado final; JARVIS organizará el trabajo.</small></div><span class="professional-secure">Verificación activa</span></div>
+        <div class="professional-form-grid">
+          <label><span>Nombre</span><input class="text-input" id="professionalTitleInput" placeholder="Ej. Informe económico trimestral" /></label>
+          <label><span>Nivel del equipo</span><select class="text-input" id="professionalTeamSize"><option value="4">Equipo equilibrado</option><option value="5" selected>Equipo completo</option><option value="6">Equipo ampliado</option></select></label>
+          <label class="professional-objective-field"><span>Objetivo y entregables</span><textarea class="text-input professional-objective" id="professionalObjectiveInput" placeholder="Explica qué debe lograr JARVIS, qué debe entregar y cualquier restricción importante..."></textarea></label>
+        </div>
+        <div class="professional-actions">
+          <button class="soft-btn" id="professionalPlanBtn">Diseñar misión</button>
+          <button class="primary-btn" id="professionalExecuteBtn">Iniciar misión</button>
+        </div>
+      </div>
+      <div class="professional-plan-output" id="professionalPlanOutput"><div class="professional-empty">El equipo, los hitos y los controles de calidad aparecerán aquí.</div></div>`;
+
+    $$('[data-professional-template]', els.sheetBody).forEach(button => button.addEventListener('click', () => {
+      const input = $('#professionalObjectiveInput', els.sheetBody);
+      input.value = button.dataset.professionalTemplate || '';
+      input.focus();
+    }));
+
+    const readPayload = () => ({
+      session_id: backendConversationId(),
+      title: $('#professionalTitleInput', els.sheetBody).value.trim() || 'Misión profesional JARVIS',
+      objective: $('#professionalObjectiveInput', els.sheetBody).value.trim(),
+      mode: state.mode,
+      project_name: currentProject()?.name || 'General',
+      max_roles: Number($('#professionalTeamSize', els.sheetBody).value || 5),
+    });
+
+    $('#professionalPlanBtn', els.sheetBody)?.addEventListener('click', async () => {
+      const payload = readPayload();
+      if (!payload.objective) return toast('Describe primero el objetivo');
+      const output = $('#professionalPlanOutput', els.sheetBody);
+      output.innerHTML = '<div class="professional-empty">Diseñando equipo y controles...</div>';
+      try {
+        const plan = await apiFetch('/api/professional/plan', { method:'POST', body:JSON.stringify(payload) });
+        output.innerHTML = renderProfessionalPlan(plan);
+      } catch (error) {
+        output.innerHTML = `<div class="professional-error">${escapeHtml(error.message || 'No se pudo diseñar la misión.')}</div>`;
+      }
+    });
+
+    $('#professionalExecuteBtn', els.sheetBody)?.addEventListener('click', async () => {
+      const payload = readPayload();
+      if (!payload.objective) return toast('Describe primero el objetivo');
+      const button = $('#professionalExecuteBtn', els.sheetBody);
+      button.disabled = true;
+      button.textContent = 'Preparando misión...';
+      try {
+        await apiFetch('/api/professional/execute', { method:'POST', body:JSON.stringify(payload) });
+        toast('La misión profesional comenzó');
+        setTimeout(() => openPanel('jobs'), 500);
+      } catch (error) {
+        toast(error.message || 'No se pudo iniciar la misión');
+        button.disabled = false;
+        button.textContent = 'Iniciar misión';
+      }
+    });
+  }
+
+  function renderProfessionalPlan(plan) {
+    const team = plan.team || [];
+    const milestones = plan.milestones || [];
+    const criteria = plan.success_criteria || [];
+    const budget = plan.budget || {};
+    return `<article class="professional-plan-card">
+      <header class="professional-plan-head">
+        <div><span>Plan profesional</span><h3>${escapeHtml(plan.intent || 'general')} · complejidad ${escapeHtml(plan.complexity || 'media')}</h3></div>
+        <div class="professional-plan-metrics"><span><strong>${team.length}</strong> especialistas</span><span><strong>${milestones.length}</strong> hitos</span><span><strong>${Number(budget.target_minutes || 8)}</strong> min objetivo</span></div>
+      </header>
+      <section class="professional-team-grid">${team.map(role => `<div class="professional-role-card"><span>${escapeHtml(role.icon || '◇')}</span><div><strong>${escapeHtml(role.name || role.id || 'Especialista')}</strong><small>${escapeHtml(role.mission || '')}</small></div></div>`).join('')}</section>
+      <section class="professional-timeline">${milestones.map((item,index) => `<div class="professional-milestone"><span>${index+1}</span><div><strong>${escapeHtml(item.name || `Hito ${index+1}`)}</strong><small>${escapeHtml(item.detail || '')}</small><em>Control: ${escapeHtml(item.quality_gate || 'Verificación de calidad')}</em></div></div>`).join('')}</section>
+      <section class="professional-criteria"><strong>Criterios de éxito</strong><ul>${criteria.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul></section>
+      <footer class="professional-plan-foot"><span>${plan.requires_approval ? 'Solicitará aprobación para acciones sensibles' : 'Ejecución interna segura'}</span><span>${budget.independent_verification ? 'Verificación independiente activada' : 'Verificación estándar'}</span></footer>
+    </article>`;
   }
 
   async function renderAgentCenter() {

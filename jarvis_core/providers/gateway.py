@@ -25,6 +25,7 @@ MODE_PROVIDER_PREFERENCES: Dict[str, List[str]] = {
     "writing": ["anthropic", "openai", "gemini", "groq", "compatible", "ollama"],
     "math": ["groq", "openai", "anthropic", "gemini", "compatible", "ollama"],
     "private": ["ollama", "groq", "anthropic", "openai", "gemini", "compatible"],
+    "professional": ["anthropic", "openai", "gemini", "groq", "compatible", "ollama"],
 }
 
 
@@ -70,6 +71,8 @@ class MultiProviderGateway:
             score += 0.22
         if request.mode == "private" and provider_name == "ollama":
             score += 0.7
+        if request.mode == "professional" and provider_name in {"anthropic", "openai", "gemini"}:
+            score += 0.18
         return score
 
     def route_preview(self, request: ProviderRequest) -> List[Dict[str, Any]]:

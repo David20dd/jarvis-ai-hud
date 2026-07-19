@@ -1,5 +1,5 @@
 {
-  "name": "J.A.R.V.I.S. Unified Intelligence Core",
+  "name": "J.A.R.V.I.S. Professional Intelligence Core",
   "short_name": "JARVIS",
   "description": "Asistente multimodelo con Claude, agentes, caché, herramientas, resiliencia y verificación.",
   "start_url": "../",

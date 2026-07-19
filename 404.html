@@ -4,14 +4,14 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#070b11" />
-  <meta name="description" content="J.A.R.V.I.S. Unified Intelligence Core: planificación, ejecución por etapas, interfaz limpia, proveedores múltiples y recuperación automática." />
+  <meta name="description" content="J.A.R.V.I.S. Clean Agent Edition: planificación, ejecución por etapas, interfaz limpia, proveedores múltiples y recuperación automática." />
   <meta name="referrer" content="strict-origin-when-cross-origin" />
-  <title>J.A.R.V.I.S. — Unified Intelligence Core</title>
-  <link rel="icon" href="./static/favicon-32.png?v=21" sizes="32x32" type="image/png" />
-  <link rel="shortcut icon" href="./static/favicon-32.png?v=21" type="image/png" />
+  <title>J.A.R.V.I.S. — Clean Agent Edition</title>
+  <link rel="icon" href="./static/favicon-32.png?v=20" sizes="32x32" type="image/png" />
+  <link rel="shortcut icon" href="./static/favicon-32.png?v=20" type="image/png" />
   <link rel="apple-touch-icon" href="./static/apple-touch-icon.png" />
-  <link rel="manifest" href="./static/manifest.webmanifest?v=21" />
-  <link rel="stylesheet" href="./static/styles.css?v=21" />
+  <link rel="manifest" href="./static/manifest.webmanifest?v=20" />
+  <link rel="stylesheet" href="./static/styles.css?v=20" />
 
   <script defer src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
@@ -24,8 +24,8 @@
     };
   </script>
   <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
-  <script src="./static/config.js?v=21"></script>
-  <script defer src="./static/app.js?v=21"></script>
+  <script src="./static/config.js?v=20"></script>
+  <script defer src="./static/app.js?v=20"></script>
 </head>
 <body>
   <div class="ambient" id="ambientGlow" aria-hidden="true"></div>
@@ -88,11 +88,11 @@
             </button>
             <div class="welcome-kicker">Autonomous Intelligence Interface</div>
             <h1 class="welcome-title">¿Qué construiremos <span class="accent">hoy</span>?</h1>
-            <p class="welcome-sub">Conversa, investiga, analiza documentos, resuelve problemas y organiza tareas en una interfaz poderosa, clara y sin elementos innecesarios.</p>
+            <p class="welcome-sub">Trabaja con un equipo de especialistas, ejecuta objetivos por etapas y recibe resultados verificados en una interfaz limpia y profesional.</p>
 
             <div class="suggestions" aria-label="Sugerencias">
-              <button class="suggestion" data-prompt="Investiga este tema con fuentes recientes y dame un resumen claro.">
-                <strong>Investigar</strong><span>Información actual, comparación de fuentes y conclusiones claras.</span>
+              <button class="suggestion" data-prompt="Convierte este objetivo en una misión profesional, asigna especialistas, ejecútala por etapas y verifica el resultado.">
+                <strong>Misión profesional</strong><span>Plan, equipo especializado, ejecución y control de calidad.</span>
               </button>
               <button class="suggestion" data-prompt="Ayúdame a analizar un documento y extraer sus puntos principales.">
                 <strong>Analizar documentos</strong><span>PDF, Word, Excel, PowerPoint, texto y código.</span>
@@ -100,8 +100,8 @@
               <button class="suggestion" data-prompt="Resuelve esta ecuación paso a paso y explícamela de forma sencilla.">
                 <strong>Resolver matemática</strong><span>Cálculo exacto, álgebra y ecuaciones bien formateadas.</span>
               </button>
-              <button class="suggestion" data-prompt="Convierte esta idea en un plan organizado con pasos concretos.">
-                <strong>Planificar</strong><span>Objetivos, tareas y ejecución estructurada.</span>
+              <button class="suggestion" data-prompt="Diseña una solución técnica completa, comprueba riesgos y entrega pasos o código ejecutable.">
+                <strong>Construir solución</strong><span>Arquitectura, programación, verificación y entrega completa.</span>
               </button>
             </div>
           </section>
@@ -156,7 +156,7 @@
           <source srcset="./static/jarvis-reactor-v18.webp" type="image/webp" />
           <img src="./static/jarvis-reactor-v18.png" alt="" />
         </picture>
-        <div><div class="drawer-brand">J.A.R.V.I.S.</div><div class="drawer-subtitle">Unified Intelligence Core</div></div>
+        <div><div class="drawer-brand">J.A.R.V.I.S.</div><div class="drawer-subtitle">Clean Agent Edition</div></div>
       </div>
       <button class="icon-btn" id="closeDrawerBtn" aria-label="Cerrar menú"><svg viewBox="0 0 24 24"><path d="m18.3 5.7-1.4-1.4L12 9.2 7.1 4.3 5.7 5.7l4.9 4.9-4.9 4.9 1.4 1.4 4.9-4.9 4.9 4.9 1.4-1.4-4.9-4.9z"/></svg></button>
     </div>
@@ -179,7 +179,7 @@
       <div class="drawer-primary-nav">
         <button class="drawer-link primary-nav-link" data-panel="projects"><span>◆</span><span>Proyectos</span></button>
         <button class="drawer-link primary-nav-link" data-panel="library"><span>▣</span><span>Biblioteca</span></button>
-        <button class="drawer-link primary-nav-link agent-nav-link" data-panel="agent"><span>✦</span><span>Agente de trabajo</span><small>Nuevo</small></button>
+        <button class="drawer-link primary-nav-link agent-nav-link" data-panel="professional"><span>✦</span><span>Centro profesional</span><small>Pro</small></button>
         <button class="drawer-link primary-nav-link" data-panel="jobs"><span>◉</span><span>Trabajos</span></button>
         <button class="drawer-link primary-nav-link" data-panel="system"><span>⚙</span><span>Ajustes</span></button>
       </div>
@@ -187,6 +187,7 @@
         <span>Más herramientas</span><svg viewBox="0 0 24 24"><path d="m7 10 5 5 5-5z"/></svg>
       </button>
       <div class="more-tools-group" id="moreToolsGroup" hidden>
+        <button class="drawer-link" data-panel="agent"><span>✦</span> Agente de trabajo</button>
         <button class="drawer-link" data-panel="memory"><span>◈</span> Memoria</button>
         <button class="drawer-link" data-panel="reminders"><span>◷</span> Recordatorios</button>
         <button class="drawer-link" data-panel="search"><span>⌕</span> Buscar conocimiento</button>
