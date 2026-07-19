@@ -59,7 +59,7 @@
     mode: 'jarvis_nexus_mode',
     projects: 'jarvis_nexus_projects_v11',
     activeProject: 'jarvis_nexus_active_project_v11',
-    moreToolsOpen: 'jarvis_clean_more_tools_v22'
+    moreToolsOpen: 'jarvis_clean_more_tools_v23'
   };
 
   const MODES = [
@@ -103,7 +103,7 @@
   document.addEventListener('DOMContentLoaded', init);
 
   function init() {
-    document.title = window.JARVIS_CONFIG?.APP_NAME || 'J.A.R.V.I.S. — Professional Intelligence Core';
+    document.title = window.JARVIS_CONFIG?.APP_NAME || 'J.A.R.V.I.S. — Professional Responsive Core';
     ensureProjects();
     migrateChatsToProjects();
     if (!state.activeChatId || !state.chats[state.activeChatId] || currentChat()?.projectId !== state.activeProjectId) {
@@ -125,6 +125,7 @@
     pollNotifications();
     registerServiceWorker();
     updateOfflineBanner();
+    updateViewportMetrics();
     requestAnimationFrame(() => document.body.classList.add('app-ready'));
   }
 
@@ -177,9 +178,23 @@
 
     window.addEventListener('online', () => { updateOfflineBanner(); checkHealth({ wake: true }); });
     window.addEventListener('offline', () => { updateOfflineBanner(); setStatus('Sin conexión', 'error'); });
+    window.addEventListener('resize', updateViewportMetrics, { passive: true });
+    window.addEventListener('orientationchange', () => setTimeout(updateViewportMetrics, 120), { passive: true });
+    window.visualViewport?.addEventListener('resize', updateViewportMetrics, { passive: true });
+    window.visualViewport?.addEventListener('scroll', updateViewportMetrics, { passive: true });
     window.addEventListener('keydown', handleGlobalKeys);
   }
 
+
+  function updateViewportMetrics() {
+    const viewport = window.visualViewport;
+    const visibleHeight = Math.max(320, Math.round(viewport?.height || window.innerHeight || document.documentElement.clientHeight));
+    const layoutHeight = Math.max(visibleHeight, Math.round(window.innerHeight || visibleHeight));
+    const keyboardGap = Math.max(0, layoutHeight - visibleHeight - Math.round(viewport?.offsetTop || 0));
+    document.documentElement.style.setProperty('--app-height', `${visibleHeight}px`);
+    document.documentElement.style.setProperty('--viewport-offset-top', `${Math.round(viewport?.offsetTop || 0)}px`);
+    document.body.classList.toggle('keyboard-open', keyboardGap > 120);
+  }
 
   function syncMoreTools() {
     if (!els.moreToolsBtn || !els.moreToolsGroup) return;
@@ -511,6 +526,7 @@
       const count = chat.messages?.length || 0;
       btn.className = `chat-item compact-chat-item${chat.id === state.activeChatId ? ' active' : ''}`;
       btn.title = chat.title || 'Conversación';
+      btn.setAttribute('aria-current', chat.id === state.activeChatId ? 'true' : 'false');
       btn.innerHTML = `
         <span class="chat-item-status" aria-hidden="true"></span>
         <span class="chat-item-copy">
@@ -1176,7 +1192,7 @@
         ${panelCard('Trabajos', `${c.jobs || 0} registrados`, 'jobs')}
       </div>
       <div style="height:14px"></div>
-      <div class="panel-card"><h3>Estado del núcleo</h3><p>Versión ${escapeHtml(data.version || '22.0.0')} · ${escapeHtml(data.status || 'operativo')} · ${Number(data.usage_24h?.total_tokens || 0).toLocaleString()} tokens en 24 horas.</p></div>`;
+      <div class="panel-card"><h3>Estado del núcleo</h3><p>Versión ${escapeHtml(data.version || '23.0.0')} · ${escapeHtml(data.status || 'operativo')} · ${Number(data.usage_24h?.total_tokens || 0).toLocaleString()} tokens en 24 horas.</p></div>`;
     $$('[data-open-panel]', els.sheetBody).forEach(btn => btn.addEventListener('click', () => openPanel(btn.dataset.openPanel)));
   }
 
@@ -1249,7 +1265,7 @@
         <div class="professional-hero-glow" aria-hidden="true"></div>
         <div class="professional-hero-mark">✦</div>
         <div class="professional-hero-copy">
-          <span class="professional-kicker">Professional Intelligence Core</span>
+          <span class="professional-kicker">Professional Responsive Core</span>
           <h3>Convierta objetivos en misiones verificables</h3>
           <p>JARVIS forma un equipo de especialistas, define hitos, utiliza varios proveedores y audita el resultado antes de entregarlo.</p>
         </div>

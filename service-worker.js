@@ -1,8 +1,8 @@
-const CACHE_NAME = 'jarvis-professional-core-v22';
+const CACHE_NAME = 'jarvis-responsive-core-v23';
 const CORE = [
   './', './index.html', './404.html',
-  './static/styles.css?v=22', './static/app.js?v=22', './static/config.js?v=22',
-  './static/manifest.webmanifest?v=22', './static/favicon-32.png',
+  './static/styles.css?v=23', './static/app.js?v=23', './static/config.js?v=23',
+  './static/manifest.webmanifest?v=23', './static/favicon-32.png',
   './static/jarvis-reactor-v18.webp', './static/jarvis-reactor-v18.png'
 ];
 self.addEventListener('install', event => {
