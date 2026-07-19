@@ -5086,3 +5086,59 @@ body.focus-mode .composer-zone { width: min(100%, 940px); }
     justify-content: center;
   }
 }
+
+/* ===============================
+   v26.1 reactor-only enhancement
+   Adds subtle rotational motion
+   without changing layout or UI
+   =============================== */
+.reactor-svg-shell {
+  animation: reactorCoreSpin 24s linear infinite;
+  transform-origin: center center;
+  will-change: transform;
+}
+
+.reactor-img {
+  animation: reactorGlowPulse 4.8s ease-in-out infinite;
+  transform-origin: center center;
+  will-change: filter, transform;
+}
+
+.reactor-wrap:hover .reactor-svg-shell {
+  animation-duration: 14s;
+}
+
+.reactor-wrap:hover .reactor-img {
+  animation-duration: 2.8s;
+}
+
+.reactor-wrap.core-surge .reactor-svg-shell {
+  animation-duration: 8s;
+}
+
+.reactor-wrap.core-surge .reactor-img {
+  animation: reactorGlowPulse 2.2s ease-in-out infinite, reactorPulse 960ms ease;
+}
+
+@keyframes reactorCoreSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes reactorGlowPulse {
+  0%, 100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 22px rgba(87, 222, 255, .25)) drop-shadow(0 0 58px rgba(38, 129, 255, .13));
+  }
+  50% {
+    transform: scale(1.012);
+    filter: drop-shadow(0 0 28px rgba(120, 238, 255, .34)) drop-shadow(0 0 72px rgba(44, 151, 255, .20));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reactor-svg-shell,
+  .reactor-img {
+    animation: none !important;
+  }
+}
