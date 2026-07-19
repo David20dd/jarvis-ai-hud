@@ -4,14 +4,14 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#070b11" />
-  <meta name="description" content="J.A.R.V.I.S. Cinematic Intelligence v26 — Ultra Interface: interfaz premium, reactor vectorial adaptable, agentes profesionales y experiencia limpia en computadora y celular." />
+  <meta name="description" content="J.A.R.V.I.S. Cinematic Intelligence v29 — Final Experience: interfaz premium, reactor vectorial adaptable, agentes profesionales y experiencia limpia en computadora y celular." />
   <meta name="referrer" content="strict-origin-when-cross-origin" />
-  <title>J.A.R.V.I.S. — Cinematic Intelligence v26 — Ultra Interface</title>
-  <link rel="icon" href="./favicon-v26.svg?v=26" type="image/svg+xml" />
-  <link rel="shortcut icon" href="./favicon-v26.svg?v=26" type="image/svg+xml" />
+  <title>J.A.R.V.I.S. — Cinematic Intelligence v29 — Final Experience</title>
+  <link rel="icon" href="./favicon-v29.svg?v=29" type="image/svg+xml" />
+  <link rel="shortcut icon" href="./favicon-v29.svg?v=29" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
-  <link rel="manifest" href="./manifest.webmanifest?v=26" />
-  <link rel="stylesheet" href="./styles.css?v=26" />
+  <link rel="manifest" href="./manifest.webmanifest?v=29" />
+  <link rel="stylesheet" href="./styles.css?v=29" />
 
   <script defer src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
@@ -24,8 +24,8 @@
     };
   </script>
   <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
-  <script src="./config.js?v=26"></script>
-  <script defer src="./app.js?v=26"></script>
+  <script src="./config.js?v=29"></script>
+  <script defer src="./app.js?v=29"></script>
 </head>
 <body>
   <a class="skip-link" href="#userInput">Ir al campo de mensaje</a>
@@ -38,7 +38,7 @@
           <svg viewBox="0 0 24 24"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/></svg>
         </button>
         <div class="brand">
-          <div class="brand-reactor-wrap" aria-hidden="true"><img class="brand-reactor" src="./jarvis-reactor-v26.svg" alt="" /></div>
+          <div class="brand-reactor-wrap" aria-hidden="true"><img class="brand-reactor" src="./jarvis-reactor-v29.svg" alt="" /></div>
           <div class="brand-copy">
             <div class="brand-name">J.A.R.V.I.S.</div>
             <div class="brand-sub">Cinematic Multi-Agent Interface</div>
@@ -76,13 +76,13 @@
             <div class="welcome-layout">
               <div class="welcome-visual">
                 <div class="core-label" aria-hidden="true"><span></span> Núcleo multiagente</div>
-                <button class="reactor-wrap" id="reactorFx" type="button" aria-label="Activar núcleo visual de JARVIS" title="Activar núcleo">
+                <button class="reactor-wrap" id="reactorFx" type="button" aria-label="Activar núcleo visual de JARVIS" title="Activar núcleo visual">
                   <span class="reactor-aura" aria-hidden="true"></span>
                   <span class="reactor-orbit one" aria-hidden="true"></span>
                   <span class="reactor-orbit two" aria-hidden="true"></span>
                   <span class="reactor-orbit three" aria-hidden="true"></span>
                   <span class="reactor-scan" aria-hidden="true"></span>
-                  <div class="reactor-picture reactor-svg-shell"><img class="reactor-img" src="./jarvis-reactor-v26.svg" alt="Reactor vectorial de JARVIS con núcleo triangular invertido" /></div>
+                  <div class="reactor-picture reactor-svg-shell"><img class="reactor-img" src="./jarvis-reactor-v29.svg" alt="Reactor vectorial de JARVIS con núcleo triangular invertido" /></div>
                 </button>
                 <div class="core-caption" aria-hidden="true">
                   <span>Multimodelo</span><i></i><span>Agentes</span><i></i><span>Verificación</span>
@@ -130,8 +130,14 @@
 
           <div class="thinking-wrap" id="thinkingWrap" aria-live="polite" aria-label="JARVIS está preparando una respuesta">
             <div class="thinking-card">
-              <div class="thinking-dots" aria-hidden="true"><span></span><span></span><span></span></div>
-              <span id="thinkingText">Preparando respuesta</span>
+              <span class="thinking-reactor" aria-hidden="true"><img src="./jarvis-reactor-v29.svg" alt="" /></span>
+              <span class="thinking-copy"><strong id="thinkingText">Preparando respuesta</strong><small id="thinkingDetail">Analizando la solicitud y seleccionando la mejor ruta.</small></span>
+              <span class="thinking-stage-rail" aria-hidden="true">
+                <span data-thinking-stage="0">Analiza</span><i></i>
+                <span data-thinking-stage="1">Planifica</span><i></i>
+                <span data-thinking-stage="2">Ejecuta</span><i></i>
+                <span data-thinking-stage="3">Verifica</span>
+              </span>
             </div>
           </div>
         </div>
@@ -172,8 +178,8 @@
   <aside class="drawer" id="drawer" aria-label="Menú lateral">
     <div class="drawer-head drawer-head-clean">
       <div class="drawer-identity">
-        <div class="drawer-reactor" aria-hidden="true"><img src="./jarvis-reactor-v26.svg" alt="" /></div>
-        <div><div class="drawer-brand">J.A.R.V.I.S.</div><div class="drawer-subtitle">Cinematic Intelligence v26 — Ultra Interface</div></div>
+        <div class="drawer-reactor" aria-hidden="true"><img src="./jarvis-reactor-v29.svg" alt="" /></div>
+        <div><div class="drawer-brand">J.A.R.V.I.S.</div><div class="drawer-subtitle">Cinematic Intelligence v29 — Final Experience</div></div>
       </div>
       <button class="icon-btn" id="closeDrawerBtn" aria-label="Cerrar menú"><svg viewBox="0 0 24 24"><path d="m18.3 5.7-1.4-1.4L12 9.2 7.1 4.3 5.7 5.7l4.9 4.9-4.9 4.9 1.4 1.4 4.9-4.9 4.9 4.9 1.4-1.4-4.9-4.9z"/></svg></button>
     </div>
@@ -183,12 +189,17 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 3a6.5 6.5 0 1 0 3.98 11.64L19.85 21 21 19.85l-6.36-6.37A6.5 6.5 0 0 0 9.5 3zm0 2a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9z"/></svg>
         <input id="drawerSearch" type="search" placeholder="Buscar conversaciones..." autocomplete="off" />
       </div>
+      <div class="chat-filter-bar" id="chatFilterBar" role="tablist" aria-label="Filtrar conversaciones">
+        <button type="button" role="tab" data-chat-filter="all" aria-selected="true">Todas</button>
+        <button type="button" role="tab" data-chat-filter="pinned" aria-selected="false">Fijadas</button>
+        <button type="button" role="tab" data-chat-filter="recent" aria-selected="false">Recientes</button>
+      </div>
       <div class="drawer-section compact-project-section">
         <div class="section-label section-label-row"><span>Proyecto activo</span><button id="quickNewProjectBtn" type="button" title="Nuevo proyecto">+</button></div>
         <div class="project-list compact-project-list" id="projectList"></div>
       </div>
       <div class="drawer-section chat-history-section">
-        <div class="section-label section-label-row"><span>Conversaciones</span><button type="button" data-panel="search" title="Buscar conocimiento">⌕</button></div>
+        <div class="section-label section-label-row"><span>Conversaciones <b id="chatCountBadge">0</b></span><button type="button" data-panel="search" title="Buscar conocimiento">⌕</button></div>
         <div class="chat-list grouped-chat-list" id="chatList"></div>
       </div>
     </div>
@@ -236,6 +247,13 @@
       <div class="command-foot"><span id="commandTitle">Centro de comandos</span><span>↑↓ navegar · Enter ejecutar</span></div>
     </div>
   </section>
+
+  <nav class="mobile-dock" id="mobileDock" aria-label="Navegación móvil">
+    <button type="button" id="mobileMenuBtn" aria-label="Abrir conversaciones"><svg viewBox="0 0 24 24"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/></svg><span>Chats</span></button>
+    <button type="button" id="mobileToolsBtn" aria-label="Abrir herramientas"><svg viewBox="0 0 24 24"><path d="M7 2h10a2 2 0 0 1 2 2v16H5V4a2 2 0 0 1 2-2Zm0 2v14h10V4H7Zm2 3h6v2H9Zm0 4h6v2H9Z"/></svg><span>Herramientas</span></button>
+    <button type="button" class="mobile-dock-primary" id="mobileNewChatBtn" aria-label="Nueva conversación"><svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></svg><span>Nuevo</span></button>
+    <button type="button" id="mobileFocusBtn" aria-label="Alternar modo enfoque"><svg viewBox="0 0 24 24"><path d="M4 9V4h5v2H6v3H4Zm11-5h5v5h-2V6h-3V4ZM6 15v3h3v2H4v-5h2Zm12 0h2v5h-5v-2h3v-3ZM9 9h6v6H9V9Z"/></svg><span>Enfoque</span></button>
+  </nav>
 
   <div class="offline-banner" id="offlineBanner" role="status">Modo local: la interfaz sigue disponible, pero el núcleo de Render no tiene conexión.</div>
   <div class="toast" id="toast" role="status"></div>

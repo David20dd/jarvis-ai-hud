@@ -1,9 +1,9 @@
-const CACHE_NAME = 'jarvis-cinematic-ui-static-v26';
+const CACHE_NAME = 'jarvis-cinematic-ui-static-v29';
 const CORE = [
   './', './index.html',
-  './styles.css?v=26', './app.js?v=26', './config.js?v=26',
-  './manifest.webmanifest?v=26', './favicon-v26.svg?v=26',
-  './jarvis-reactor-v26.svg'
+  './styles.css?v=29', './app.js?v=29', './config.js?v=29',
+  './manifest.webmanifest?v=29', './favicon-v29.svg?v=29',
+  './jarvis-reactor-v29.svg'
 ];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(CORE)).then(() => self.skipWaiting()));

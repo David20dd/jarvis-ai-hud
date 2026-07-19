@@ -19,6 +19,8 @@
     messages: $('#messages'),
     thinkingWrap: $('#thinkingWrap'),
     thinkingText: $('#thinkingText'),
+    thinkingDetail: $('#thinkingDetail'),
+    thinkingStages: $$('[data-thinking-stage]'),
     jumpBtn: $('#jumpBtn'),
     attachments: $('#attachments'),
     attachBtn: $('#attachBtn'),
@@ -36,6 +38,8 @@
     projectList: $('#projectList'),
     drawerSearch: $('#drawerSearch'),
     chatList: $('#chatList'),
+    chatFilterBar: $('#chatFilterBar'),
+    chatCountBadge: $('#chatCountBadge'),
     moreToolsBtn: $('#moreToolsBtn'),
     moreToolsGroup: $('#moreToolsGroup'),
     sheet: $('#sheet'),
@@ -48,7 +52,12 @@
     commandInput: $('#commandInput'),
     commandResults: $('#commandResults'),
     offlineBanner: $('#offlineBanner'),
-    focusModeBtn: $('#focusModeBtn')
+    focusModeBtn: $('#focusModeBtn'),
+    mobileDock: $('#mobileDock'),
+    mobileMenuBtn: $('#mobileMenuBtn'),
+    mobileToolsBtn: $('#mobileToolsBtn'),
+    mobileNewChatBtn: $('#mobileNewChatBtn'),
+    mobileFocusBtn: $('#mobileFocusBtn')
   };
 
   const STORE = {
@@ -60,8 +69,9 @@
     mode: 'jarvis_nexus_mode',
     projects: 'jarvis_nexus_projects_v11',
     activeProject: 'jarvis_nexus_active_project_v11',
-    moreToolsOpen: 'jarvis_clean_more_tools_v26',
-    focusMode: 'jarvis_focus_mode_v26'
+    moreToolsOpen: 'jarvis_clean_more_tools_v29',
+    focusMode: 'jarvis_focus_mode_v29',
+    chatFilter: 'jarvis_chat_filter_v29'
   };
 
   const MODES = [
@@ -98,7 +108,9 @@
     commandIndex: 0,
     commandItems: [],
     moreToolsOpen: localStorage.getItem(STORE.moreToolsOpen) === '1',
-    focusMode: localStorage.getItem(STORE.focusMode) === '1'
+    focusMode: localStorage.getItem(STORE.focusMode) === '1',
+    chatFilter: localStorage.getItem(STORE.chatFilter) || 'all',
+    chatSwitchTimer: null
   };
 
   localStorage.setItem(STORE.client, state.clientId);
@@ -106,7 +118,7 @@
   document.addEventListener('DOMContentLoaded', init);
 
   function init() {
-    document.title = window.JARVIS_CONFIG?.APP_NAME || 'J.A.R.V.I.S. — Cinematic Intelligence v26';
+    document.title = window.JARVIS_CONFIG?.APP_NAME || 'J.A.R.V.I.S. — Cinematic Intelligence v29';
     ensureProjects();
     migrateChatsToProjects();
     if (!state.activeChatId || !state.chats[state.activeChatId] || currentChat()?.projectId !== state.activeProjectId) {
@@ -118,6 +130,7 @@
     renderMode();
     renderProjectSwitcher();
     renderProjectList();
+    renderChatFilters();
     renderChatList();
     renderActiveChat();
     syncMoreTools();
@@ -145,8 +158,20 @@
     els.newChatBtn.addEventListener('click', () => createChat(true));
     els.quickNewProjectBtn?.addEventListener('click', createProjectFlow);
     els.drawerSearch?.addEventListener('input', () => renderChatList(els.drawerSearch.value));
+    els.chatFilterBar?.addEventListener('click', event => {
+      const button = event.target.closest('[data-chat-filter]');
+      if (!button) return;
+      state.chatFilter = button.dataset.chatFilter || 'all';
+      localStorage.setItem(STORE.chatFilter, state.chatFilter);
+      renderChatFilters();
+      renderChatList(els.drawerSearch?.value || '');
+    });
     els.moreToolsBtn?.addEventListener('click', toggleMoreTools);
     els.focusModeBtn?.addEventListener('click', toggleFocusMode);
+    els.mobileMenuBtn?.addEventListener('click', openDrawer);
+    els.mobileToolsBtn?.addEventListener('click', () => openPanel('overview'));
+    els.mobileNewChatBtn?.addEventListener('click', () => createChat(true));
+    els.mobileFocusBtn?.addEventListener('click', toggleFocusMode);
 
     $$('[data-panel]').forEach(btn => btn.addEventListener('click', () => openPanel(btn.dataset.panel)));
     $$('.suggestion').forEach(btn => btn.addEventListener('click', () => {
@@ -221,6 +246,8 @@
     els.focusModeBtn.setAttribute('aria-pressed', state.focusMode ? 'true' : 'false');
     const label = els.focusModeBtn.querySelector('.focus-mode-label');
     if (label) label.textContent = state.focusMode ? 'Salir del enfoque' : 'Modo enfoque';
+    els.mobileFocusBtn?.classList.toggle('active', state.focusMode);
+    els.mobileFocusBtn?.setAttribute('aria-pressed', state.focusMode ? 'true' : 'false');
   }
 
   function toggleFocusMode() {
@@ -520,27 +547,39 @@
   }
 
   function switchChat(id) {
-    if (!state.chats[id]) return;
+    if (!state.chats[id] || id === state.activeChatId) { closeOverlays(); return; }
     if (state.isGenerating) stopGeneration();
-    state.activeChatId = id;
-    saveChats();
-    renderChatList();
-    renderActiveChat();
-    syncMoreTools();
-    syncFocusMode();
-    restoreDraft();
+    clearTimeout(state.chatSwitchTimer);
+    els.chatScroll.classList.remove('chat-switch-in');
+    els.chatScroll.classList.add('chat-switch-out');
     closeOverlays();
+    state.chatSwitchTimer = setTimeout(() => {
+      state.activeChatId = id;
+      saveChats();
+      renderChatList();
+      renderActiveChat();
+      syncMoreTools();
+      syncFocusMode();
+      restoreDraft();
+      els.chatScroll.classList.remove('chat-switch-out');
+      void els.chatScroll.offsetWidth;
+      els.chatScroll.classList.add('chat-switch-in');
+      setTimeout(() => els.chatScroll.classList.remove('chat-switch-in'), 360);
+    }, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 110);
   }
 
   function renderChatList(query = '') {
     const normalized = String(query || '').trim().toLowerCase();
-    const items = Object.values(state.chats)
-      .filter(chat => chat.projectId === state.activeProjectId)
+    const projectChats = Object.values(state.chats).filter(chat => chat.projectId === state.activeProjectId);
+    const recentThreshold = Date.now() - (7 * 24 * 60 * 60 * 1000);
+    const items = projectChats
+      .filter(chat => state.chatFilter === 'pinned' ? Boolean(chat.pinned) : state.chatFilter === 'recent' ? Number(chat.updatedAt || 0) >= recentThreshold : true)
       .filter(chat => !normalized || `${chat.title || ''} ${(chat.messages || []).map(item => item.content || '').join(' ')}`.toLowerCase().includes(normalized))
       .sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || (b.updatedAt || 0) - (a.updatedAt || 0));
+    if (els.chatCountBadge) els.chatCountBadge.textContent = String(items.length);
     els.chatList.innerHTML = '';
     if (!items.length) {
-      els.chatList.innerHTML = '<div class="history-empty clean-history-empty"><span>◇</span><strong>Sin conversaciones</strong><small>Comienza una conversación nueva en este proyecto.</small></div>';
+      els.chatList.innerHTML = `<div class="history-empty clean-history-empty"><span>◇</span><strong>Sin resultados</strong><small>${state.chatFilter === 'all' ? 'Comienza una conversación nueva en este proyecto.' : 'Cambia el filtro para ver otras conversaciones.'}</small></div>`;
       return;
     }
     let currentGroup = '';
@@ -586,6 +625,14 @@
         switchChat(chat.id);
       });
       els.chatList.appendChild(btn);
+    });
+  }
+
+  function renderChatFilters() {
+    $$('[data-chat-filter]', els.chatFilterBar || document).forEach(button => {
+      const active = (button.dataset.chatFilter || 'all') === state.chatFilter;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-selected', active ? 'true' : 'false');
     });
   }
 
@@ -827,6 +874,10 @@
   }
 
   function setSendState(generating) {
+    document.body.classList.toggle('is-generating', generating);
+    document.querySelector('.composer')?.classList.toggle('is-generating', generating);
+    els.sendBtn.classList.toggle('generating', generating);
+    els.mobileDock?.classList.toggle('is-generating', generating);
     els.sendBtn.title = generating ? 'Detener' : 'Enviar';
     els.sendBtn.setAttribute('aria-label', generating ? 'Detener' : 'Enviar');
     els.sendIcon.innerHTML = generating
@@ -838,6 +889,8 @@
     clearTimeout(state.thinkingTimer);
     state.thinkingTimer = setTimeout(() => {
       if (!state.isGenerating) return;
+      els.thinkingWrap.dataset.phase = 'prepare';
+      applyThinkingState({ text: 'Preparando respuesta', phase: 'prepare', status: 'Preparando núcleo', tone: 'warning' });
       els.thinkingWrap.classList.add('active');
       els.ambient.classList.add('active');
       followBottom();
@@ -846,24 +899,65 @@
 
   function hideThinking() {
     clearTimeout(state.thinkingTimer);
+    delete els.thinkingWrap.dataset.phase;
+    els.thinkingStages.forEach(node => node.classList.remove('active', 'complete'));
     els.thinkingWrap.classList.remove('active');
   }
 
   function startStatusSequence() {
     clearStatusSequence();
     const states = state.mode === 'research'
-      ? ['Preparando investigación', 'Probando rutas de búsqueda', 'Revisando y depurando fuentes', 'Comparando resultados', 'Verificando la respuesta']
-      : ['Preparando respuesta', 'Analizando contexto', 'Seleccionando la mejor ruta', 'Probando alternativas si es necesario', 'Verificando el resultado'];
+      ? [
+          { text: 'Preparando investigación', phase: 'prepare', status: 'Preparando misión', tone: 'warning' },
+          { text: 'Probando rutas de búsqueda', phase: 'search', status: 'Buscando mejores rutas', tone: 'warning' },
+          { text: 'Revisando y depurando fuentes', phase: 'verify', status: 'Verificando fuentes', tone: 'warning' },
+          { text: 'Comparando resultados', phase: 'compare', status: 'Comparando resultados', tone: 'warning' },
+          { text: 'Verificando la respuesta', phase: 'resolve', status: 'Resolviendo con precisión', tone: 'warning' }
+        ]
+      : [
+          { text: 'Preparando respuesta', phase: 'prepare', status: 'Preparando núcleo', tone: 'warning' },
+          { text: 'Analizando contexto', phase: 'analyze', status: 'Analizando contexto', tone: 'warning' },
+          { text: 'Seleccionando la mejor ruta', phase: 'route', status: 'Seleccionando mejor ruta', tone: 'warning' },
+          { text: 'Probando alternativas si es necesario', phase: 'fallback', status: 'Probando alternativas', tone: 'warning' },
+          { text: 'Verificando el resultado', phase: 'resolve', status: 'Verificando resultado', tone: 'warning' }
+        ];
     let index = 0;
-    els.thinkingText.textContent = states[0];
+    applyThinkingState(states[0]);
     const tick = () => {
       if (!state.isGenerating) return;
       index = Math.min(index + 1, states.length - 1);
       els.thinkingText.animate([{ opacity: 0, transform: 'translateY(3px)' }, { opacity: 1, transform: 'none' }], { duration: 180, easing: 'ease-out' });
-      els.thinkingText.textContent = states[index];
-      if (index < states.length - 1) state.statusTimers.push(setTimeout(tick, 2300));
+      applyThinkingState(states[index]);
+      if (index < states.length - 1) state.statusTimers.push(setTimeout(tick, 2100));
     };
-    state.statusTimers.push(setTimeout(tick, 1800));
+    state.statusTimers.push(setTimeout(tick, 1600));
+  }
+
+  function applyThinkingState(step) {
+    if (!step) return;
+    const phase = step.phase || 'prepare';
+    const phaseIndex = ({ prepare:0, analyze:0, search:1, route:1, compare:2, fallback:2, verify:3, resolve:3 })[phase] ?? 0;
+    els.thinkingWrap.dataset.phase = phase;
+    els.thinkingText.textContent = step.text || 'Procesando';
+    if (els.thinkingDetail) els.thinkingDetail.textContent = step.detail || thinkingDetailForPhase(phase);
+    els.thinkingStages.forEach((node, index) => {
+      node.classList.toggle('active', index === phaseIndex);
+      node.classList.toggle('complete', index < phaseIndex);
+    });
+    if (step.status) setStatus(step.status, step.tone || 'warning');
+  }
+
+  function thinkingDetailForPhase(phase) {
+    return ({
+      prepare:'Organizando el objetivo y el contexto disponible.',
+      analyze:'Comprendiendo intención, restricciones y prioridades.',
+      search:'Consultando rutas y fuentes pertinentes.',
+      route:'Asignando el proveedor y las herramientas más adecuadas.',
+      compare:'Comparando opciones y descartando inconsistencias.',
+      fallback:'Recuperando la tarea mediante una ruta alternativa.',
+      verify:'Auditando fuentes, cálculos y coherencia.',
+      resolve:'Consolidando una respuesta final verificada.'
+    })[phase] || 'Procesando la solicitud con el núcleo multiagente.';
   }
 
   function clearStatusSequence() {
@@ -877,6 +971,7 @@
     const fileText = files?.length ? `\n\n📎 ${files.join(', ')}` : '';
     row.innerHTML = `<div class="user-bubble">${escapeHtml(text + fileText)}</div>`;
     els.messages.appendChild(row);
+    animateMessageEntry(row);
     if (scroll) followBottom();
   }
 
@@ -886,7 +981,7 @@
     const avatarWrap = document.createElement('div');
     avatarWrap.className = 'assistant-avatar';
     const avatar = document.createElement('img');
-    const reactorRef = document.querySelector('.brand-reactor')?.getAttribute('src') || './static/jarvis-reactor-v26.svg';
+    const reactorRef = document.querySelector('.brand-reactor')?.getAttribute('src') || './static/jarvis-reactor-v29.svg';
     avatar.src = new URL(reactorRef, document.baseURI).href;
     avatar.alt = 'JARVIS';
     avatarWrap.appendChild(avatar);
@@ -1058,6 +1153,7 @@
     saveProjects();
     saveChats();
     renderProjectList();
+    renderChatFilters();
     renderChatList(els.drawerSearch?.value || '');
   }
 
@@ -1182,14 +1278,36 @@
   function openDrawer() {
     renderProjectList();
     renderChatList(els.drawerSearch?.value || '');
-    els.drawer.classList.add('open');
+    document.body.classList.add('drawer-visible');
+    els.drawer.classList.remove('closing');
     els.backdrop.classList.add('open');
+    requestAnimationFrame(() => {
+      els.drawer.classList.add('open');
+      staggerDrawerItems();
+    });
   }
 
   function closeOverlays() {
-    els.drawer.classList.remove('open');
+    const drawerWasOpen = els.drawer.classList.contains('open');
+    if (drawerWasOpen) {
+      els.drawer.classList.add('closing');
+      els.drawer.classList.remove('open');
+      setTimeout(() => els.drawer.classList.remove('closing'), 280);
+    }
     els.sheet.classList.remove('open');
-    els.backdrop.classList.remove('open');
+    if (drawerWasOpen) setTimeout(() => els.backdrop.classList.remove('open'), 170);
+    else els.backdrop.classList.remove('open');
+    document.body.classList.remove('drawer-visible');
+  }
+
+  function staggerDrawerItems() {
+    $$('.project-item, .chat-item, .drawer-link', els.drawer).forEach((node, index) => {
+      node.style.setProperty('--stagger-index', String(Math.min(index, 18)));
+      node.classList.remove('stagger-in');
+      void node.offsetWidth;
+      node.classList.add('stagger-in');
+      setTimeout(() => node.classList.remove('stagger-in'), 420);
+    });
   }
 
   async function openPanel(panel) {
@@ -1306,7 +1424,7 @@
         <div class="professional-hero-glow" aria-hidden="true"></div>
         <div class="professional-hero-mark">✦</div>
         <div class="professional-hero-copy">
-          <span class="professional-kicker">Cinematic Intelligence v26</span>
+          <span class="professional-kicker">Cinematic Intelligence v29</span>
           <h3>Convierta objetivos en misiones verificables</h3>
           <p>JARVIS forma un equipo de especialistas, define hitos, utiliza varios proveedores y audita el resultado antes de entregarlo.</p>
         </div>
@@ -1997,9 +2115,11 @@
 
   function setStatus(text, type) {
     els.statusText.textContent = text;
-    els.statusPill.classList.remove('online', 'error');
+    els.statusPill.classList.remove('online', 'error', 'warning');
+    els.statusPill.dataset.state = type || 'neutral';
     if (type === 'online') els.statusPill.classList.add('online');
     if (type === 'error') els.statusPill.classList.add('error');
+    if (type === 'warning') els.statusPill.classList.add('warning');
   }
 
   async function pollNotifications() {

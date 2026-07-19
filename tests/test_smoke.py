@@ -482,9 +482,13 @@ def test_responsive_frontend_contract():
     manifest = json.loads(Path("static/manifest.webmanifest").read_text(encoding="utf-8"))
 
     assert "viewport-fit=cover" in html
-    assert "?v=26" in html
-    assert "jarvis-reactor-v26.svg" in html
+    assert "?v=29" in html
+    assert "jarvis-reactor-v29.svg" in html
     assert "focusModeBtn" in html
+    assert "mobileDock" in html
+    assert "chatFilterBar" in html
+    assert "thinking-stage-rail" in html
+    assert "jarvis_chat_filter_v29" in js
     assert "--app-height" in css
     assert "@media (max-width: 680px)" in css
     assert "@media (max-height: 540px)" in css
