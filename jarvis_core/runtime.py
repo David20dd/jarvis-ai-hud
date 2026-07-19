@@ -88,7 +88,7 @@ class MemoryTTLCache:
 class RedisLayer:
     """Optional Redis L2. It disables itself temporarily after failures."""
 
-    def __init__(self, url: str, namespace: str = "jarvis:v23", failure_cooldown: int = 30) -> None:
+    def __init__(self, url: str, namespace: str = "jarvis:v25", failure_cooldown: int = 30) -> None:
         self.url = (url or "").strip()
         self.namespace = namespace
         self.failure_cooldown = max(5, int(failure_cooldown))

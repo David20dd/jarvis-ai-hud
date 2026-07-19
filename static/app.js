@@ -47,7 +47,8 @@
     commandPalette: $('#commandPalette'),
     commandInput: $('#commandInput'),
     commandResults: $('#commandResults'),
-    offlineBanner: $('#offlineBanner')
+    offlineBanner: $('#offlineBanner'),
+    focusModeBtn: $('#focusModeBtn')
   };
 
   const STORE = {
@@ -59,7 +60,8 @@
     mode: 'jarvis_nexus_mode',
     projects: 'jarvis_nexus_projects_v11',
     activeProject: 'jarvis_nexus_active_project_v11',
-    moreToolsOpen: 'jarvis_clean_more_tools_v23'
+    moreToolsOpen: 'jarvis_clean_more_tools_v25',
+    focusMode: 'jarvis_focus_mode_v25'
   };
 
   const MODES = [
@@ -95,7 +97,8 @@
     wakeRetrying: false,
     commandIndex: 0,
     commandItems: [],
-    moreToolsOpen: localStorage.getItem(STORE.moreToolsOpen) === '1'
+    moreToolsOpen: localStorage.getItem(STORE.moreToolsOpen) === '1',
+    focusMode: localStorage.getItem(STORE.focusMode) === '1'
   };
 
   localStorage.setItem(STORE.client, state.clientId);
@@ -103,7 +106,7 @@
   document.addEventListener('DOMContentLoaded', init);
 
   function init() {
-    document.title = window.JARVIS_CONFIG?.APP_NAME || 'J.A.R.V.I.S. — Professional Responsive Core';
+    document.title = window.JARVIS_CONFIG?.APP_NAME || 'J.A.R.V.I.S. — Cinematic Intelligence v25';
     ensureProjects();
     migrateChatsToProjects();
     if (!state.activeChatId || !state.chats[state.activeChatId] || currentChat()?.projectId !== state.activeProjectId) {
@@ -118,6 +121,7 @@
     renderChatList();
     renderActiveChat();
     syncMoreTools();
+    syncFocusMode();
     restoreDraft();
     autoResize();
     bindHeroFx();
@@ -142,6 +146,7 @@
     els.quickNewProjectBtn?.addEventListener('click', createProjectFlow);
     els.drawerSearch?.addEventListener('input', () => renderChatList(els.drawerSearch.value));
     els.moreToolsBtn?.addEventListener('click', toggleMoreTools);
+    els.focusModeBtn?.addEventListener('click', toggleFocusMode);
 
     $$('[data-panel]').forEach(btn => btn.addEventListener('click', () => openPanel(btn.dataset.panel)));
     $$('.suggestion').forEach(btn => btn.addEventListener('click', () => {
@@ -209,6 +214,24 @@
     syncMoreTools();
   }
 
+  function syncFocusMode() {
+    document.body.classList.toggle('focus-mode', state.focusMode);
+    if (!els.focusModeBtn) return;
+    els.focusModeBtn.classList.toggle('active', state.focusMode);
+    els.focusModeBtn.setAttribute('aria-pressed', state.focusMode ? 'true' : 'false');
+    const label = els.focusModeBtn.querySelector('.focus-mode-label');
+    if (label) label.textContent = state.focusMode ? 'Salir del enfoque' : 'Modo enfoque';
+  }
+
+  function toggleFocusMode() {
+    state.focusMode = !state.focusMode;
+    localStorage.setItem(STORE.focusMode, state.focusMode ? '1' : '0');
+    syncFocusMode();
+    closeOverlays();
+    toast(state.focusMode ? 'Modo enfoque activado' : 'Modo enfoque desactivado');
+    setTimeout(() => els.userInput?.focus(), 120);
+  }
+
   function activateCoreVisual() {
     const node = els.reactorFx;
     if (!node) return;
@@ -244,6 +267,11 @@
     if ((event.ctrlKey || event.metaKey) && key === 'e') {
       event.preventDefault();
       openPanel('export');
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && event.shiftKey && key === 'f') {
+      event.preventDefault();
+      toggleFocusMode();
       return;
     }
     if (event.key === '/' && !event.metaKey && !event.ctrlKey && !event.altKey) {
@@ -414,6 +442,7 @@
     renderChatList();
     renderActiveChat();
     syncMoreTools();
+    syncFocusMode();
     restoreDraft();
     closeOverlays();
     toast(`Proyecto activo: ${currentProject()?.name || 'General'}`);
@@ -471,6 +500,7 @@
     renderChatList();
     renderActiveChat();
     syncMoreTools();
+    syncFocusMode();
     restoreDraft();
     closeOverlays();
     if (showToast) toast('Nueva conversación creada');
@@ -497,6 +527,7 @@
     renderChatList();
     renderActiveChat();
     syncMoreTools();
+    syncFocusMode();
     restoreDraft();
     closeOverlays();
   }
@@ -506,7 +537,7 @@
     const items = Object.values(state.chats)
       .filter(chat => chat.projectId === state.activeProjectId)
       .filter(chat => !normalized || `${chat.title || ''} ${(chat.messages || []).map(item => item.content || '').join(' ')}`.toLowerCase().includes(normalized))
-      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+      .sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || (b.updatedAt || 0) - (a.updatedAt || 0));
     els.chatList.innerHTML = '';
     if (!items.length) {
       els.chatList.innerHTML = '<div class="history-empty clean-history-empty"><span>◇</span><strong>Sin conversaciones</strong><small>Comienza una conversación nueva en este proyecto.</small></div>';
@@ -514,7 +545,7 @@
     }
     let currentGroup = '';
     items.forEach(chat => {
-      const group = chatDateGroup(chat.updatedAt);
+      const group = chat.pinned ? 'Fijadas' : chatDateGroup(chat.updatedAt);
       if (group !== currentGroup) {
         currentGroup = group;
         const label = document.createElement('div');
@@ -524,19 +555,29 @@
       }
       const btn = document.createElement('button');
       const count = chat.messages?.length || 0;
-      btn.className = `chat-item compact-chat-item${chat.id === state.activeChatId ? ' active' : ''}`;
+      btn.className = `chat-item compact-chat-item${chat.id === state.activeChatId ? ' active' : ''}${chat.pinned ? ' pinned' : ''}`;
       btn.title = chat.title || 'Conversación';
       btn.setAttribute('aria-current', chat.id === state.activeChatId ? 'true' : 'false');
       btn.innerHTML = `
         <span class="chat-item-status" aria-hidden="true"></span>
         <span class="chat-item-copy">
           <span class="chat-item-title">${escapeHtml(chat.title || 'Conversación')}</span>
+          <span class="chat-item-preview">${escapeHtml(chatPreview(chat))}</span>
           <span class="chat-item-meta">${count} ${count === 1 ? 'mensaje' : 'mensajes'} · ${escapeHtml(formatRelativeTime(chat.updatedAt))}</span>
         </span>
         <span class="chat-item-actions">
+          <span class="chat-item-pin" role="button" aria-label="${chat.pinned ? 'Desfijar' : 'Fijar'} conversación" title="${chat.pinned ? 'Desfijar' : 'Fijar'}">${chat.pinned ? '◆' : '◇'}</span>
           <span class="chat-item-delete" role="button" aria-label="Eliminar conversación" title="Eliminar">×</span>
         </span>`;
       btn.addEventListener('click', event => {
+        if (event.target.closest('.chat-item-pin')) {
+          event.stopPropagation();
+          chat.pinned = !chat.pinned;
+          chat.updatedAt = Date.now();
+          saveChats();
+          renderChatList(els.drawerSearch?.value || '');
+          return;
+        }
         if (event.target.closest('.chat-item-delete')) {
           event.stopPropagation();
           if (confirm('¿Eliminar esta conversación?')) removeChat(chat.id);
@@ -845,7 +886,7 @@
     const avatarWrap = document.createElement('div');
     avatarWrap.className = 'assistant-avatar';
     const avatar = document.createElement('img');
-    const reactorRef = document.querySelector('.brand-reactor')?.getAttribute('src') || './static/jarvis-reactor-v18.png';
+    const reactorRef = document.querySelector('.brand-reactor')?.getAttribute('src') || './static/jarvis-reactor-v25.svg';
     avatar.src = new URL(reactorRef, document.baseURI).href;
     avatar.alt = 'JARVIS';
     avatarWrap.appendChild(avatar);
@@ -1192,7 +1233,7 @@
         ${panelCard('Trabajos', `${c.jobs || 0} registrados`, 'jobs')}
       </div>
       <div style="height:14px"></div>
-      <div class="panel-card"><h3>Estado del núcleo</h3><p>Versión ${escapeHtml(data.version || '23.0.0')} · ${escapeHtml(data.status || 'operativo')} · ${Number(data.usage_24h?.total_tokens || 0).toLocaleString()} tokens en 24 horas.</p></div>`;
+      <div class="panel-card"><h3>Estado del núcleo</h3><p>Versión ${escapeHtml(data.version || '25.0.0')} · ${escapeHtml(data.status || 'operativo')} · ${Number(data.usage_24h?.total_tokens || 0).toLocaleString()} tokens en 24 horas.</p></div>`;
     $$('[data-open-panel]', els.sheetBody).forEach(btn => btn.addEventListener('click', () => openPanel(btn.dataset.openPanel)));
   }
 
@@ -1265,7 +1306,7 @@
         <div class="professional-hero-glow" aria-hidden="true"></div>
         <div class="professional-hero-mark">✦</div>
         <div class="professional-hero-copy">
-          <span class="professional-kicker">Professional Responsive Core</span>
+          <span class="professional-kicker">Cinematic Intelligence v25</span>
           <h3>Convierta objetivos en misiones verificables</h3>
           <p>JARVIS forma un equipo de especialistas, define hitos, utiliza varios proveedores y audita el resultado antes de entregarlo.</p>
         </div>

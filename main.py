@@ -478,7 +478,7 @@ async def lifespan(_: FastAPI):
     _start_maintenance()
     recovered = _recover_interrupted_jobs()
     logger.info(
-        "J.A.R.V.I.S. Professional Responsive Core v23 iniciado | public_mode=%s | redis=%s | jobs_recuperados=%s",
+        "J.A.R.V.I.S. Cinematic Intelligence v25 iniciado | public_mode=%s | redis=%s | jobs_recuperados=%s",
         PUBLIC_MODE,
         bool(REDIS_URL),
         recovered,
@@ -487,12 +487,12 @@ async def lifespan(_: FastAPI):
     _stop_maintenance()
     JOB_EXECUTOR.shutdown(wait=False, cancel_futures=True)
     provider_gateway.close()
-    logger.info("J.A.R.V.I.S. Professional Responsive Core v23 detenido")
+    logger.info("J.A.R.V.I.S. Cinematic Intelligence v25 detenido")
 
 
 app = FastAPI(
-    title="J.A.R.V.I.S. Professional Responsive Core",
-    version="23.0.0",
+    title="J.A.R.V.I.S. Cinematic Intelligence v25",
+    version="25.0.0",
     lifespan=lifespan,
 )
 
@@ -561,7 +561,7 @@ async def request_observability(request: Request, call_next):
         elif response.status_code >= 400:
             status = "cancelled" if response.status_code == 499 else "error"
         response.headers["X-Request-ID"] = request_id
-        response.headers["X-JARVIS-Version"] = "23.0.0"
+        response.headers["X-JARVIS-Version"] = "25.0.0"
         if request.url.path.startswith("/api/"):
             response.headers.setdefault("Cache-Control", "no-store")
         return response
@@ -3172,7 +3172,7 @@ async def consultar_jarvis_stream(data: ChatInput, request: Request):
             "Probando alternativas y caché",
             "Verificando el resultado",
         ]
-        yield json.dumps({"type": "progress", "stage": states[0], "version": "23.0.0"}, ensure_ascii=False) + "\n"
+        yield json.dumps({"type": "progress", "stage": states[0], "version": "25.0.0"}, ensure_ascii=False) + "\n"
         task = asyncio.create_task(consultar_jarvis(data, request))
         index = 1
         while not task.done():
@@ -3655,14 +3655,14 @@ def agent_status(session_id: str):
         ).fetchall()
     counts = {row["status"]: row["total"] for row in rows}
     active = sum(counts.get(status, 0) for status in ("queued", "running", "retrying", "paused", "cancelling"))
-    return {"status": "ok", "active": active, "counts": counts, "version": "23.0.0"}
+    return {"status": "ok", "active": active, "counts": counts, "version": "25.0.0"}
 
 
 @app.get("/api/professional/profiles")
 def professional_profiles():
     return {
         "status": "ok",
-        "version": "23.0.0",
+        "version": "25.0.0",
         "profiles": role_catalog_payload(),
         "principles": [
             "Planificación antes de la ejecución",
@@ -3739,7 +3739,7 @@ def professional_status(session_id: str):
     active = sum(counts.get(status, 0) for status in ("queued", "running", "retrying", "paused", "cancelling"))
     return {
         "status": "ok",
-        "version": "23.0.0",
+        "version": "25.0.0",
         "active": active,
         "counts": counts,
         "profiles": len(role_catalog_payload()),
@@ -3959,7 +3959,7 @@ def resilience_status(session_id: str = "default_session", limit: int = 12):
         ).fetchone()
     return {
         "status": "ok",
-        "version": "23.0.0",
+        "version": "25.0.0",
         "providers": resilience_provider_status(),
         "limits": {
             "max_resolution_attempts": MAX_RESOLUTION_ATTEMPTS,
@@ -3994,7 +3994,7 @@ def dashboard(session_id: str):
             (sid, since),
         ).fetchone()
     return {
-        "version": "23.0.0",
+        "version": "25.0.0",
         "status": "online" if provider_gateway.configured_names() else "local_only",
         "counts": counts,
         "usage_24h": dict(usage),
@@ -4035,14 +4035,14 @@ def self_check():
     checks["disk"] = disk_status(str(BASE_DIR))
     checks["context_compaction"] = {"ok": len(compact_messages([{"role":"system","content":"a"*1000},{"role":"user","content":"b"*20000}], 5000, 4)) >= 1}
     overall = all(item.get("ok") for key, item in checks.items() if key not in {"groq_key", "secondary_provider", "redis"})
-    return {"status": "ok" if overall else "degraded", "checks": checks, "version": "23.0.0"}
+    return {"status": "ok" if overall else "degraded", "checks": checks, "version": "25.0.0"}
 
 
 @app.get("/api/capabilities")
 def capabilities():
     return {
         "autonomous_core": True,
-        "version": "23.0.0",
+        "version": "25.0.0",
         "groq_configured": bool(GROQ_API_KEY),
         "model": GROQ_MODEL,
         "model_chain": MODEL_CHAIN,
@@ -4158,7 +4158,7 @@ def _job_health() -> Dict[str, Any]:
 
 @app.get("/api/tools/registry")
 def tools_registry_status():
-    return {"status": "ok", "version": "23.0.0", **TOOL_REGISTRY.snapshot()}
+    return {"status": "ok", "version": "25.0.0", **TOOL_REGISTRY.snapshot()}
 
 
 @app.get("/api/providers")
@@ -4166,7 +4166,7 @@ def providers_status():
     snapshot = provider_gateway.snapshot()
     return {
         "status": "ok",
-        "version": "23.0.0",
+        "version": "25.0.0",
         "gateway": snapshot,
         "configured_count": len(snapshot.get("configured", [])),
         "local_routes_available": True,
@@ -4177,7 +4177,7 @@ def providers_status():
 def providers_capabilities():
     return {
         "status": "ok",
-        "version": "23.0.0",
+        "version": "25.0.0",
         "matrix": provider_gateway.capability_matrix(),
         "quality_council": {
             "enabled": CONSENSUS_ENABLED,
@@ -4219,7 +4219,7 @@ def providers_route_preview(data: ProviderRouteInput):
 def health_live():
     return {
         "status": "ok",
-        "version": "23.0.0",
+        "version": "25.0.0",
         "uptime_seconds": runtime.metrics.summary().get("uptime_seconds", 0),
         "timestamp": time.time(),
     }
@@ -4234,7 +4234,7 @@ def health_ready():
         status_code=200 if ready else 503,
         content={
             "status": "ready" if ready else "not_ready",
-            "version": "23.0.0",
+            "version": "25.0.0",
             "database": database,
             "static_ui": {"ok": static_ok},
             "generative_route_configured": bool(
@@ -4264,7 +4264,7 @@ def health_deep():
     status = "ok" if required_ok and not open_circuits else ("degraded" if required_ok else "failed")
     payload = {
         "status": status,
-        "version": "23.0.0",
+        "version": "25.0.0",
         "database": database,
         "redis": redis,
         "disk": disk,
@@ -4311,7 +4311,7 @@ def performance(session_id: str = "default_session", hours: int = 24):
         ).fetchall()
     return {
         "status": "ok",
-        "version": "23.0.0",
+        "version": "25.0.0",
         "hours": hours,
         "runtime": runtime.snapshot(),
         "jobs": _job_health(),
@@ -4355,7 +4355,7 @@ def health():
         "models": provider_status(),
         "providers": resilience_provider_status(),
         "public_mode": PUBLIC_MODE,
-        "version": "23.0.0",
+        "version": "25.0.0",
         "runtime": {
             "cache": runtime.snapshot().get("cache", {}),
             "singleflight": runtime.singleflight.stats(),
@@ -4369,7 +4369,7 @@ def health():
 def system_info():
     return {
         "status": "JARVIS Core Interface Active",
-        "version": "23.0.0",
+        "version": "25.0.0",
         "groq_configured": bool(GROQ_API_KEY),
         "model": GROQ_MODEL,
         "model_chain": MODEL_CHAIN,

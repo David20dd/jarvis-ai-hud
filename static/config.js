@@ -5,6 +5,6 @@
 */
 window.JARVIS_CONFIG = Object.freeze({
   API_BASE: "https://jarvis-ai-hud.onrender.com",
-  APP_NAME: "J.A.R.V.I.S. — Professional Responsive Core",
+  APP_NAME: "J.A.R.V.I.S. — Cinematic Intelligence v25",
   PUBLIC_MODE: true
 });
