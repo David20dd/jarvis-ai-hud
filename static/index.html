@@ -4,14 +4,14 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#070b11" />
-  <meta name="description" content="J.A.R.V.I.S. Cinematic Intelligence v25: interfaz premium, reactor vectorial adaptable, agentes profesionales y experiencia limpia en computadora y celular." />
+  <meta name="description" content="J.A.R.V.I.S. Cinematic Intelligence v26 — Ultra Interface: interfaz premium, reactor vectorial adaptable, agentes profesionales y experiencia limpia en computadora y celular." />
   <meta name="referrer" content="strict-origin-when-cross-origin" />
-  <title>J.A.R.V.I.S. — Cinematic Intelligence v25</title>
-  <link rel="icon" href="./favicon-v25.svg?v=25" type="image/svg+xml" />
-  <link rel="shortcut icon" href="./favicon-v25.svg?v=25" type="image/svg+xml" />
+  <title>J.A.R.V.I.S. — Cinematic Intelligence v26 — Ultra Interface</title>
+  <link rel="icon" href="./favicon-v26.svg?v=26" type="image/svg+xml" />
+  <link rel="shortcut icon" href="./favicon-v26.svg?v=26" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
-  <link rel="manifest" href="./manifest.webmanifest?v=25" />
-  <link rel="stylesheet" href="./styles.css?v=25" />
+  <link rel="manifest" href="./manifest.webmanifest?v=26" />
+  <link rel="stylesheet" href="./styles.css?v=26" />
 
   <script defer src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
@@ -24,10 +24,11 @@
     };
   </script>
   <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
-  <script src="./config.js?v=25"></script>
-  <script defer src="./app.js?v=25"></script>
+  <script src="./config.js?v=26"></script>
+  <script defer src="./app.js?v=26"></script>
 </head>
 <body>
+  <a class="skip-link" href="#userInput">Ir al campo de mensaje</a>
   <div class="ambient" id="ambientGlow" aria-hidden="true"></div>
 
   <div class="app">
@@ -37,7 +38,7 @@
           <svg viewBox="0 0 24 24"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/></svg>
         </button>
         <div class="brand">
-          <div class="brand-reactor-wrap" aria-hidden="true"><img class="brand-reactor" src="./jarvis-reactor-v25.svg" alt="" /></div>
+          <div class="brand-reactor-wrap" aria-hidden="true"><img class="brand-reactor" src="./jarvis-reactor-v26.svg" alt="" /></div>
           <div class="brand-copy">
             <div class="brand-name">J.A.R.V.I.S.</div>
             <div class="brand-sub">Cinematic Multi-Agent Interface</div>
@@ -53,7 +54,7 @@
       <div class="top-right">
         <button class="icon-btn command-btn" id="commandBtn" aria-label="Abrir comandos" title="Comandos · Ctrl+K">
           <svg viewBox="0 0 24 24"><path d="M9.5 3a6.5 6.5 0 1 0 3.98 11.64L19.85 21 21 19.85l-6.36-6.37A6.5 6.5 0 0 0 9.5 3zm0 2a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9z"/></svg>
-          <span class="command-key">⌘K</span>
+          <span class="command-key">Ctrl K</span>
         </button>
         <div class="status-pill" id="statusPill" title="Estado del núcleo">
           <span class="status-dot"></span>
@@ -72,31 +73,56 @@
       <section class="chat-shell" aria-label="Conversación con JARVIS">
         <div class="chat-scroll" id="chatScroll">
           <section class="welcome" id="welcome">
-            <button class="reactor-wrap" id="reactorFx" type="button" aria-label="Activar núcleo visual de JARVIS" title="Activar núcleo">
-              <span class="reactor-aura" aria-hidden="true"></span>
-              <span class="reactor-orbit one" aria-hidden="true"></span>
-              <span class="reactor-orbit two" aria-hidden="true"></span>
-              <span class="reactor-orbit three" aria-hidden="true"></span>
-              <span class="reactor-scan" aria-hidden="true"></span>
-              <div class="reactor-picture reactor-svg-shell"><img class="reactor-img" src="./jarvis-reactor-v25.svg" alt="Reactor JARVIS con núcleo triangular invertido" /></div>
-            </button>
-            <div class="welcome-kicker">Cinematic Multi-Agent Interface</div>
-            <h1 class="welcome-title">¿Qué construiremos <span class="accent">hoy</span>?</h1>
-            <p class="welcome-sub">Una experiencia más clara, rápida y cinematográfica para investigar, crear, programar y resolver objetivos complejos con agentes especializados.</p>
+            <div class="welcome-layout">
+              <div class="welcome-visual">
+                <div class="core-label" aria-hidden="true"><span></span> Núcleo multiagente</div>
+                <button class="reactor-wrap" id="reactorFx" type="button" aria-label="Activar núcleo visual de JARVIS" title="Activar núcleo">
+                  <span class="reactor-aura" aria-hidden="true"></span>
+                  <span class="reactor-orbit one" aria-hidden="true"></span>
+                  <span class="reactor-orbit two" aria-hidden="true"></span>
+                  <span class="reactor-orbit three" aria-hidden="true"></span>
+                  <span class="reactor-scan" aria-hidden="true"></span>
+                  <div class="reactor-picture reactor-svg-shell"><img class="reactor-img" src="./jarvis-reactor-v26.svg" alt="Reactor vectorial de JARVIS con núcleo triangular invertido" /></div>
+                </button>
+                <div class="core-caption" aria-hidden="true">
+                  <span>Multimodelo</span><i></i><span>Agentes</span><i></i><span>Verificación</span>
+                </div>
+              </div>
 
-            <div class="suggestions" aria-label="Sugerencias">
-              <button class="suggestion" data-prompt="Convierte este objetivo en una misión profesional, asigna especialistas, ejecútala por etapas y verifica el resultado.">
-                <strong>Misión profesional</strong><span>Plan, equipo especializado, ejecución y control de calidad.</span>
-              </button>
-              <button class="suggestion" data-prompt="Ayúdame a analizar un documento y extraer sus puntos principales.">
-                <strong>Analizar documentos</strong><span>PDF, Word, Excel, PowerPoint, texto y código.</span>
-              </button>
-              <button class="suggestion" data-prompt="Resuelve esta ecuación paso a paso y explícamela de forma sencilla.">
-                <strong>Resolver matemática</strong><span>Cálculo exacto, álgebra y ecuaciones bien formateadas.</span>
-              </button>
-              <button class="suggestion" data-prompt="Diseña una solución técnica completa, comprueba riesgos y entrega pasos o código ejecutable.">
-                <strong>Construir solución</strong><span>Arquitectura, programación, verificación y entrega completa.</span>
-              </button>
+              <div class="welcome-content">
+                <div class="welcome-kicker">Cinematic Multi-Agent Interface</div>
+                <h1 class="welcome-title">¿Qué construiremos <span class="accent">hoy</span>?</h1>
+                <p class="welcome-sub">Investiga, analiza, programa y organiza objetivos complejos con una experiencia clara, profesional y diseñada para trabajar sin distracciones.</p>
+
+                <div class="capability-strip" aria-label="Capacidades principales">
+                  <span><b>01</b> Planeación inteligente</span>
+                  <span><b>02</b> Ejecución por etapas</span>
+                  <span><b>03</b> Resultado verificado</span>
+                </div>
+
+                <div class="suggestions" aria-label="Acciones rápidas">
+                  <button class="suggestion" data-prompt="Convierte este objetivo en una misión profesional, asigna especialistas, ejecútala por etapas y verifica el resultado.">
+                    <span class="suggestion-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2 3.5 6.5v5c0 5.2 3.6 9.6 8.5 10.5 4.9-.9 8.5-5.3 8.5-10.5v-5L12 2Zm0 2.2 6.4 3.4v3.9c0 4-2.6 7.5-6.4 8.5-3.8-1-6.4-4.5-6.4-8.5V7.6L12 4.2Zm-1.1 4.1v3.1H7.8v2h3.1v3.1h2v-3.1H16v-2h-3.1V8.3h-2Z"/></svg></span>
+                    <span class="suggestion-copy"><strong>Misión profesional</strong><span>Plan, especialistas, ejecución y control de calidad.</span></span>
+                    <span class="suggestion-arrow" aria-hidden="true">↗</span>
+                  </button>
+                  <button class="suggestion" data-prompt="Ayúdame a analizar un documento y extraer sus puntos principales.">
+                    <span class="suggestion-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 2h8l4 4v16H6V2Zm2 2v16h8V7h-3V4H8Zm2 7h4v2h-4v-2Zm0 4h4v2h-4v-2Z"/></svg></span>
+                    <span class="suggestion-copy"><strong>Analizar documentos</strong><span>PDF, Word, Excel, presentaciones, texto y código.</span></span>
+                    <span class="suggestion-arrow" aria-hidden="true">↗</span>
+                  </button>
+                  <button class="suggestion" data-prompt="Resuelve esta ecuación paso a paso y explícamela de forma sencilla.">
+                    <span class="suggestion-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4V4Zm2 2v12h12V6H6Zm2 2h3v2H8V8Zm5 0h3v2h-3V8Zm-5 4h8v2H8v-2Zm0 4h3v2H8v-2Zm5 0h3v2h-3v-2Z"/></svg></span>
+                    <span class="suggestion-copy"><strong>Resolver matemática</strong><span>Cálculo exacto, álgebra y explicaciones paso a paso.</span></span>
+                    <span class="suggestion-arrow" aria-hidden="true">↗</span>
+                  </button>
+                  <button class="suggestion" data-prompt="Diseña una solución técnica completa, comprueba riesgos y entrega pasos o código ejecutable.">
+                    <span class="suggestion-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m8.7 16.6-4.6-4.6 4.6-4.6 1.4 1.4L6.9 12l3.2 3.2-1.4 1.4Zm6.6 0-1.4-1.4 3.2-3.2-3.2-3.2 1.4-1.4 4.6 4.6-4.6 4.6ZM10.2 19l2.1-14 2 .3-2.1 14-2-.3Z"/></svg></span>
+                    <span class="suggestion-copy"><strong>Construir solución</strong><span>Arquitectura, programación, riesgos y entrega completa.</span></span>
+                    <span class="suggestion-arrow" aria-hidden="true">↗</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </section>
 
@@ -146,8 +172,8 @@
   <aside class="drawer" id="drawer" aria-label="Menú lateral">
     <div class="drawer-head drawer-head-clean">
       <div class="drawer-identity">
-        <div class="drawer-reactor" aria-hidden="true"><img src="./jarvis-reactor-v25.svg" alt="" /></div>
-        <div><div class="drawer-brand">J.A.R.V.I.S.</div><div class="drawer-subtitle">Cinematic Intelligence v25</div></div>
+        <div class="drawer-reactor" aria-hidden="true"><img src="./jarvis-reactor-v26.svg" alt="" /></div>
+        <div><div class="drawer-brand">J.A.R.V.I.S.</div><div class="drawer-subtitle">Cinematic Intelligence v26 — Ultra Interface</div></div>
       </div>
       <button class="icon-btn" id="closeDrawerBtn" aria-label="Cerrar menú"><svg viewBox="0 0 24 24"><path d="m18.3 5.7-1.4-1.4L12 9.2 7.1 4.3 5.7 5.7l4.9 4.9-4.9 4.9 1.4 1.4 4.9-4.9 4.9 4.9 1.4-1.4-4.9-4.9z"/></svg></button>
     </div>

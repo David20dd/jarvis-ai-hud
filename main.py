@@ -478,7 +478,7 @@ async def lifespan(_: FastAPI):
     _start_maintenance()
     recovered = _recover_interrupted_jobs()
     logger.info(
-        "J.A.R.V.I.S. Cinematic Intelligence v25 iniciado | public_mode=%s | redis=%s | jobs_recuperados=%s",
+        "J.A.R.V.I.S. Cinematic Intelligence v26 iniciado | public_mode=%s | redis=%s | jobs_recuperados=%s",
         PUBLIC_MODE,
         bool(REDIS_URL),
         recovered,
@@ -487,11 +487,11 @@ async def lifespan(_: FastAPI):
     _stop_maintenance()
     JOB_EXECUTOR.shutdown(wait=False, cancel_futures=True)
     provider_gateway.close()
-    logger.info("J.A.R.V.I.S. Cinematic Intelligence v25 detenido")
+    logger.info("J.A.R.V.I.S. Cinematic Intelligence v26 detenido")
 
 
 app = FastAPI(
-    title="J.A.R.V.I.S. Cinematic Intelligence v25",
+    title="J.A.R.V.I.S. Cinematic Intelligence v26",
     version="25.0.0",
     lifespan=lifespan,
 )
