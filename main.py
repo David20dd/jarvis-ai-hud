@@ -91,7 +91,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("jarvis")
 
-APP_VERSION = "46.0.0"
+APP_VERSION = "46.0.1"
 APP_EDITION = "Unified Personal Intelligence"
 
 DB_FILE = os.getenv("JARVIS_DB_FILE", "jarvis_memory.db").strip() or "jarvis_memory.db"
@@ -660,6 +660,18 @@ def _identity_for_request(request: Request) -> Optional[Dict[str, Any]]:
     return user
 
 
+def _add_cors_to_early_response(request: Request, response: JSONResponse) -> None:
+    """Preserva CORS cuando este middleware responde antes de CORSMiddleware."""
+    origin = request.headers.get("origin", "").strip()
+    if not origin:
+        return
+    if "*" in ALLOWED_ORIGINS:
+        response.headers["Access-Control-Allow-Origin"] = "*"
+    elif origin in ALLOWED_ORIGINS:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Vary"] = "Origin"
+
+
 @app.middleware("http")
 async def request_observability(request: Request, call_next):
     started = time.perf_counter()
@@ -680,6 +692,7 @@ async def request_observability(request: Request, call_next):
         if AUTH_REQUIRED and path.startswith("/api/") and not is_public_api and not getattr(request.state, "identity", None):
             status = "error"
             response = JSONResponse(status_code=401, content={"detail": "Inicia sesión para utilizar este núcleo privado."})
+            _add_cors_to_early_response(request, response)
             response.headers["X-Request-ID"] = request_id
             response.headers["X-JARVIS-Version"] = APP_VERSION
             response.headers["Cache-Control"] = "no-store"

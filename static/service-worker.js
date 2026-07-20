@@ -1,8 +1,8 @@
-const CACHE_NAME = 'jarvis-unified-personal-static-v46';
+const CACHE_NAME = 'jarvis-unified-personal-static-v46-1';
 const CORE = [
   './', './index.html',
-  './styles.css?v=46', './app.js?v=46', './config.js?v=46',
-  './manifest.webmanifest?v=46', './favicon-v46.svg?v=46',
+  './styles.css?v=46.1', './app.js?v=46.1', './config.js?v=46.1',
+  './manifest.webmanifest?v=46.1', './favicon-v46.svg?v=46.1',
   './jarvis-reactor-v46.svg'
 ];
 self.addEventListener('install', event => {

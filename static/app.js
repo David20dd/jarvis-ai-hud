@@ -905,6 +905,12 @@
         const partial = 'Generación detenida por el usuario.';
         appendAssistant(partial, { cancelled: true, route: 'cancelled' }, true, false);
         persistMessage({ role: 'assistant', content: partial, meta: { cancelled: true, route: 'cancelled' } });
+      } else if (Number(error?.status || 0) === 401 || /inicia sesi[oó]n|núcleo privado/i.test(String(error?.message || ''))) {
+        const authMessage = '🔐 **El núcleo está operativo, pero requiere iniciar sesión.**\n\nAbre **Cuenta y privacidad**, crea la primera cuenta propietaria o inicia sesión, y después vuelve a enviar el mensaje.';
+        appendAssistant(authMessage, { route: 'authentication_required', error: true }, true, false);
+        persistMessage({ role: 'assistant', content: authMessage, meta: { route: 'authentication_required', error: true } });
+        setStatus('Inicia sesión', 'warning');
+        setTimeout(() => openPanel('account').catch(() => {}), 180);
       } else {
         console.error('Fallo de respuesta JARVIS:', error);
         const recovery = buildLocalRecoveryReply(displayPrompt, error);
@@ -1587,7 +1593,7 @@ Revisa que Render esté en estado **Live**, que \`static/config.js\` apunte a la
     const registration = data.registration_enabled ? `
       <details class="auth-register"><summary>Crear la cuenta propietaria</summary><div class="auth-fields"><input class="text-input" id="registerName" autocomplete="name" placeholder="Nombre"/><input class="text-input" id="registerEmail" type="email" autocomplete="email" placeholder="Correo"/><input class="text-input" id="registerPassword" type="password" autocomplete="new-password" placeholder="Contraseña segura (12+ caracteres)"/><button class="soft-btn" id="registerAccount">Crear cuenta</button></div></details>` : '';
     els.sheetBody.innerHTML = `
-      <div class="account-login"><span class="account-lock">◇</span><h3>Protege tu núcleo personal</h3><p>El inicio de sesión es opcional hasta que actives <code>JARVIS_AUTH_REQUIRED=true</code> en Render.</p><div class="auth-fields"><input class="text-input" id="loginEmail" type="email" autocomplete="username" placeholder="Correo"/><input class="text-input" id="loginPassword" type="password" autocomplete="current-password" placeholder="Contraseña"/><button class="primary-btn" id="loginAccount">Iniciar sesión</button></div>${registration}</div>`;
+      <div class="account-login"><span class="account-lock">◇</span><h3>Protege tu núcleo personal</h3><p>${data.auth_required ? 'Este núcleo privado requiere iniciar sesión antes de conversar.' : 'El inicio de sesión es opcional hasta que actives <code>JARVIS_AUTH_REQUIRED=true</code> en Render.'}</p><div class="auth-fields"><input class="text-input" id="loginEmail" type="email" autocomplete="username" placeholder="Correo"/><input class="text-input" id="loginPassword" type="password" autocomplete="current-password" placeholder="Contraseña"/><button class="primary-btn" id="loginAccount">Iniciar sesión</button></div>${registration}</div>`;
     const finishAuth = result => {
       state.authToken = result.token || ''; state.authUser = result.user || null;
       sessionStore.setItem(STORE.authToken, state.authToken);
@@ -2358,7 +2364,10 @@ Revisa que Render esté en estado **Live**, que \`static/config.js\` apunte a la
       catch { throw new Error(`El servidor respondió con contenido no válido (HTTP ${response.status}).`); }
       if (!response.ok) {
         const retry = data.retry_after_seconds ? ` Intenta nuevamente en ${data.retry_after_seconds} segundos.` : '';
-        throw new Error((data.detail || data.reply || `Error HTTP ${response.status}`) + retry);
+        const error = new Error((data.detail || data.reply || `Error HTTP ${response.status}`) + retry);
+        error.status = response.status;
+        error.data = data;
+        throw error;
       }
       return data;
     };
@@ -2404,6 +2413,7 @@ Revisa que Render esté en estado **Live**, que \`static/config.js\` apunte a la
       return finalData;
     } catch (error) {
       if (error.name === 'AbortError') throw error;
+      if (Number(error?.status || 0) === 401) throw error;
       setStatus('Recuperando resultado por ruta compatible', 'warning');
       const fallback = await resilientFetch(apiUrl('/api/jarvis'), requestOptions, { attempts: 2, timeoutMs: 50000, retryStatuses: [408, 425, 429, 500, 502, 503, 504] });
       return parseStandardResponse(fallback);

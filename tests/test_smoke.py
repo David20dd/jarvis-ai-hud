@@ -60,8 +60,8 @@ def test_http_health_and_headers():
     with TestClient(main.app) as client:
         live = client.get("/api/health/live")
         assert live.status_code == 200
-        assert live.json()["version"] == "46.0.0"
-        assert live.headers["x-jarvis-version"] == "46.0.0"
+        assert live.json()["version"] == "46.0.1"
+        assert live.headers["x-jarvis-version"] == "46.0.1"
         assert live.headers.get("x-request-id")
 
         ready = client.get("/api/health/ready")
@@ -78,7 +78,7 @@ def test_http_health_and_headers():
 def test_capabilities_include_stability_features():
     with TestClient(main.app) as client:
         data = client.get("/api/capabilities").json()
-        assert data["version"] == "46.0.0"
+        assert data["version"] == "46.0.1"
         features = set(data["features"])
         assert "singleflight_deduplication" in features
         assert "persistent_job_recovery" in features
@@ -185,7 +185,7 @@ def test_provider_gateway_endpoints_and_route_preview():
         status = client.get("/api/providers")
         assert status.status_code == 200
         payload = status.json()
-        assert payload["version"] == "46.0.0"
+        assert payload["version"] == "46.0.1"
         assert "gateway" in payload
         assert "providers" in payload["gateway"]
 
@@ -324,7 +324,7 @@ def test_agent_plan_and_execute_endpoints():
 
         status = client.get('/api/agents/status', params={'session_id': 'agent-test'})
         assert status.status_code == 200
-        assert status.json()['version'] == '46.0.0'
+        assert status.json()['version'] == '46.0.1'
 
 
 
@@ -384,7 +384,7 @@ def test_provider_capability_matrix_and_tool_registry_endpoints():
         capabilities = client.get('/api/providers/capabilities')
         assert capabilities.status_code == 200
         payload = capabilities.json()
-        assert payload['version'] == '46.0.0'
+        assert payload['version'] == '46.0.1'
         assert 'anthropic' in payload['matrix']['providers']
         assert 'coding' in payload['matrix']['task_preferences']
         assert payload['quality_council']['max_providers'] >= 2
@@ -392,7 +392,7 @@ def test_provider_capability_matrix_and_tool_registry_endpoints():
         registry = client.get('/api/tools/registry')
         assert registry.status_code == 200
         tools = registry.json()
-        assert tools['version'] == '46.0.0'
+        assert tools['version'] == '46.0.1'
         assert tools['available_count'] >= 10
         names = {item['name'] for item in tools['tools'] if item['available']}
         assert {'web_search', 'calculator', 'document_search'}.issubset(names)
@@ -452,7 +452,7 @@ def test_professional_endpoints_expose_profiles_and_plan():
         profiles = client.get("/api/professional/profiles")
         assert profiles.status_code == 200
         payload = profiles.json()
-        assert payload["version"] == "46.0.0"
+        assert payload["version"] == "46.0.1"
         assert len(payload["profiles"]) >= 6
 
         planned = client.post(
@@ -474,7 +474,7 @@ def test_professional_endpoints_expose_profiles_and_plan():
 
         status = client.get("/api/professional/status?session_id=professional-test")
         assert status.status_code == 200
-        assert status.json()["version"] == "46.0.0"
+        assert status.json()["version"] == "46.0.1"
 
 
 def test_responsive_frontend_contract():
@@ -585,7 +585,7 @@ def test_v38_automation_and_optional_integrations_status():
         status = client.get("/api/autonomy/status?session_id=automation-test")
         assert status.status_code == 200
         payload = status.json()
-        assert payload["version"] == "46.0.0"
+        assert payload["version"] == "46.0.1"
         assert "mcp" in payload and "code_lab" in payload and "semantic" in payload
 
 
@@ -710,7 +710,7 @@ def test_v46_operations_and_channel_status_endpoints():
         assert client.get("/404.html").status_code == 200
         operations = client.get("/api/operations/overview", params={"session_id": "test-v46"})
         assert operations.status_code == 200
-        assert operations.json()["version"] == "46.0.0"
+        assert operations.json()["version"] == "46.0.1"
         assert operations.json()["safety"]["human_approval"] is True
         channels = client.get("/api/channels/status")
         assert channels.status_code == 200
@@ -727,4 +727,20 @@ def test_v46_frontend_is_clean_connected_and_boot_safe():
     assert "window.storage" not in js
     assert "Authorization: `Bearer ${state.authToken}`" in js
     assert "renderChannels" in js and "renderAccount" in js
+    assert "authentication_required" in js
+    assert "Number(error?.status || 0) === 401" in js
     assert "v46 — Clean, connected and calm" in css
+
+
+def test_v46_private_core_returns_readable_cors_401(monkeypatch):
+    monkeypatch.setattr(main, "AUTH_REQUIRED", True)
+    monkeypatch.setattr(main, "ALLOWED_ORIGINS", ["*"])
+    with TestClient(main.app) as client:
+        response = client.post(
+            "/api/jarvis",
+            headers={"Origin": "https://owner.github.io"},
+            json={"message": "2+2", "session_id": "auth-required-test"},
+        )
+    assert response.status_code == 401
+    assert response.headers["access-control-allow-origin"] == "*"
+    assert "Inicia sesión" in response.json()["detail"]
