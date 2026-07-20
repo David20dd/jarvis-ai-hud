@@ -91,8 +91,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger("jarvis")
 
-APP_VERSION = "46.0.1"
-APP_EDITION = "Unified Personal Intelligence"
+APP_VERSION = "47.0.0"
+APP_EDITION = "Reliable Workspace"
 
 DB_FILE = os.getenv("JARVIS_DB_FILE", "jarvis_memory.db").strip() or "jarvis_memory.db"
 BASE_DIR = Path(__file__).resolve().parent
@@ -558,7 +558,7 @@ async def lifespan(_: FastAPI):
     recovered_workflows = _recover_interrupted_workflows()
     recovered_channels = _recover_channel_events()
     logger.info(
-        "J.A.R.V.I.S. v46 iniciado | public_mode=%s | redis=%s | jobs_recuperados=%s | workflows_recuperados=%s | canales_recuperados=%s",
+        "J.A.R.V.I.S. v47 iniciado | public_mode=%s | redis=%s | jobs_recuperados=%s | workflows_recuperados=%s | canales_recuperados=%s",
         PUBLIC_MODE,
         bool(REDIS_URL),
         recovered,
@@ -569,11 +569,11 @@ async def lifespan(_: FastAPI):
     _stop_maintenance()
     JOB_EXECUTOR.shutdown(wait=False, cancel_futures=True)
     provider_gateway.close()
-    logger.info("J.A.R.V.I.S. v46 detenido")
+    logger.info("J.A.R.V.I.S. v47 detenido")
 
 
 app = FastAPI(
-    title=f"J.A.R.V.I.S. {APP_EDITION} v46",
+    title=f"J.A.R.V.I.S. {APP_EDITION} v47",
     version=APP_VERSION,
     lifespan=lifespan,
 )
@@ -682,7 +682,8 @@ async def request_observability(request: Request, call_next):
     try:
         path = request.url.path.rstrip("/") or "/"
         is_public_api = (
-            path in AUTH_PUBLIC_PATHS
+            request.method.upper() == "OPTIONS"
+            or path in AUTH_PUBLIC_PATHS
             or path.startswith("/api/health/")
             or path in {"/api/health", "/api/health/live", "/api/health/ready"}
         )
@@ -2331,7 +2332,7 @@ def classify_intent(prompt: str) -> Dict[str, Any]:
         "general": 1,
     }
     keyword_groups = {
-        "research": ["busca", "investiga", "noticias", "actual", "fuentes", "compara", "precio", "clima", "resultado"],
+        "research": ["busca", "investiga", "noticias", "actual", "fuentes", "compara", "precio", "clima", "resultados deportivos", "marcador"],
         "documents": ["documento", "pdf", "word", "excel", "powerpoint", "archivo", "resumen del archivo", "biblioteca"],
         "math": ["calcula", "resuelve", "ecuación", "ecuacion", "porcentaje", "derivada", "integral", "matriz", "estadística", "estadistica"],
         "code": ["código", "codigo", "programa", "python", "javascript", "java", "html", "css", "sql", "debug", "error de código", "api"],
@@ -2343,6 +2344,8 @@ def classify_intent(prompt: str) -> Dict[str, Any]:
     for intent, words in keyword_groups.items():
         scores[intent] += sum(2 for word in words if word in text)
     if re.search(r"[0-9a-z²³+\-−*/×÷().^\s]+=[0-9a-z²³+\-−*/×÷().^\s]+", text):
+        scores["math"] += 6
+    if re.search(r"\d\s*(?:%|[+\-*/×÷^])\s*\d", text):
         scores["math"] += 6
     if "```" in prompt or re.search(r"\b(traceback|syntaxerror|typeerror|referenceerror)\b", text):
         scores["code"] += 6
@@ -4911,6 +4914,8 @@ def create_autonomy_workflow(data: WorkflowInput, request: Request):
     enforce_request_guard(request)
     sid = safe_session_id(data.session_id)
     intent = classify_intent(data.objective).get("intent", "general")
+    if data.mode in {"math", "research"}:
+        intent = data.mode
     plan = autonomy_planner.build(
         data.objective, intent=intent, mode=data.mode, project_name=data.project_name,
     )
@@ -5199,7 +5204,7 @@ def self_check():
         checks["automation_store"] = {"ok": True, "counts": automation_store.counts()}
         checks["evaluation_store"] = {"ok": True, "runs": evaluation_store.report(1).get("runs", 0)}
     except Exception as exc:
-        checks["v46_data_core"] = {"ok": False, "detail": safe_error_text(exc)}
+        checks["v47_data_core"] = {"ok": False, "detail": safe_error_text(exc)}
     checks["mcp"] = {"ok": True, "optional": True, **mcp_manager.status(False)}
     checks["code_lab"] = {"ok": True, "optional": True, **code_lab.status()}
     checks["disk"] = disk_status(str(BASE_DIR))

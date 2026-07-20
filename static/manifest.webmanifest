@@ -1,7 +1,7 @@
 {
-  "name": "J.A.R.V.I.S. Unified Personal Intelligence v46",
+  "name": "J.A.R.V.I.S. Reliable Workspace v47",
   "short_name": "JARVIS",
-  "description": "Asistente multimodelo con workflows autónomos persistentes, evidencia, aprobaciones y una interfaz rápida y adaptable.",
+  "description": "Asistente multimodelo confiable con chat, archivos, memoria, misiones y canales en una interfaz sencilla.",
   "start_url": "../",
   "scope": "../",
   "display": "standalone",

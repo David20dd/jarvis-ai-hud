@@ -1,2562 +1,713 @@
 (() => {
   'use strict';
 
-  const $ = (sel, root = document) => root.querySelector(sel);
-  const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+  const $ = (selector, root = document) => root.querySelector(selector);
+  const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
+  const safeStorage = storage => ({
+    getItem(key) { try { return storage?.getItem(key); } catch { return null; } },
+    setItem(key, value) { try { storage?.setItem(key, value); } catch {} },
+    removeItem(key) { try { storage?.removeItem(key); } catch {} }
+  });
+  const local = safeStorage(window.localStorage);
+  const session = safeStorage(window.sessionStorage);
 
-  function createSafeStorage(target = 'localStorage') {
-    const memory = new Map();
-    try {
-      const testKey = '__jarvis_storage_test__';
-      const targetStorage = window[target];
-      targetStorage.setItem(testKey, '1');
-      targetStorage.removeItem(testKey);
-      return targetStorage;
-    } catch {
-      return {
-        getItem(key) { return memory.has(String(key)) ? memory.get(String(key)) : null; },
-        setItem(key, value) { memory.set(String(key), String(value)); },
-        removeItem(key) { memory.delete(String(key)); },
-        clear() { memory.clear(); },
-        key(index) { return [...memory.keys()][Number(index)] || null; },
-        get length() { return memory.size; }
-      };
-    }
-  }
-
-  const storage = createSafeStorage();
-  const sessionStore = createSafeStorage('sessionStorage');
+  const KEYS = {
+    client: 'jarvis_v47_client',
+    chats: 'jarvis_v47_chats',
+    active: 'jarvis_v47_active_chat',
+    api: 'jarvis_v47_api_base',
+    token: 'jarvis_v47_auth_token',
+    user: 'jarvis_v47_auth_user',
+    mode: 'jarvis_v47_mode'
+  };
 
   const els = {
-    ambient: $('#ambientGlow'),
-    statusPill: $('#statusPill'),
-    statusText: $('#statusText'),
-    menuBtn: $('#menuBtn'),
-    workspaceBtn: $('#workspaceBtn'),
-    newChatTopBtn: $('#newChatTopBtn'),
-    projectBtn: $('#projectBtn'),
-    projectName: $('#projectName'),
-    commandBtn: $('#commandBtn'),
-    chatScroll: $('#chatScroll'),
-    welcome: $('#welcome'),
-    messages: $('#messages'),
-    thinkingWrap: $('#thinkingWrap'),
-    thinkingText: $('#thinkingText'),
-    thinkingDetail: $('#thinkingDetail'),
-    thinkingStages: $$('[data-thinking-stage]'),
-    jumpBtn: $('#jumpBtn'),
-    attachments: $('#attachments'),
-    attachBtn: $('#attachBtn'),
-    fileInput: $('#fileInput'),
-    userInput: $('#userInput'),
-    micBtn: $('#micBtn'),
-    sendBtn: $('#sendBtn'),
-    sendIcon: $('#sendIcon'),
-    modeBtn: $('#modeBtn'),
-    backdrop: $('#backdrop'),
-    drawer: $('#drawer'),
-    closeDrawerBtn: $('#closeDrawerBtn'),
-    newChatBtn: $('#newChatBtn'),
-    quickNewProjectBtn: $('#quickNewProjectBtn'),
-    projectList: $('#projectList'),
-    drawerSearch: $('#drawerSearch'),
-    chatList: $('#chatList'),
-    chatFilterBar: $('#chatFilterBar'),
-    chatCountBadge: $('#chatCountBadge'),
-    moreToolsBtn: $('#moreToolsBtn'),
-    moreToolsGroup: $('#moreToolsGroup'),
-    sheet: $('#sheet'),
-    sheetTitle: $('#sheetTitle'),
-    sheetBody: $('#sheetBody'),
-    closeSheetBtn: $('#closeSheetBtn'),
-    toast: $('#toast'),
-    reactorFx: $('#reactorFx'),
-    commandPalette: $('#commandPalette'),
-    commandInput: $('#commandInput'),
-    commandResults: $('#commandResults'),
-    offlineBanner: $('#offlineBanner'),
-    focusModeBtn: $('#focusModeBtn'),
-    mobileDock: $('#mobileDock'),
-    mobileMenuBtn: $('#mobileMenuBtn'),
-    mobileToolsBtn: $('#mobileToolsBtn'),
-    mobileNewChatBtn: $('#mobileNewChatBtn'),
-    mobileFocusBtn: $('#mobileFocusBtn')
+    app: $('#app'), sidebar: $('#sidebar'), scrim: $('#scrim'), sidebarClose: $('#sidebarClose'),
+    menuBtn: $('#menuBtn'), brandBtn: $('#brandBtn'), newChatBtn: $('#newChatBtn'), mobileNewBtn: $('#mobileNewBtn'),
+    mobileCompose: $('#mobileCompose'), chatList: $('#chatList'), chatSearch: $('#chatSearch'), searchChatsBtn: $('#searchChatsBtn'),
+    modeSelect: $('#modeSelect'), statusButton: $('#statusButton'), statusText: $('#statusText'), diagnosticsBtn: $('#diagnosticsBtn'),
+    chatView: $('#chatView'), panelView: $('#panelView'), conversation: $('#conversation'), welcome: $('#welcome'), messages: $('#messages'),
+    thinking: $('#thinking'), thinkingTitle: $('#thinkingTitle'), thinkingDetail: $('#thinkingDetail'),
+    composer: $('#composer'), messageInput: $('#messageInput'), sendBtn: $('#sendBtn'), attachBtn: $('#attachBtn'),
+    fileInput: $('#fileInput'), attachments: $('#attachments'), voiceBtn: $('#voiceBtn'),
+    panelBack: $('#panelBack'), panelEyebrow: $('#panelEyebrow'), panelTitle: $('#panelTitle'), panelContent: $('#panelContent'), panelRefresh: $('#panelRefresh'),
+    accountBtn: $('#accountBtn'), accountName: $('#accountName'), accountState: $('#accountState'), avatar: $('#avatar'),
+    authModal: $('#authModal'), authForm: $('#authForm'), authTitle: $('#authTitle'), authCopy: $('#authCopy'), registerTab: $('#registerTab'),
+    nameField: $('#nameField'), authName: $('#authName'), authEmail: $('#authEmail'), authPassword: $('#authPassword'), authError: $('#authError'), authSubmit: $('#authSubmit'),
+    connectionModal: $('#connectionModal'), connectionExplanation: $('#connectionExplanation'), apiBaseInput: $('#apiBaseInput'),
+    resetConnection: $('#resetConnection'), saveConnection: $('#saveConnection'), connectionResult: $('#connectionResult'), toast: $('#toast')
   };
 
-  const STORE = {
-    client: 'jarvis_nexus_client',
-    chats: 'jarvis_nexus_chats',
-    active: 'jarvis_nexus_active_chat',
-    draftPrefix: 'jarvis_nexus_draft_',
-    apiBase: 'jarvis_pages_api_base_v11',
-    mode: 'jarvis_nexus_mode',
-    projects: 'jarvis_nexus_projects_v11',
-    activeProject: 'jarvis_nexus_active_project_v11',
-    moreToolsOpen: 'jarvis_clean_more_tools_v46',
-    focusMode: 'jarvis_focus_mode_v46',
-    chatFilter: 'jarvis_chat_filter_v46',
-    authToken: 'jarvis_auth_token_v46',
-    authUser: 'jarvis_auth_user_v46'
-  };
-
-  const MODES = [
-    { id: 'auto', label: 'Modo automático' },
-    { id: 'fast', label: 'Modo rápido' },
-    { id: 'research', label: 'Modo investigación' },
-    { id: 'math', label: 'Modo matemática' },
-    { id: 'writing', label: 'Modo escritura' },
-    { id: 'professional', label: 'Modo profesional' }
-  ];
-
-  const IS_GITHUB_PAGES = location.hostname.endsWith('.github.io');
-  const CONFIGURED_API_BASE = normalizeBase(window.JARVIS_CONFIG?.API_BASE || '');
-  const DEFAULT_API_BASE = IS_GITHUB_PAGES
-    ? CONFIGURED_API_BASE
-    : normalizeBase(location.origin || CONFIGURED_API_BASE);
+  const isGitHubPages = location.hostname.endsWith('.github.io');
+  const configuredBase = normalizeBase(window.JARVIS_CONFIG?.API_BASE || 'https://jarvis-ai-hud.onrender.com');
+  const savedBase = normalizeBase(local.getItem(KEYS.api) || '');
 
   const state = {
-    clientId: storage.getItem(STORE.client) || uid('client'),
-    chats: loadJSON(STORE.chats, {}),
-    projects: loadJSON(STORE.projects, {}),
-    activeProjectId: storage.getItem(STORE.activeProject) || '',
-    activeChatId: storage.getItem(STORE.active) || '',
+    clientId: local.getItem(KEYS.client) || uid('client'),
+    apiBase: isGitHubPages ? (savedBase || configuredBase) : savedBase,
+    token: session.getItem(KEYS.token) || '',
+    user: parseJSON(session.getItem(KEYS.user), null),
+    auth: { required: false, registration: false, authenticated: false },
+    core: { online: false, version: '', busy: false },
+    mode: local.getItem(KEYS.mode) || 'auto',
+    chats: parseJSON(local.getItem(KEYS.chats), {}),
+    activeChatId: local.getItem(KEYS.active) || '',
     files: [],
-    isGenerating: false,
     abortController: null,
-    thinkingTimer: null,
-    statusTimers: [],
-    followOutput: true,
-    mode: storage.getItem(STORE.mode) || 'auto',
-    apiBase: normalizeBase(storage.getItem(STORE.apiBase) || DEFAULT_API_BASE),
-    authToken: sessionStore.getItem(STORE.authToken) || '',
-    authUser: loadSessionJSON(STORE.authUser, null),
-    lastPrompt: '',
-    wakeRetrying: false,
-    commandIndex: 0,
-    commandItems: [],
-    moreToolsOpen: storage.getItem(STORE.moreToolsOpen) === '1',
-    focusMode: storage.getItem(STORE.focusMode) === '1',
-    chatFilter: storage.getItem(STORE.chatFilter) || 'all',
-    chatSwitchTimer: null
+    currentView: 'chat',
+    authMode: 'login',
+    toastTimer: null
   };
+  local.setItem(KEYS.client, state.clientId);
 
-  storage.setItem(STORE.client, state.clientId);
-
-  document.addEventListener('DOMContentLoaded', () => {
-    try {
-      init();
-    } catch (error) {
-      console.error('JARVIS no pudo iniciar:', error);
-      showBootFailure(error);
-    }
-  });
-
-  function showBootFailure(error) {
-    document.body.classList.add('app-ready', 'boot-failure');
-    const messages = document.querySelector('#messages');
-    const welcome = document.querySelector('#welcome');
-    if (welcome) welcome.style.display = 'none';
-    if (messages) {
-      messages.innerHTML = `<div class="message assistant"><div class="assistant-row"><div class="assistant-body"><div class="assistant-content"><h3>JARVIS necesita reiniciar la interfaz</h3><p>Se detectó un problema local del navegador. Recarga la página con <strong>Ctrl + F5</strong>. Tus conversaciones guardadas no se eliminan.</p><p class="boot-error-code">${escapeHtml(error?.message || 'Error de inicio')}</p></div></div></div></div>`;
+  class ApiError extends Error {
+    constructor(message, status = 0, data = null) {
+      super(message);
+      this.name = 'ApiError';
+      this.status = Number(status || 0);
+      this.data = data;
     }
   }
 
+  document.addEventListener('DOMContentLoaded', init);
+
   function init() {
-    document.title = window.JARVIS_CONFIG?.APP_NAME || 'J.A.R.V.I.S. — Unified Personal Intelligence v46';
-    ensureProjects();
-    migrateChatsToProjects();
-    if (!state.activeChatId || !state.chats[state.activeChatId] || currentChat()?.projectId !== state.activeProjectId) {
-      state.activeChatId = latestChatForProject(state.activeProjectId)?.id || '';
-    }
-    if (!state.activeChatId) createChat(false);
-    configureMarkdown();
+    ensureChat();
     bindEvents();
-    renderMode();
-    renderProjectSwitcher();
-    renderProjectList();
-    renderChatFilters();
+    els.modeSelect.value = state.mode;
     renderChatList();
-    renderActiveChat();
-    syncMoreTools();
-    syncFocusMode();
-    restoreDraft();
+    renderConversation();
+    renderAttachments();
     autoResize();
-    bindHeroFx();
-    checkHealth({ wake: true });
-    pollNotifications();
+    bootCore();
     registerServiceWorker();
-    updateOfflineBanner();
-    updateViewportMetrics();
-    requestAnimationFrame(() => document.body.classList.add('app-ready'));
   }
 
   function bindEvents() {
-    els.menuBtn?.addEventListener('click', openDrawer);
-    els.closeDrawerBtn?.addEventListener('click', closeOverlays);
-    els.backdrop?.addEventListener('click', closeOverlays);
-    els.workspaceBtn?.addEventListener('click', () => openPanel('overview'));
-    els.projectBtn?.addEventListener('click', () => openPanel('projects'));
-    els.commandBtn?.addEventListener('click', openCommandPalette);
-    els.closeSheetBtn?.addEventListener('click', closeOverlays);
-    els.newChatTopBtn?.addEventListener('click', () => createChat(true));
-    els.newChatBtn?.addEventListener('click', () => createChat(true));
-    els.quickNewProjectBtn?.addEventListener('click', createProjectFlow);
-    els.drawerSearch?.addEventListener('input', () => renderChatList(els.drawerSearch.value));
-    els.chatFilterBar?.addEventListener('click', event => {
-      const button = event.target.closest('[data-chat-filter]');
-      if (!button) return;
-      state.chatFilter = button.dataset.chatFilter || 'all';
-      storage.setItem(STORE.chatFilter, state.chatFilter);
-      renderChatFilters();
-      renderChatList(els.drawerSearch?.value || '');
+    els.menuBtn.addEventListener('click', () => els.app.classList.add('sidebar-open'));
+    els.sidebarClose.addEventListener('click', closeSidebar);
+    els.scrim.addEventListener('click', closeSidebar);
+    els.brandBtn.addEventListener('click', () => openView('chat'));
+    els.newChatBtn.addEventListener('click', newChat);
+    els.mobileNewBtn.addEventListener('click', newChat);
+    els.mobileCompose.addEventListener('click', newChat);
+    els.panelBack.addEventListener('click', () => openView('chat'));
+    els.panelRefresh.addEventListener('click', () => renderPanel(state.currentView));
+    els.statusButton.addEventListener('click', () => state.core.online ? openView('system') : openConnection());
+    els.diagnosticsBtn.addEventListener('click', () => openView('system'));
+    els.accountBtn.addEventListener('click', openAccount);
+    els.searchChatsBtn.addEventListener('click', () => {
+      els.chatSearch.hidden = !els.chatSearch.hidden;
+      if (!els.chatSearch.hidden) els.chatSearch.focus();
     });
-    els.moreToolsBtn?.addEventListener('click', toggleMoreTools);
-    els.focusModeBtn?.addEventListener('click', toggleFocusMode);
-    els.mobileMenuBtn?.addEventListener('click', openDrawer);
-    els.mobileToolsBtn?.addEventListener('click', () => openPanel('overview'));
-    els.mobileNewChatBtn?.addEventListener('click', () => createChat(true));
-    els.mobileFocusBtn?.addEventListener('click', toggleFocusMode);
-
-    $$('[data-panel]').forEach(btn => btn.addEventListener('click', () => openPanel(btn.dataset.panel)));
-    $$('.suggestion').forEach(btn => btn.addEventListener('click', () => {
-      els.userInput.value = btn.dataset.prompt || '';
-      saveDraft();
+    els.chatSearch.addEventListener('input', renderChatList);
+    els.modeSelect.addEventListener('change', () => {
+      state.mode = els.modeSelect.value;
+      local.setItem(KEYS.mode, state.mode);
+    });
+    els.composer.addEventListener('submit', event => { event.preventDefault(); state.core.busy ? stopGeneration() : sendMessage(); });
+    els.messageInput.addEventListener('input', autoResize);
+    els.messageInput.addEventListener('keydown', event => {
+      if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); state.core.busy ? stopGeneration() : sendMessage(); }
+    });
+    els.attachBtn.addEventListener('click', () => els.fileInput.click());
+    els.fileInput.addEventListener('change', handleFiles);
+    els.voiceBtn.addEventListener('click', startVoiceInput);
+    $$('[data-prompt]').forEach(button => button.addEventListener('click', () => {
+      els.messageInput.value = button.dataset.prompt || '';
       autoResize();
-      els.userInput.focus();
+      els.messageInput.focus();
     }));
+    $$('[data-view]').forEach(button => button.addEventListener('click', () => openView(button.dataset.view)));
 
-    els.attachBtn?.addEventListener('click', () => els.fileInput.click());
-    els.fileInput?.addEventListener('change', handleFiles);
-    els.sendBtn?.addEventListener('click', handlePrimaryAction);
-    els.micBtn?.addEventListener('click', startVoiceInput);
-    els.modeBtn?.addEventListener('click', cycleMode);
-    els.jumpBtn?.addEventListener('click', () => scrollToBottom(true));
-    els.statusPill?.addEventListener('click', () => openPanel('system'));
-    els.reactorFx?.addEventListener('click', activateCoreVisual);
-    els.commandPalette?.addEventListener('click', event => { if (event.target === els.commandPalette) closeCommandPalette(); });
-    els.commandInput?.addEventListener('input', renderCommandPalette);
-    els.commandInput?.addEventListener('keydown', handleCommandKeydown);
-
-    els.userInput?.addEventListener('input', () => { autoResize(); saveDraft(); });
-    els.userInput?.addEventListener('keydown', e => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        handlePrimaryAction();
-      }
+    $$('[data-auth-tab]').forEach(button => button.addEventListener('click', () => setAuthMode(button.dataset.authTab)));
+    els.authForm.addEventListener('submit', submitAuth);
+    els.saveConnection.addEventListener('click', saveConnection);
+    els.resetConnection.addEventListener('click', () => {
+      state.apiBase = isGitHubPages ? configuredBase : '';
+      local.removeItem(KEYS.api);
+      els.apiBaseInput.value = state.apiBase || location.origin;
+      testConnection();
     });
 
-    els.chatScroll?.addEventListener('scroll', () => {
-      state.followOutput = isNearBottom();
-      els.jumpBtn.classList.toggle('show', !state.followOutput && state.isGenerating);
-    });
-
-    window.addEventListener('online', () => { updateOfflineBanner(); checkHealth({ wake: true }); });
-    window.addEventListener('offline', () => { updateOfflineBanner(); setStatus('Sin conexión', 'error'); });
-    window.addEventListener('resize', updateViewportMetrics, { passive: true });
-    window.addEventListener('orientationchange', () => setTimeout(updateViewportMetrics, 120), { passive: true });
-    window.visualViewport?.addEventListener('resize', updateViewportMetrics, { passive: true });
-    window.visualViewport?.addEventListener('scroll', updateViewportMetrics, { passive: true });
-    window.addEventListener('keydown', handleGlobalKeys);
-  }
-
-
-  function updateViewportMetrics() {
-    const viewport = window.visualViewport;
-    const visibleHeight = Math.max(320, Math.round(viewport?.height || window.innerHeight || document.documentElement.clientHeight));
-    const layoutHeight = Math.max(visibleHeight, Math.round(window.innerHeight || visibleHeight));
-    const keyboardGap = Math.max(0, layoutHeight - visibleHeight - Math.round(viewport?.offsetTop || 0));
-    document.documentElement.style.setProperty('--app-height', `${visibleHeight}px`);
-    document.documentElement.style.setProperty('--viewport-offset-top', `${Math.round(viewport?.offsetTop || 0)}px`);
-    document.body.classList.toggle('keyboard-open', keyboardGap > 120);
-  }
-
-  function syncMoreTools() {
-    if (!els.moreToolsBtn || !els.moreToolsGroup) return;
-    els.moreToolsBtn.setAttribute('aria-expanded', state.moreToolsOpen ? 'true' : 'false');
-    els.moreToolsBtn.classList.toggle('open', state.moreToolsOpen);
-    els.moreToolsGroup.hidden = !state.moreToolsOpen;
-  }
-
-  function toggleMoreTools() {
-    state.moreToolsOpen = !state.moreToolsOpen;
-    storage.setItem(STORE.moreToolsOpen, state.moreToolsOpen ? '1' : '0');
-    syncMoreTools();
-  }
-
-  function syncFocusMode() {
-    document.body.classList.toggle('focus-mode', state.focusMode);
-    if (!els.focusModeBtn) return;
-    els.focusModeBtn.classList.toggle('active', state.focusMode);
-    els.focusModeBtn.setAttribute('aria-pressed', state.focusMode ? 'true' : 'false');
-    const label = els.focusModeBtn.querySelector('.focus-mode-label');
-    if (label) label.textContent = state.focusMode ? 'Salir del enfoque' : 'Modo enfoque';
-    els.mobileFocusBtn?.classList.toggle('active', state.focusMode);
-    els.mobileFocusBtn?.setAttribute('aria-pressed', state.focusMode ? 'true' : 'false');
-  }
-
-  function toggleFocusMode() {
-    state.focusMode = !state.focusMode;
-    storage.setItem(STORE.focusMode, state.focusMode ? '1' : '0');
-    syncFocusMode();
-    closeOverlays();
-    toast(state.focusMode ? 'Modo enfoque activado' : 'Modo enfoque desactivado');
-    setTimeout(() => els.userInput?.focus(), 120);
-  }
-
-  function activateCoreVisual() {
-    const node = els.reactorFx;
-    if (!node) return;
-    node.classList.remove('core-surge');
-    void node.offsetWidth;
-    node.classList.add('core-surge');
-    els.ambient.classList.add('active');
-    clearTimeout(activateCoreVisual.timer);
-    activateCoreVisual.timer = setTimeout(() => {
-      node.classList.remove('core-surge');
-      if (!state.isGenerating) els.ambient.classList.remove('active');
-    }, 980);
-    toast('Núcleo visual sincronizado');
-    setTimeout(() => els.userInput.focus(), 180);
-  }
-
-  function handleGlobalKeys(event) {
-    const key = event.key.toLowerCase();
-    if (event.key === 'Escape') {
-      closeCommandPalette();
-      closeOverlays();
-    }
-    if ((event.ctrlKey || event.metaKey) && key === 'k') {
-      event.preventDefault();
-      openCommandPalette();
-      return;
-    }
-    if ((event.ctrlKey || event.metaKey) && event.shiftKey && key === 'n') {
-      event.preventDefault();
-      createChat(true);
-      return;
-    }
-    if ((event.ctrlKey || event.metaKey) && key === 'e') {
-      event.preventDefault();
-      openPanel('export');
-      return;
-    }
-    if ((event.ctrlKey || event.metaKey) && event.shiftKey && key === 'f') {
-      event.preventDefault();
-      toggleFocusMode();
-      return;
-    }
-    if (event.key === '/' && !event.metaKey && !event.ctrlKey && !event.altKey) {
-      const tag = document.activeElement?.tagName?.toLowerCase();
-      if (tag !== 'textarea' && tag !== 'input') {
-        event.preventDefault();
-        els.userInput.focus();
-      }
-    }
-  }
-
-  function bindHeroFx() {
-    const node = els.reactorFx;
-    if (!node || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const update = (x, y) => {
-      node.style.setProperty('--mx', `${x}px`);
-      node.style.setProperty('--my', `${y}px`);
-      const rx = ((y / node.clientHeight) - 0.5) * -8;
-      const ry = ((x / node.clientWidth) - 0.5) * 10;
-      node.style.setProperty('--rx', `${rx.toFixed(2)}deg`);
-      node.style.setProperty('--ry', `${ry.toFixed(2)}deg`);
-    };
-    node.addEventListener('pointermove', (event) => {
-      const rect = node.getBoundingClientRect();
-      update(event.clientX - rect.left, event.clientY - rect.top);
-    });
-    node.addEventListener('pointerleave', () => {
-      node.style.setProperty('--mx', `${node.clientWidth / 2}px`);
-      node.style.setProperty('--my', `${node.clientHeight / 2}px`);
-      node.style.setProperty('--rx', '0deg');
-      node.style.setProperty('--ry', '0deg');
-    });
-    node.style.setProperty('--mx', `${node.clientWidth / 2}px`);
-    node.style.setProperty('--my', `${node.clientHeight / 2}px`);
-  }
-
-  function configureMarkdown() {
-    if (!window.marked) return;
-    marked.setOptions({ gfm: true, breaks: true });
-  }
-
-  function uid(prefix = 'id') {
-    if (crypto?.randomUUID) return `${prefix}_${crypto.randomUUID()}`;
-    return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+    window.addEventListener('online', bootCore);
+    window.addEventListener('offline', () => setStatus('Sin conexión a internet', 'offline'));
   }
 
   function normalizeBase(value) {
-    return String(value || '').trim().replace(/\/+$/, '');
+    return String(value || '').trim().replace(/\/+$/, '').replace(/\/api\/jarvis(?:\/stream)?$/i, '');
   }
 
   function apiUrl(path) {
-    const base = normalizeBase(state.apiBase || DEFAULT_API_BASE);
-    if (!base) throw new Error('No se ha configurado la URL del backend de JARVIS.');
-    return `${base}${path}`;
+    const clean = path.startsWith('/') ? path : `/${path}`;
+    return state.apiBase ? `${state.apiBase}${clean}` : clean;
   }
 
-  function loadJSON(key, fallback) {
-    try { return JSON.parse(storage.getItem(key) || '') || fallback; }
-    catch { return fallback; }
+  function uid(prefix) {
+    const random = window.crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    return `${prefix}_${random}`;
   }
 
-  function loadSessionJSON(key, fallback) {
-    try { return JSON.parse(sessionStore.getItem(key) || '') || fallback; }
-    catch { return fallback; }
+  function parseJSON(value, fallback) {
+    try { return value ? JSON.parse(value) : fallback; } catch { return fallback; }
   }
 
-  function saveProjects() {
-    storage.setItem(STORE.projects, JSON.stringify(state.projects));
-    storage.setItem(STORE.activeProject, state.activeProjectId);
+  function escapeHTML(value) {
+    return String(value ?? '').replace(/[&<>'"]/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[char]));
   }
 
-  function ensureProjects() {
-    const projects = Object.values(state.projects || {});
-    if (!projects.length) {
-      const id = 'project_general';
-      state.projects = {
-        [id]: {
-          id,
-          name: 'General',
-          description: 'Conversaciones y tareas generales.',
-          createdAt: Date.now(),
-          updatedAt: Date.now()
-        }
+  async function request(path, options = {}, config = {}) {
+    const attempts = Math.max(1, Number(config.attempts || 1));
+    const timeoutMs = Math.max(3000, Number(config.timeoutMs || 20000));
+    const retryable = new Set([408, 425, 429, 500, 502, 503, 504]);
+    let lastError;
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      const controller = new AbortController();
+      const outerSignal = options.signal;
+      const forwardAbort = () => controller.abort();
+      if (outerSignal) {
+        if (outerSignal.aborted) throw new DOMException('Solicitud cancelada', 'AbortError');
+        outerSignal.addEventListener('abort', forwardAbort, { once: true });
+      }
+      const timer = setTimeout(() => controller.abort('timeout'), timeoutMs);
+      try {
+        const headers = new Headers(options.headers || {});
+        if (state.token) headers.set('Authorization', `Bearer ${state.token}`);
+        if (options.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
+        const response = await fetch(apiUrl(path), { ...options, headers, signal: controller.signal, credentials: 'omit' });
+        clearTimeout(timer);
+        outerSignal?.removeEventListener('abort', forwardAbort);
+        const raw = await response.text();
+        let data = {};
+        try { data = raw ? JSON.parse(raw) : {}; }
+        catch { throw new ApiError(`El servidor respondió contenido no válido (HTTP ${response.status}).`, response.status); }
+        if (response.ok) return data;
+        const message = data.detail || data.reply || `Error HTTP ${response.status}`;
+        const error = new ApiError(message, response.status, data);
+        if (!retryable.has(response.status) || attempt === attempts) throw error;
+        lastError = error;
+      } catch (error) {
+        clearTimeout(timer);
+        outerSignal?.removeEventListener('abort', forwardAbort);
+        if (outerSignal?.aborted) throw new DOMException('Solicitud cancelada', 'AbortError');
+        if (error instanceof ApiError && (!retryable.has(error.status) || attempt === attempts)) throw error;
+        lastError = error?.name === 'AbortError' ? new ApiError('El núcleo tardó demasiado en responder.', 0) : error;
+        if (attempt === attempts) throw lastError;
+      }
+      await sleep(Math.min(800 * attempt, 1800));
+    }
+    throw lastError || new ApiError('No fue posible conectar con el núcleo.');
+  }
+
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+  async function bootCore() {
+    setStatus('Comprobando núcleo', 'checking');
+    try {
+      const health = await request('/api/health/live', {}, { attempts: 2, timeoutMs: 15000 });
+      state.core.online = health.status === 'ok';
+      state.core.version = health.version || '';
+      const auth = await request('/api/auth/status', {}, { attempts: 1, timeoutMs: 12000 });
+      state.auth = {
+        required: Boolean(auth.auth_required),
+        registration: Boolean(auth.registration_enabled),
+        authenticated: Boolean(auth.authenticated)
       };
-      state.activeProjectId = id;
-      saveProjects();
-      return;
+      state.user = auth.user || null;
+      if (!state.auth.authenticated && state.token) clearSession();
+      if (state.auth.authenticated && state.user) saveUser();
+      updateAccountUI();
+      setStatus(state.auth.required && !state.auth.authenticated ? 'Inicia sesión' : 'Núcleo operativo', state.auth.required && !state.auth.authenticated ? 'checking' : 'online');
+      if (state.auth.required && !state.auth.authenticated) openAccount(true);
+      else startNotificationPolling();
+      return true;
+    } catch (error) {
+      state.core.online = false;
+      setStatus('Núcleo sin conexión', 'error');
+      els.connectionExplanation.textContent = explainError(error);
+      return false;
     }
-    if (!state.activeProjectId || !state.projects[state.activeProjectId]) {
-      state.activeProjectId = projects[0].id;
-      saveProjects();
-    }
   }
 
-  function migrateChatsToProjects() {
-    let changed = false;
-    Object.values(state.chats).forEach(chat => {
-      if (!chat.projectId) {
-        chat.projectId = state.activeProjectId;
-        changed = true;
-      }
-    });
-    if (changed) saveChats();
+  function setStatus(text, type = 'checking') {
+    els.statusText.textContent = text;
+    els.statusButton.className = `status-button ${type}`;
   }
 
-  function currentProject() {
-    return state.projects[state.activeProjectId] || Object.values(state.projects)[0];
+  function explainError(error) {
+    if (!navigator.onLine) return 'El dispositivo no tiene conexión a internet.';
+    if (error?.status === 401) return 'El núcleo requiere iniciar sesión.';
+    if (error?.status === 403) return 'El dominio o la cuenta no tienen autorización.';
+    if (error?.status === 404) return 'La URL no corresponde al backend de JARVIS.';
+    if ([502,503,504].includes(error?.status)) return 'Render está iniciando o el servicio no pudo arrancar.';
+    return String(error?.message || 'No fue posible contactar el backend.').slice(0, 220);
   }
 
-  function latestChatForProject(projectId) {
-    return Object.values(state.chats)
-      .filter(chat => chat.projectId === projectId)
-      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0] || null;
-  }
-
-  function projectChatCount(projectId) {
-    return Object.values(state.chats).filter(chat => chat.projectId === projectId).length;
-  }
-
-  function renderProjectSwitcher() {
-    const project = currentProject();
-    if (els.projectName) els.projectName.textContent = project?.name || 'General';
-  }
-
-  function renderProjectList() {
-    if (!els.projectList) return;
-    const projects = Object.values(state.projects).sort((a,b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-    els.projectList.innerHTML = '';
-    projects.forEach(project => {
-      const button = document.createElement('button');
-      button.className = `project-item${project.id === state.activeProjectId ? ' active' : ''}`;
-      button.innerHTML = `<span class="project-item-dot"></span><span class="project-item-copy"><span class="project-item-name">${escapeHtml(project.name)}</span><span class="project-item-count">${projectChatCount(project.id)} conversaciones</span></span>`;
-      button.addEventListener('click', () => switchProject(project.id));
-      els.projectList.appendChild(button);
-    });
-  }
-
-  function createProjectFlow() {
-    const name = prompt('Nombre del nuevo proyecto:');
-    if (!name?.trim()) return;
-    const description = prompt('Descripción breve del proyecto:', '') || '';
-    const id = uid('project');
-    state.projects[id] = {
-      id,
-      name: name.trim().slice(0, 60),
-      description: description.trim().slice(0, 240),
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    };
-    state.activeProjectId = id;
-    saveProjects();
-    renderProjectSwitcher();
-    renderProjectList();
-    createChat(false);
-    toast(`Proyecto “${state.projects[id].name}” creado`);
-  }
-
-  function switchProject(projectId) {
-    if (!state.projects[projectId] || projectId === state.activeProjectId) {
-      closeOverlays();
-      return;
-    }
-    if (state.isGenerating) stopGeneration();
-    state.activeProjectId = projectId;
-    state.projects[projectId].updatedAt = Date.now();
-    const latest = latestChatForProject(projectId);
-    state.activeChatId = latest?.id || '';
-    saveProjects();
-    if (!state.activeChatId) createChat(false);
-    saveChats();
-    renderProjectSwitcher();
-    renderProjectList();
-    renderChatList();
-    renderActiveChat();
-    syncMoreTools();
-    syncFocusMode();
-    restoreDraft();
-    closeOverlays();
-    toast(`Proyecto activo: ${currentProject()?.name || 'General'}`);
-  }
-
-  function deleteProject(projectId) {
-    if (!state.projects[projectId]) return;
-    if (Object.keys(state.projects).length <= 1) {
-      toast('Debe existir al menos un proyecto');
-      return;
-    }
-    const project = state.projects[projectId];
-    if (!confirm(`¿Eliminar el proyecto “${project.name}” y sus conversaciones locales?`)) return;
-    Object.keys(state.chats).forEach(chatId => {
-      if (state.chats[chatId].projectId === projectId) {
-        delete state.chats[chatId];
-        storage.removeItem(STORE.draftPrefix + chatId);
-      }
-    });
-    delete state.projects[projectId];
-    state.activeProjectId = Object.keys(state.projects)[0];
-    state.activeChatId = latestChatForProject(state.activeProjectId)?.id || '';
-    saveProjects();
-    saveChats();
-    if (!state.activeChatId) createChat(false);
-    renderProjectSwitcher();
-    renderProjectList();
-    renderChatList();
-    renderActiveChat();
-  }
-
-  function saveChats() {
-    storage.setItem(STORE.chats, JSON.stringify(state.chats));
-    storage.setItem(STORE.active, state.activeChatId);
-  }
-
-  function currentChat() {
-    return state.chats[state.activeChatId];
-  }
-
-  function backendConversationId(chatId = state.activeChatId) {
-    const projectId = currentChat()?.projectId || state.activeProjectId || 'project_general';
-    const workspace = state.authUser?.workspace_session_id || `public_${state.clientId}`;
-    return `${workspace}_${projectId}_${chatId}`.replace(/[^a-zA-Z0-9_.:@-]/g, '_').slice(0, 150);
-  }
-
-  function createChat(showToast = true) {
-    if (state.isGenerating) stopGeneration();
+  function ensureChat() {
+    if (state.activeChatId && state.chats[state.activeChatId]) return;
     const id = uid('chat');
-    state.chats[id] = { id, projectId: state.activeProjectId, title: 'Nueva conversación', messages: [], createdAt: Date.now(), updatedAt: Date.now() };
+    state.chats[id] = { id, title: 'Nueva conversación', messages: [], updatedAt: Date.now() };
     state.activeChatId = id;
-    if (state.projects[state.activeProjectId]) state.projects[state.activeProjectId].updatedAt = Date.now();
-    saveProjects();
-    saveChats();
-    renderProjectList();
-    renderChatList();
-    renderActiveChat();
-    syncMoreTools();
-    syncFocusMode();
-    restoreDraft();
-    closeOverlays();
-    if (showToast) toast('Nueva conversación creada');
-    els.userInput.focus();
+    persistChats();
   }
 
-  function removeChat(id) {
-    delete state.chats[id];
-    storage.removeItem(STORE.draftPrefix + id);
-    const remaining = Object.values(state.chats).filter(chat => chat.projectId === state.activeProjectId);
-    state.activeChatId = remaining[0]?.id || '';
-    if (!state.activeChatId) createChat(false);
-    saveChats();
-    renderProjectList();
-    renderChatList();
-    renderActiveChat();
+  function currentChat() { ensureChat(); return state.chats[state.activeChatId]; }
+
+  function persistChats() {
+    local.setItem(KEYS.chats, JSON.stringify(state.chats));
+    local.setItem(KEYS.active, state.activeChatId);
   }
 
-  function switchChat(id) {
-    if (!state.chats[id] || id === state.activeChatId) { closeOverlays(); return; }
-    if (state.isGenerating) stopGeneration();
-    clearTimeout(state.chatSwitchTimer);
-    els.chatScroll.classList.remove('chat-switch-in');
-    els.chatScroll.classList.add('chat-switch-out');
-    closeOverlays();
-    state.chatSwitchTimer = setTimeout(() => {
-      state.activeChatId = id;
-      saveChats();
+  function newChat() {
+    const id = uid('chat');
+    state.chats[id] = { id, title: 'Nueva conversación', messages: [], updatedAt: Date.now() };
+    state.activeChatId = id;
+    state.files = [];
+    persistChats();
+    renderChatList();
+    renderConversation();
+    renderAttachments();
+    openView('chat');
+    els.messageInput.focus();
+  }
+
+  function renderChatList() {
+    const query = els.chatSearch.value.trim().toLowerCase();
+    const chats = Object.values(state.chats).sort((a,b) => b.updatedAt - a.updatedAt).filter(chat => !query || chat.title.toLowerCase().includes(query));
+    els.chatList.innerHTML = chats.length ? chats.map(chat => `
+      <article class="chat-item ${chat.id === state.activeChatId ? 'active' : ''}" data-chat-id="${escapeHTML(chat.id)}">
+        <div><strong>${escapeHTML(chat.title)}</strong><small>${chat.messages.length} mensajes · ${relativeTime(chat.updatedAt)}</small></div>
+        <button class="chat-delete" data-delete-chat="${escapeHTML(chat.id)}" aria-label="Eliminar conversación">×</button>
+      </article>`).join('') : '<div class="empty-history">No encontramos conversaciones.</div>';
+    $$('[data-chat-id]', els.chatList).forEach(item => item.addEventListener('click', event => {
+      if (event.target.closest('[data-delete-chat]')) return;
+      state.activeChatId = item.dataset.chatId;
+      persistChats();
       renderChatList();
-      renderActiveChat();
-      syncMoreTools();
-      syncFocusMode();
-      restoreDraft();
-      els.chatScroll.classList.remove('chat-switch-out');
-      void els.chatScroll.offsetWidth;
-      els.chatScroll.classList.add('chat-switch-in');
-      setTimeout(() => els.chatScroll.classList.remove('chat-switch-in'), 360);
-    }, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 110);
+      renderConversation();
+      openView('chat');
+    }));
+    $$('[data-delete-chat]', els.chatList).forEach(button => button.addEventListener('click', event => {
+      event.stopPropagation();
+      const id = button.dataset.deleteChat;
+      if (Object.keys(state.chats).length === 1) return newChat();
+      delete state.chats[id];
+      if (state.activeChatId === id) state.activeChatId = Object.keys(state.chats)[0];
+      persistChats(); renderChatList(); renderConversation();
+    }));
   }
 
-  function renderChatList(query = '') {
-    const normalized = String(query || '').trim().toLowerCase();
-    const projectChats = Object.values(state.chats).filter(chat => chat.projectId === state.activeProjectId);
-    const recentThreshold = Date.now() - (7 * 24 * 60 * 60 * 1000);
-    const items = projectChats
-      .filter(chat => state.chatFilter === 'pinned' ? Boolean(chat.pinned) : state.chatFilter === 'recent' ? Number(chat.updatedAt || 0) >= recentThreshold : true)
-      .filter(chat => !normalized || `${chat.title || ''} ${(chat.messages || []).map(item => item.content || '').join(' ')}`.toLowerCase().includes(normalized))
-      .sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || (b.updatedAt || 0) - (a.updatedAt || 0));
-    if (els.chatCountBadge) els.chatCountBadge.textContent = String(items.length);
-    els.chatList.innerHTML = '';
-    if (!items.length) {
-      els.chatList.innerHTML = `<div class="history-empty clean-history-empty"><span>◇</span><strong>Sin resultados</strong><small>${state.chatFilter === 'all' ? 'Comienza una conversación nueva en este proyecto.' : 'Cambia el filtro para ver otras conversaciones.'}</small></div>`;
-      return;
-    }
-    let currentGroup = '';
-    items.forEach(chat => {
-      const group = chat.pinned ? 'Fijadas' : chatDateGroup(chat.updatedAt);
-      if (group !== currentGroup) {
-        currentGroup = group;
-        const label = document.createElement('div');
-        label.className = 'chat-date-group';
-        label.textContent = group;
-        els.chatList.appendChild(label);
-      }
-      const btn = document.createElement('button');
-      const count = chat.messages?.length || 0;
-      btn.className = `chat-item compact-chat-item${chat.id === state.activeChatId ? ' active' : ''}${chat.pinned ? ' pinned' : ''}`;
-      btn.title = chat.title || 'Conversación';
-      btn.setAttribute('aria-current', chat.id === state.activeChatId ? 'true' : 'false');
-      btn.innerHTML = `
-        <span class="chat-item-status" aria-hidden="true"></span>
-        <span class="chat-item-copy">
-          <span class="chat-item-title">${escapeHtml(chat.title || 'Conversación')}</span>
-          <span class="chat-item-preview">${escapeHtml(chatPreview(chat))}</span>
-          <span class="chat-item-meta">${count} ${count === 1 ? 'mensaje' : 'mensajes'} · ${escapeHtml(formatRelativeTime(chat.updatedAt))}</span>
-        </span>
-        <span class="chat-item-actions">
-          <span class="chat-item-pin" role="button" aria-label="${chat.pinned ? 'Desfijar' : 'Fijar'} conversación" title="${chat.pinned ? 'Desfijar' : 'Fijar'}">${chat.pinned ? '◆' : '◇'}</span>
-          <span class="chat-item-delete" role="button" aria-label="Eliminar conversación" title="Eliminar">×</span>
-        </span>`;
-      btn.addEventListener('click', event => {
-        if (event.target.closest('.chat-item-pin')) {
-          event.stopPropagation();
-          chat.pinned = !chat.pinned;
-          chat.updatedAt = Date.now();
-          saveChats();
-          renderChatList(els.drawerSearch?.value || '');
-          return;
-        }
-        if (event.target.closest('.chat-item-delete')) {
-          event.stopPropagation();
-          if (confirm('¿Eliminar esta conversación?')) removeChat(chat.id);
-          return;
-        }
-        switchChat(chat.id);
-      });
-      els.chatList.appendChild(btn);
-    });
+  function relativeTime(timestamp) {
+    const diff = Date.now() - Number(timestamp || 0);
+    if (diff < 60000) return 'ahora';
+    if (diff < 3600000) return `${Math.floor(diff/60000)} min`;
+    if (diff < 86400000) return `${Math.floor(diff/3600000)} h`;
+    return new Date(timestamp).toLocaleDateString('es-HN', { day:'numeric', month:'short' });
   }
 
-  function renderChatFilters() {
-    $$('[data-chat-filter]', els.chatFilterBar || document).forEach(button => {
-      const active = (button.dataset.chatFilter || 'all') === state.chatFilter;
-      button.classList.toggle('active', active);
-      button.setAttribute('aria-selected', active ? 'true' : 'false');
-    });
-  }
-
-  function chatDateGroup(value) {
-    const time = Number(value || 0);
-    if (!time) return 'Recientes';
-    const now = new Date();
-    const date = new Date(time);
-    const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    const startDate = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-    const days = Math.floor((startToday - startDate) / 86400000);
-    if (days <= 0) return 'Hoy';
-    if (days === 1) return 'Ayer';
-    if (days < 7) return 'Esta semana';
-    if (days < 31) return 'Este mes';
-    return 'Anteriores';
-  }
-
-  function chatPreview(chat) {
-    const latest = [...(chat.messages || [])].reverse().find(item => String(item.content || '').trim());
-    return String(latest?.content || 'Conversación nueva').replace(/\s+/g, ' ').slice(0, 82);
-  }
-
-  function formatRelativeTime(value) {
-    const time = Number(value || 0);
-    if (!time) return 'ahora';
-    const diff = Date.now() - time;
-    const minute = 60 * 1000;
-    const hour = 60 * minute;
-    const day = 24 * hour;
-    if (diff < minute) return 'ahora';
-    if (diff < hour) return `hace ${Math.max(1, Math.floor(diff / minute))} min`;
-    if (diff < day) return `hace ${Math.max(1, Math.floor(diff / hour))} h`;
-    if (diff < 7 * day) return `hace ${Math.max(1, Math.floor(diff / day))} d`;
-    return new Date(time).toLocaleDateString('es-HN', { day: '2-digit', month: 'short' });
-  }
-
-  function showWelcome() {
-    clearTimeout(showWelcome.timer);
-    els.welcome.classList.remove('hidden', 'leaving');
-    els.welcome.style.display = 'flex';
-  }
-
-  function dismissWelcome(animated = true) {
-    clearTimeout(showWelcome.timer);
-    if (els.welcome.classList.contains('hidden')) return;
-    if (!animated || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      els.welcome.classList.add('hidden');
-      els.welcome.classList.remove('leaving');
-      els.welcome.style.display = 'none';
-      return;
-    }
-    els.welcome.classList.add('leaving');
-    showWelcome.timer = setTimeout(() => {
-      els.welcome.classList.add('hidden');
-      els.welcome.classList.remove('leaving');
-      els.welcome.style.display = 'none';
-    }, 280);
-  }
-
-  function renderActiveChat() {
-    els.messages.innerHTML = '';
+  function renderConversation() {
     const chat = currentChat();
-    const hasMessages = Boolean(chat?.messages?.length);
-    if (!hasMessages) {
-      showWelcome();
-      return;
-    }
-    dismissWelcome(false);
-    chat.messages.forEach(msg => {
-      if (msg.role === 'user') appendUser(msg.content, false, msg.files || []);
-      else appendAssistant(msg.content, msg.meta || {}, false, false);
-    });
-    requestAnimationFrame(() => scrollToBottom(false));
+    els.welcome.hidden = chat.messages.length > 0;
+    els.messages.innerHTML = chat.messages.map(renderMessageHTML).join('');
+    scrollBottom(false);
   }
 
-  function saveDraft() {
-    storage.setItem(STORE.draftPrefix + state.activeChatId, els.userInput.value);
+  function renderMessageHTML(message) {
+    const role = message.role === 'user' ? 'user' : 'assistant';
+    const meta = message.meta || {};
+    const metaHTML = role === 'assistant' && (meta.model || meta.route || meta.cached) ? `<div class="message-meta">${meta.model ? `<span>${escapeHTML(meta.model)}</span>` : ''}${meta.route ? `<span>${escapeHTML(meta.route)}</span>` : ''}${meta.cached ? '<span>caché</span>' : ''}</div>` : '';
+    if (role === 'user') return `<article class="message user"><div class="message-body">${formatContent(message.content)}</div></article>`;
+    return `<article class="message assistant"><span class="message-avatar">J</span><div class="message-body ${meta.error ? 'message-error' : ''}">${formatContent(message.content)}${metaHTML}</div></article>`;
   }
 
-  function restoreDraft() {
-    els.userInput.value = storage.getItem(STORE.draftPrefix + state.activeChatId) || '';
+  function formatContent(value) {
+    const source = escapeHTML(value || '');
+    const fenced = source.replace(/```([\w-]*)\n([\s\S]*?)```/g, (_, lang, code) => `<pre><code data-language="${lang}">${code.trim()}</code></pre>`);
+    return fenced.split(/\n{2,}/).map(block => block.startsWith('<pre>') ? block : `<p>${block.replace(/\n/g,'<br>').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/`([^`]+)`/g,'<code>$1</code>')}</p>`).join('');
+  }
+
+  function addMessage(role, content, meta = {}) {
+    const chat = currentChat();
+    chat.messages.push({ role, content: String(content || ''), meta, createdAt: Date.now() });
+    chat.updatedAt = Date.now();
+    if (role === 'user' && chat.title === 'Nueva conversación') chat.title = String(content).replace(/\s+/g,' ').slice(0,46) || 'Conversación';
+    persistChats();
+    renderChatList();
+    renderConversation();
+  }
+
+  async function sendMessage() {
+    const text = els.messageInput.value.trim();
+    if (!text && !state.files.length) return;
+    if (!state.core.online) { openConnection(); return; }
+    if (state.auth.required && !state.auth.authenticated) { openAccount(true); return; }
+
+    const prompt = text || 'Analiza los archivos adjuntos.';
+    const files = state.files.map(file => ({ file_name:file.name, file_b64:file.base64 }));
+    addMessage('user', prompt);
+    els.messageInput.value = '';
+    state.files = [];
+    renderAttachments();
     autoResize();
+    setBusy(true, 'Analizando la solicitud…');
+    state.abortController = new AbortController();
+
+    try {
+      const data = await request('/api/jarvis', {
+        method:'POST',
+        signal: state.abortController.signal,
+        body:JSON.stringify({
+          message:prompt,
+          session_id:backendSessionId(),
+          files,
+          mode:state.mode,
+          project_name:'General',
+          request_id:uid('request')
+        })
+      }, { attempts:2, timeoutMs:65000 });
+      const reply = String(data.reply || data.response || '').trim();
+      if (!reply) throw new ApiError('El núcleo respondió sin contenido.');
+      addMessage('assistant', reply, {
+        model:data.model || '', route:data.route || data.mode || '', cached:Boolean(data.cached)
+      });
+      setStatus('Núcleo operativo', 'online');
+    } catch (error) {
+      if (error?.name === 'AbortError') addMessage('assistant', 'Generación detenida por el usuario.', { error:true, route:'cancelled' });
+      else if (error?.status === 401) {
+        clearSession();
+        addMessage('assistant', '🔐 El núcleo está operativo, pero requiere iniciar sesión. Abre **Cuenta personal** y vuelve a intentarlo.', { error:true, route:'authentication' });
+        openAccount(true);
+      } else {
+        const localReply = localRecovery(prompt, error);
+        addMessage('assistant', localReply, { error:true, route:'local_recovery' });
+        setStatus('Revisar conexión', 'error');
+      }
+    } finally {
+      state.abortController = null;
+      setBusy(false);
+    }
   }
 
-  function clearDraft() {
-    storage.removeItem(STORE.draftPrefix + state.activeChatId);
+  function localRecovery(prompt, error) {
+    const expression = String(prompt).trim().replace(/,/g,'.').replace(/×/g,'*').replace(/÷/g,'/');
+    if (/^[\d\s()+\-*/.%]+$/.test(expression) && expression.length < 100) {
+      try {
+        const result = Function(`"use strict";return (${expression})`)();
+        if (Number.isFinite(result)) return `Resultado local: **${result}**.\n\nEl cálculo se completó en el dispositivo mientras se revisa la conexión remota.`;
+      } catch {}
+    }
+    return `⚠️ **JARVIS recibió tu mensaje, pero no pudo completar la solicitud remota.**\n\n${explainError(error)}\n\nNo se seguirá reintentando indefinidamente. Abre el indicador de estado para revisar la conexión y vuelve a enviar cuando aparezca **Núcleo operativo**.`;
   }
 
-  function autoResize() {
-    els.userInput.style.height = 'auto';
-    els.userInput.style.height = `${Math.min(els.userInput.scrollHeight, 190)}px`;
+  function stopGeneration() { state.abortController?.abort(); }
+
+  function setBusy(busy, detail = '') {
+    state.core.busy = busy;
+    els.thinking.hidden = !busy;
+    els.thinkingDetail.textContent = detail || 'Procesando…';
+    els.sendBtn.classList.toggle('stop', busy);
+    els.sendBtn.innerHTML = busy ? '<span>■</span>' : '<span>➤</span>';
+    if (busy) scrollBottom();
   }
 
-  function cycleMode() {
-    const index = MODES.findIndex(m => m.id === state.mode);
-    state.mode = MODES[(index + 1) % MODES.length].id;
-    storage.setItem(STORE.mode, state.mode);
-    renderMode();
-  }
-
-  function renderMode() {
-    els.modeBtn.textContent = MODES.find(m => m.id === state.mode)?.label || MODES[0].label;
+  function backendSessionId() {
+    const owner = state.user?.id || state.clientId;
+    return `web:${owner}:${state.activeChatId}`.slice(0,150);
   }
 
   async function handleFiles(event) {
-    const chosen = [...(event.target.files || [])].slice(0, 3 - state.files.length);
-    for (const file of chosen) {
-      if (file.size > 12 * 1024 * 1024) {
-        toast(`${file.name} supera el límite de 12 MB`);
-        continue;
-      }
-      try {
-        const file_b64 = await readAsDataURL(file);
-        state.files.push({ file_name: file.name, file_b64, size: file.size });
-      } catch {
-        toast(`No se pudo leer ${file.name}`);
-      }
-    }
+    const selected = [...event.target.files];
     event.target.value = '';
+    for (const file of selected) {
+      if (file.size > 12 * 1024 * 1024) { toast(`${file.name} supera 12 MB.`); continue; }
+      try { state.files.push({ name:file.name, base64:await fileToBase64(file), size:file.size }); }
+      catch { toast(`No se pudo leer ${file.name}.`); }
+    }
     renderAttachments();
   }
 
-  function readAsDataURL(file) {
-    return new Promise((resolve, reject) => {
+  function fileToBase64(file) {
+    return new Promise((resolve,reject) => {
       const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
+      reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
       reader.onerror = reject;
       reader.readAsDataURL(file);
     });
   }
 
   function renderAttachments() {
-    els.attachments.innerHTML = '';
-    state.files.forEach((file, index) => {
-      const chip = document.createElement('div');
-      chip.className = 'file-chip';
-      chip.innerHTML = `<span title="${escapeHtml(file.file_name)}">${escapeHtml(file.file_name)}</span><button aria-label="Quitar archivo">×</button>`;
-      chip.querySelector('button').addEventListener('click', () => {
-        state.files.splice(index, 1);
-        renderAttachments();
-      });
-      els.attachments.appendChild(chip);
-    });
+    els.attachments.hidden = !state.files.length;
+    els.attachments.innerHTML = state.files.map((file,index) => `<div class="attachment-chip"><span>${escapeHTML(file.name)}</span><button data-remove-file="${index}" aria-label="Quitar archivo">×</button></div>`).join('');
+    $$('[data-remove-file]', els.attachments).forEach(button => button.addEventListener('click', () => {
+      state.files.splice(Number(button.dataset.removeFile),1); renderAttachments();
+    }));
   }
 
-  function handlePrimaryAction() {
-    if (state.isGenerating) stopGeneration();
-    else sendMessage();
+  function autoResize() {
+    els.messageInput.style.height = 'auto';
+    els.messageInput.style.height = `${Math.min(180, Math.max(42, els.messageInput.scrollHeight))}px`;
   }
 
-  async function sendMessage(textOverride = '') {
-    const text = (textOverride || els.userInput?.value || '').trim();
-    if ((!text && !state.files.length) || state.isGenerating) return;
-
-    let userPersisted = false;
-    let displayPrompt = text || 'Analiza los archivos adjuntos.';
-    try {
-      state.isGenerating = true;
-      state.lastPrompt = text;
-      state.followOutput = true;
-      state.abortController = new AbortController();
-      setSendState(true);
-      dismissWelcome(true);
-
-      const fileNames = state.files.map(file => file.file_name);
-      appendUser(displayPrompt, true, fileNames);
-      persistMessage({ role: 'user', content: displayPrompt, files: fileNames });
-      userPersisted = true;
-
-      const outgoingFiles = state.files.map(({ file_name, file_b64 }) => ({ file_name, file_b64 }));
-      state.files = [];
-      renderAttachments();
-      if (els.userInput) els.userInput.value = '';
-      clearDraft();
-      autoResize();
-
-      scheduleThinking();
-      startStatusSequence();
-
-      const clientRequestId = createRequestId();
-      const payload = {
-        message: displayPrompt,
-        session_id: backendConversationId(),
-        project_name: currentProject()?.name || 'General',
-        mode: state.mode,
-        files: outgoingFiles,
-        request_id: clientRequestId
-      };
-      const data = await requestJarvis(payload, state.abortController.signal);
-
-      hideThinking();
-      const reply = String(data?.reply || data?.response || '').trim() || buildLocalRecoveryReply(displayPrompt, new Error('El núcleo no devolvió contenido.'));
-      const meta = {
-        tools: data?.tools || [],
-        model: data?.model || '',
-        cached: Boolean(data?.cached),
-        degraded: Boolean(data?.degraded),
-        mode: data?.mode || '',
-        intent: data?.intent || '',
-        route: data?.route || '',
-        latencyMs: Number(data?.latency_ms || 0),
-        requestId: data?.request_id || '',
-        verified: Boolean(data?.verified),
-        verification: data?.verification || {},
-        resolutionAttempts: Number(data?.resolution_attempts || 0),
-        resolutionTrace: Array.isArray(data?.resolution_trace) ? data.resolution_trace : [],
-        recoveredErrors: Array.isArray(data?.recovered_errors) ? data.recovered_errors : [],
-        recovered: Boolean(data?.recovered),
-        similarCache: Boolean(data?.similar_cache),
-        idempotentReplay: Boolean(data?.idempotent_replay)
-      };
-      appendAssistant(reply, meta, true, true);
-      persistMessage({ role: 'assistant', content: reply, meta });
-      updateChatTitle(text);
-      setStatus('Núcleo operativo', 'online');
-    } catch (error) {
-      hideThinking();
-      if (error?.name === 'AbortError') {
-        const partial = 'Generación detenida por el usuario.';
-        appendAssistant(partial, { cancelled: true, route: 'cancelled' }, true, false);
-        persistMessage({ role: 'assistant', content: partial, meta: { cancelled: true, route: 'cancelled' } });
-      } else if (Number(error?.status || 0) === 401 || /inicia sesi[oó]n|núcleo privado/i.test(String(error?.message || ''))) {
-        const authMessage = '🔐 **El núcleo está operativo, pero requiere iniciar sesión.**\n\nAbre **Cuenta y privacidad**, crea la primera cuenta propietaria o inicia sesión, y después vuelve a enviar el mensaje.';
-        appendAssistant(authMessage, { route: 'authentication_required', error: true }, true, false);
-        persistMessage({ role: 'assistant', content: authMessage, meta: { route: 'authentication_required', error: true } });
-        setStatus('Inicia sesión', 'warning');
-        setTimeout(() => openPanel('account').catch(() => {}), 180);
-      } else {
-        console.error('Fallo de respuesta JARVIS:', error);
-        const recovery = buildLocalRecoveryReply(displayPrompt, error);
-        appendAssistant(recovery, { degraded: true, recovered: true, route: 'local_recovery', error: true }, true, false);
-        persistMessage({ role: 'assistant', content: recovery, meta: { degraded: true, recovered: true, route: 'local_recovery', error: true } });
-        if (!userPersisted) {
-          try { persistMessage({ role: 'user', content: displayPrompt, files: [] }); } catch {}
-        }
-        updateChatTitle(text);
-        setStatus('Modo de recuperación local', 'warning');
-      }
-    } finally {
-      state.isGenerating = false;
-      state.abortController = null;
-      setSendState(false);
-      clearStatusSequence();
-      els.ambient?.classList.remove('active');
-      els.jumpBtn?.classList.remove('show');
-    }
+  function scrollBottom(smooth = true) {
+    requestAnimationFrame(() => els.conversation.scrollTo({ top:els.conversation.scrollHeight, behavior:smooth ? 'smooth' : 'auto' }));
   }
 
-  function buildLocalRecoveryReply(prompt, error) {
-    const value = String(prompt || '').trim();
-    const lower = value.toLowerCase();
-    const reason = humanConnectionError(error);
+  function closeSidebar() { els.app.classList.remove('sidebar-open'); }
 
-    if (/^(hola|buenas|buenos días|buenas tardes|buenas noches|hey|hello)[!. ]*$/i.test(value)) {
-      return `Hola. Estoy operativo en modo de recuperación local. La conexión con el núcleo remoto no respondió correctamente, pero la interfaz ya no quedará en silencio.
-
-Estado detectado: **${reason}**.`;
-    }
-    if (/^(gracias|muchas gracias|thanks)[!. ]*$/i.test(value)) {
-      return 'Con gusto. JARVIS permanece disponible y volverá a utilizar el núcleo remoto automáticamente cuando la conexión esté operativa.';
-    }
-    const calculation = tryLocalCalculation(value);
-    if (calculation !== null) {
-      return `Resultado local: **${calculation}**
-
-El cálculo se resolvió directamente en el navegador porque el núcleo remoto no respondió. Estado: **${reason}**.`;
-    }
-    if (lower.includes('quién eres') || lower.includes('que eres') || lower.includes('qué eres')) {
-      return `Soy J.A.R.V.I.S., una interfaz de asistencia con herramientas, memoria, documentos y proveedores de IA. Ahora estoy usando la ruta de recuperación local porque el backend no respondió.
-
-Estado detectado: **${reason}**.`;
-    }
-    return `⚠️ **JARVIS recibió tu mensaje, pero el núcleo remoto no respondió a tiempo.**
-
-No se perdió tu solicitud. La interfaz activó la recuperación local para evitar quedarse silenciosa.
-
-**Diagnóstico:** ${reason}.
-
-Revisa que Render esté en estado **Live**, que \`static/config.js\` apunte a la URL correcta y que al menos un proveedor tenga una clave y un modelo válidos. Después pulsa **Regenerar**.`;
-  }
-
-  function humanConnectionError(error) {
-    const message = String(error?.message || '').trim();
-    if (/timeout|tiempo de espera/i.test(message)) return 'tiempo de espera agotado';
-    if (/failed to fetch|network|conexión|fetch/i.test(message)) return 'backend inaccesible o bloqueado por red/CORS';
-    if (/respuesta.*no válida|contenido no válido/i.test(message)) return 'respuesta inválida del servidor';
-    return message.slice(0, 160) || 'conexión no disponible';
-  }
-
-  function tryLocalCalculation(input) {
-    const normalized = String(input || '')
-      .replace(/,/g, '.')
-      .replace(/×/g, '*')
-      .replace(/÷/g, '/')
-      .replace(/\^/g, '**')
-      .trim();
-    const candidate = normalized.match(/^[\d\s()+\-*/.%*]+$/) ? normalized : null;
-    if (!candidate || candidate.length > 120) return null;
-    try {
-      const result = Function(`"use strict"; return (${candidate});`)();
-      if (typeof result !== 'number' || !Number.isFinite(result)) return null;
-      return Number.isInteger(result) ? String(result) : String(Number(result.toFixed(10)));
-    } catch {
-      return null;
-    }
-  }
-
-  function stopGeneration() {
-    state.abortController?.abort();
-    hideThinking();
-    clearStatusSequence();
-    els.ambient.classList.remove('active');
-  }
-
-  function setSendState(generating) {
-    document.body.classList.toggle('is-generating', generating);
-    document.querySelector('.composer')?.classList.toggle('is-generating', generating);
-    els.sendBtn.classList.toggle('generating', generating);
-    els.mobileDock?.classList.toggle('is-generating', generating);
-    els.sendBtn.title = generating ? 'Detener' : 'Enviar';
-    els.sendBtn.setAttribute('aria-label', generating ? 'Detener' : 'Enviar');
-    els.sendIcon.innerHTML = generating
-      ? '<path d="M7 7h10v10H7z"/>'
-      : '<path d="M3.4 20.4 21 12 3.4 3.6 3 10l12 2-12 2z"/>';
-  }
-
-  function scheduleThinking() {
-    clearTimeout(state.thinkingTimer);
-    state.thinkingTimer = setTimeout(() => {
-      if (!state.isGenerating) return;
-      els.thinkingWrap.dataset.phase = 'prepare';
-      applyThinkingState({ text: 'Preparando respuesta', phase: 'prepare', status: 'Preparando núcleo', tone: 'warning' });
-      els.thinkingWrap.classList.add('active');
-      els.ambient.classList.add('active');
-      followBottom();
-    }, 220);
-  }
-
-  function hideThinking() {
-    clearTimeout(state.thinkingTimer);
-    delete els.thinkingWrap.dataset.phase;
-    els.thinkingStages.forEach(node => node.classList.remove('active', 'complete'));
-    els.thinkingWrap.classList.remove('active');
-  }
-
-  function startStatusSequence() {
-    clearStatusSequence();
-    const states = state.mode === 'research'
-      ? [
-          { text: 'Preparando investigación', phase: 'prepare', status: 'Preparando misión', tone: 'warning' },
-          { text: 'Probando rutas de búsqueda', phase: 'search', status: 'Buscando mejores rutas', tone: 'warning' },
-          { text: 'Revisando y depurando fuentes', phase: 'verify', status: 'Verificando fuentes', tone: 'warning' },
-          { text: 'Comparando resultados', phase: 'compare', status: 'Comparando resultados', tone: 'warning' },
-          { text: 'Verificando la respuesta', phase: 'resolve', status: 'Resolviendo con precisión', tone: 'warning' }
-        ]
-      : [
-          { text: 'Preparando respuesta', phase: 'prepare', status: 'Preparando núcleo', tone: 'warning' },
-          { text: 'Analizando contexto', phase: 'analyze', status: 'Analizando contexto', tone: 'warning' },
-          { text: 'Seleccionando la mejor ruta', phase: 'route', status: 'Seleccionando mejor ruta', tone: 'warning' },
-          { text: 'Probando alternativas si es necesario', phase: 'fallback', status: 'Probando alternativas', tone: 'warning' },
-          { text: 'Verificando el resultado', phase: 'resolve', status: 'Verificando resultado', tone: 'warning' }
-        ];
-    let index = 0;
-    applyThinkingState(states[0]);
-    const tick = () => {
-      if (!state.isGenerating) return;
-      index = Math.min(index + 1, states.length - 1);
-      els.thinkingText.animate([{ opacity: 0, transform: 'translateY(3px)' }, { opacity: 1, transform: 'none' }], { duration: 180, easing: 'ease-out' });
-      applyThinkingState(states[index]);
-      if (index < states.length - 1) state.statusTimers.push(setTimeout(tick, 2100));
-    };
-    state.statusTimers.push(setTimeout(tick, 1600));
-  }
-
-  function applyThinkingState(step) {
-    if (!step) return;
-    const phase = step.phase || 'prepare';
-    const phaseIndex = ({ prepare:0, analyze:0, search:1, route:1, compare:2, fallback:2, verify:3, resolve:3 })[phase] ?? 0;
-    els.thinkingWrap.dataset.phase = phase;
-    els.thinkingText.textContent = step.text || 'Procesando';
-    if (els.thinkingDetail) els.thinkingDetail.textContent = step.detail || thinkingDetailForPhase(phase);
-    els.thinkingStages.forEach((node, index) => {
-      node.classList.toggle('active', index === phaseIndex);
-      node.classList.toggle('complete', index < phaseIndex);
-    });
-    if (step.status) setStatus(step.status, step.tone || 'warning');
-  }
-
-  function thinkingDetailForPhase(phase) {
-    return ({
-      prepare:'Organizando el objetivo y el contexto disponible.',
-      analyze:'Comprendiendo intención, restricciones y prioridades.',
-      search:'Consultando rutas y fuentes pertinentes.',
-      route:'Asignando el proveedor y las herramientas más adecuadas.',
-      compare:'Comparando opciones y descartando inconsistencias.',
-      fallback:'Recuperando la tarea mediante una ruta alternativa.',
-      verify:'Auditando fuentes, cálculos y coherencia.',
-      resolve:'Consolidando una respuesta final verificada.'
-    })[phase] || 'Procesando la solicitud con el núcleo multiagente.';
-  }
-
-  function clearStatusSequence() {
-    state.statusTimers.forEach(clearTimeout);
-    state.statusTimers = [];
-  }
-
-  function animateMessageEntry(node) {
-    if (!node || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    node.classList.add('message-enter');
-    requestAnimationFrame(() => node.classList.add('message-enter-active'));
-    setTimeout(() => node.classList.remove('message-enter', 'message-enter-active'), 460);
-  }
-
-  function appendUser(text, scroll = true, files = []) {
-    const row = document.createElement('div');
-    row.className = 'message user';
-    const fileText = files?.length ? `\n\n📎 ${files.join(', ')}` : '';
-    row.innerHTML = `<div class="user-bubble">${escapeHtml(text + fileText)}</div>`;
-    els.messages.appendChild(row);
-    animateMessageEntry(row);
-    if (scroll) followBottom();
-  }
-
-  function appendAssistant(text, meta = {}, scroll = true, animateBlocks = true) {
-    const row = document.createElement('div');
-    row.className = 'message assistant';
-    const avatarWrap = document.createElement('div');
-    avatarWrap.className = 'assistant-avatar';
-    const avatar = document.createElement('img');
-    const reactorRef = document.querySelector('.brand-reactor')?.getAttribute('src') || './static/jarvis-reactor-v46.svg';
-    avatar.src = resolveAssetUrl(reactorRef);
-    avatar.alt = 'JARVIS';
-    avatarWrap.appendChild(avatar);
-
-    const body = document.createElement('div');
-    body.className = 'assistant-body';
-    const head = document.createElement('div');
-    head.className = 'assistant-head';
-    const modelName = formatModelName(meta.model);
-    head.innerHTML = `<span class="assistant-label">J.A.R.V.I.S.</span><span class="assistant-head-meta">${escapeHtml(modelName || humanRoute(meta.route) || 'Núcleo inteligente')}</span>`;
-
-    const content = document.createElement('div');
-    content.className = 'assistant-content';
-    body.append(head, content);
-
-    const grid = document.createElement('div');
-    grid.className = 'assistant-row';
-    grid.append(avatarWrap, body);
-    row.appendChild(grid);
-    els.messages.appendChild(row);
-
-    const html = renderMarkdown(text);
-    if (animateBlocks && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) revealHtmlBlocks(content, html);
-    else {
-      content.innerHTML = html;
-      finalizeRichContent(content);
-    }
-
-    const tools = Array.isArray(meta.tools) ? meta.tools : [];
-    if (tools.length || meta.cached || meta.degraded || meta.intent || meta.route || meta.latencyMs) {
-      const toolRow = document.createElement('div');
-      toolRow.className = 'tool-row';
-      tools.forEach(tool => {
-        const name = typeof tool === 'string' ? tool : (tool.name || tool.tool || 'Herramienta');
-        toolRow.insertAdjacentHTML('beforeend', `<span class="tool-chip">${escapeHtml(humanToolName(name))}</span>`);
-      });
-      if (meta.intent) toolRow.insertAdjacentHTML('beforeend', `<span class="tool-chip intent-chip">${escapeHtml(humanIntent(meta.intent))}</span>`);
-      if (meta.route) toolRow.insertAdjacentHTML('beforeend', `<span class="tool-chip route-chip">${escapeHtml(humanRoute(meta.route))}</span>`);
-      if (meta.latencyMs) toolRow.insertAdjacentHTML('beforeend', `<span class="tool-chip latency-chip">${Math.max(1, Math.round(meta.latencyMs))} ms</span>`);
-      if (meta.cached) toolRow.insertAdjacentHTML('beforeend', '<span class="tool-chip">Respuesta en caché</span>');
-      if (meta.similarCache) toolRow.insertAdjacentHTML('beforeend', '<span class="tool-chip">Caché similar</span>');
-      if (meta.degraded) toolRow.insertAdjacentHTML('beforeend', '<span class="tool-chip">Modo resistente</span>');
-      if (meta.verified) toolRow.insertAdjacentHTML('beforeend', '<span class="tool-chip verified-chip">Verificado</span>');
-      if (meta.resolutionAttempts > 1) toolRow.insertAdjacentHTML('beforeend', `<span class="tool-chip attempts-chip">${meta.resolutionAttempts} rutas probadas</span>`);
-      if (meta.recoveredErrors?.length || meta.recovered) toolRow.insertAdjacentHTML('beforeend', '<span class="tool-chip recovered-chip">Recuperado automáticamente</span>');
-      if (meta.idempotentReplay) toolRow.insertAdjacentHTML('beforeend', '<span class="tool-chip">Reintento seguro</span>');
-      body.appendChild(toolRow);
-    }
-
-    const actions = buildActions(text, meta);
-    body.appendChild(actions);
-    requestAnimationFrame(() => actions.classList.add('visible'));
-    animateMessageEntry(row);
-
-    if (scroll) followBottom();
-  }
-
-  function resolveAssetUrl(value) {
-    const raw = String(value || '').trim();
-    if (!raw) return '';
-    try {
-      return new URL(raw, document.baseURI || window.location.href).href;
-    } catch {
-      return raw;
-    }
-  }
-
-  function formatModelName(model) {
-    const value = String(model || '').trim();
-    if (!value) return '';
-    return value
-      .replace(/^meta-llama\//i, '')
-      .replace(/^openai\//i, '')
-      .replace(/[-_]+/g, ' ')
-      .replace(/\b\w/g, char => char.toUpperCase())
-      .slice(0, 42);
-  }
-
-  function renderMarkdown(text) {
-    if (!window.marked || !window.DOMPurify) return `<p>${escapeHtml(text).replace(/\n/g, '<br>')}</p>`;
-    return DOMPurify.sanitize(marked.parse(text));
-  }
-
-  function revealHtmlBlocks(container, html) {
-    const template = document.createElement('template');
-    template.innerHTML = html.trim();
-    const nodes = [...template.content.childNodes];
-    let index = 0;
-    const step = () => {
-      if (index >= nodes.length) {
-        finalizeRichContent(container);
-        followBottom();
-        return;
-      }
-      const node = nodes[index++];
-      if (node.nodeType === Node.ELEMENT_NODE) node.classList.add('reveal-block');
-      container.appendChild(node);
-      followBottom();
-      setTimeout(step, nodes.length > 10 ? 28 : 45);
-    };
-    step();
-  }
-
-  function finalizeRichContent(container) {
-    enhanceCodeBlocks(container);
-    if (window.hljs) $$('pre code', container).forEach(block => hljs.highlightElement(block));
-    if (window.MathJax?.typesetPromise) MathJax.typesetPromise([container]).catch(() => {});
-  }
-
-  function enhanceCodeBlocks(container) {
-    $$('pre', container).forEach(pre => {
-      if (pre.parentElement?.classList.contains('code-shell')) return;
-      const code = $('code', pre);
-      const language = [...(code?.classList || [])].find(c => c.startsWith('language-'))?.replace('language-', '') || 'código';
-      const shell = document.createElement('div');
-      shell.className = 'code-shell';
-      const head = document.createElement('div');
-      head.className = 'code-head';
-      head.innerHTML = `<span>${escapeHtml(language)}</span><button class="code-copy" type="button">Copiar</button>`;
-      pre.replaceWith(shell);
-      shell.append(head, pre);
-      $('button', head).addEventListener('click', async e => {
-        await navigator.clipboard.writeText(code?.innerText || pre.innerText);
-        e.currentTarget.textContent = 'Copiado';
-        setTimeout(() => { e.currentTarget.textContent = 'Copiar'; }, 1400);
-      });
-    });
-  }
-
-  function buildActions(text, meta) {
-    const wrap = document.createElement('div');
-    wrap.className = 'response-actions';
-    const buttons = [
-      ['copy', 'Copiar', '<path d="M16 1H4a2 2 0 0 0-2 2v12h2V3h12zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11z"/>'],
-      ['up', 'Me gusta', '<path d="M2 21h4V9H2zm20-11a2 2 0 0 0-2-2h-6.31l.95-4.57.03-.32a1.5 1.5 0 0 0-.44-1.06L13.17 1 6.59 7.59A2 2 0 0 0 6 9v10a2 2 0 0 0 2 2h9a2 2 0 0 0 1.84-1.22l3.02-7.05A2 2 0 0 0 22 12z"/>'],
-      ['down', 'No me gusta', '<path d="M15 3H6a2 2 0 0 0-1.84 1.22L1.14 11.27A2 2 0 0 0 1 12v2a2 2 0 0 0 2 2h6.31l-.95 4.57-.03.32a1.5 1.5 0 0 0 .44 1.06L9.83 23l6.58-6.59A2 2 0 0 0 17 15V5a2 2 0 0 0-2-2zm4 0v12h4V3z"/>'],
-      ['regen', 'Regenerar', '<path d="M17.65 6.35A8 8 0 1 0 20 12h-2a6 6 0 1 1-1.76-4.24L13 11h8V3z"/>']
-    ];
-    buttons.forEach(([action, title, path]) => {
-      const btn = document.createElement('button');
-      btn.className = 'action-mini';
-      btn.title = title;
-      btn.innerHTML = `<svg viewBox="0 0 24 24">${path}</svg>`;
-      btn.addEventListener('click', () => handleResponseAction(action, text, meta, btn));
-      wrap.appendChild(btn);
-    });
-    return wrap;
-  }
-
-  async function handleResponseAction(action, text, meta, button) {
-    if (action === 'copy') {
-      await navigator.clipboard.writeText(text);
-      toast('Respuesta copiada');
+  function openView(view) {
+    closeSidebar();
+    state.currentView = view;
+    $$('[data-view]').forEach(button => button.classList.toggle('active', button.dataset.view === view));
+    if (view === 'chat') {
+      els.chatView.classList.add('active');
+      els.panelView.classList.remove('active');
       return;
     }
-    if (action === 'regen') {
-      if (state.lastPrompt) sendMessage(state.lastPrompt);
-      else toast('No hay una instrucción reciente para regenerar');
-      return;
-    }
-    const rating = action === 'up' ? 1 : -1;
+    if (state.auth.required && !state.auth.authenticated) { openAccount(true); return; }
+    els.chatView.classList.remove('active');
+    els.panelView.classList.add('active');
+    renderPanel(view);
+  }
+
+  const PANEL_INFO = {
+    library:['CONOCIMIENTO','Biblioteca'], memory:['CONTEXTO','Memoria'], missions:['AUTONOMÍA','Misiones'],
+    channels:['INTEGRACIONES','WhatsApp y Telegram'], system:['ESTADO','Diagnóstico del núcleo']
+  };
+
+  async function renderPanel(view) {
+    const [eyebrow,title] = PANEL_INFO[view] || ['JARVIS','Panel'];
+    els.panelEyebrow.textContent = eyebrow;
+    els.panelTitle.textContent = title;
+    els.panelContent.innerHTML = '<div class="empty-state">Cargando…</div>';
     try {
-      await apiFetch('/api/feedback', {
-        method: 'POST',
-        body: JSON.stringify({
-          session_id: backendConversationId(), rating,
-          prompt: state.lastPrompt || '', response: text, comment: ''
-        })
-      });
-      button.style.color = action === 'up' ? 'var(--green)' : 'var(--red)';
-      toast('Gracias por la valoración');
-    } catch { toast('No se pudo guardar la valoración'); }
-  }
-
-  function persistMessage(message) {
-    const chat = currentChat();
-    chat.messages.push(message);
-    chat.updatedAt = Date.now();
-    if (state.projects[chat.projectId]) state.projects[chat.projectId].updatedAt = chat.updatedAt;
-    saveProjects();
-    saveChats();
-    renderProjectList();
-    renderChatFilters();
-    renderChatList(els.drawerSearch?.value || '');
-  }
-
-  function updateChatTitle(prompt) {
-    const chat = currentChat();
-    if (!chat || chat.title !== 'Nueva conversación') return;
-    chat.title = prompt.trim().replace(/\s+/g, ' ').slice(0, 46) || 'Conversación';
-    chat.updatedAt = Date.now();
-    saveChats();
-    renderProjectList();
-    renderChatList(els.drawerSearch?.value || '');
-  }
-
-  function isNearBottom() {
-    return els.chatScroll.scrollHeight - els.chatScroll.scrollTop - els.chatScroll.clientHeight < 140;
-  }
-
-  function followBottom() {
-    if (state.followOutput) requestAnimationFrame(() => scrollToBottom(false));
-    else if (state.isGenerating) els.jumpBtn.classList.add('show');
-  }
-
-  function scrollToBottom(smooth) {
-    els.chatScroll.scrollTo({ top: els.chatScroll.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
-    state.followOutput = true;
-    els.jumpBtn.classList.remove('show');
-  }
-
-  function commandDefinitions() {
-    return [
-      { id:'new-chat', icon:'＋', title:'Nueva conversación', sub:'Crear un chat en el proyecto activo', shortcut:'Ctrl+Shift+N', run:() => createChat(true) },
-      { id:'new-project', icon:'◆', title:'Nuevo proyecto', sub:'Crear un espacio de trabajo independiente', run:createProjectFlow },
-      { id:'projects', icon:'◇', title:'Administrar proyectos', sub:'Cambiar, crear o eliminar proyectos', run:() => openPanel('projects') },
-      { id:'library', icon:'▣', title:'Abrir biblioteca', sub:'Documentos del proyecto activo', run:() => openPanel('library') },
-      { id:'autonomy', icon:'✦', title:'Núcleo autónomo', sub:'Workflows, evidencia, aprobaciones y automatizaciones', run:() => openPanel('autonomy') },
-      { id:'professional', icon:'✦', title:'Centro profesional', sub:'Equipo especializado, hitos y control de calidad', run:() => openPanel('professional') },
-      { id:'agent', icon:'◇', title:'Agente de trabajo', sub:'Planificación y ejecución básica por etapas', run:() => openPanel('agent') },
-      { id:'memory', icon:'◈', title:'Abrir memoria', sub:'Recuerdos y preferencias del proyecto', run:() => openPanel('memory') },
-      { id:'jobs', icon:'◉', title:'Trabajos autónomos', sub:'Crear y revisar tareas en segundo plano', run:() => openPanel('jobs') },
-      { id:'search', icon:'⌕', title:'Buscar conocimiento', sub:'Memoria, documentos y conversaciones', run:() => openPanel('search') },
-      { id:'export', icon:'⇩', title:'Exportar conversación', sub:'Descargar Markdown o JSON', shortcut:'Ctrl+E', run:() => openPanel('export') },
-      { id:'providers', icon:'◫', title:'Proveedores IA', sub:'OpenAI, Gemini, Groq, Ollama y rutas automáticas', run:() => openPanel('providers') },
-      { id:'resilience', icon:'⟲', title:'Resiliencia y rutas', sub:'Proveedores, verificaciones y recuperaciones', run:() => openPanel('resilience') },
-      { id:'performance', icon:'⌁', title:'Rendimiento', sub:'Velocidad, caché, circuitos y trabajos', run:() => openPanel('performance') },
-      { id:'system', icon:'⚙', title:'Estado del núcleo', sub:'Diagnóstico, modelos y conexión', run:() => openPanel('system') },
-      { id:'focus', icon:'/', title:'Escribir una pregunta', sub:'Enfocar el campo de conversación', shortcut:'/', run:() => els.userInput.focus() },
-      { id:'mode', icon:'◎', title:'Cambiar modo', sub:MODES.find(item => item.id === state.mode)?.label || 'Modo automático', run:cycleMode },
-    ];
-  }
-
-  function openCommandPalette() {
-    closeOverlays();
-    els.commandPalette?.classList.add('open');
-    state.commandIndex = 0;
-    if (els.commandInput) els.commandInput.value = '';
-    renderCommandPalette();
-    setTimeout(() => els.commandInput?.focus(), 40);
-  }
-
-  function closeCommandPalette() {
-    els.commandPalette?.classList.remove('open');
-  }
-
-  function paletteItems(query = '') {
-    const needle = query.trim().toLowerCase();
-    const commands = commandDefinitions()
-      .filter(item => !needle || `${item.title} ${item.sub}`.toLowerCase().includes(needle))
-      .map(item => ({ ...item, group:'Comandos' }));
-    const projects = Object.values(state.projects)
-      .filter(item => !needle || `${item.name} ${item.description || ''}`.toLowerCase().includes(needle))
-      .slice(0,8)
-      .map(item => ({ id:`project:${item.id}`, icon:'◆', title:item.name, sub:item.description || 'Cambiar a este proyecto', group:'Proyectos', run:() => switchProject(item.id) }));
-    const chats = Object.values(state.chats)
-      .filter(chat => !needle || `${chat.title} ${(chat.messages || []).map(item => item.content || '').join(' ')}`.toLowerCase().includes(needle))
-      .sort((a,b) => (b.updatedAt || 0) - (a.updatedAt || 0))
-      .slice(0,10)
-      .map(chat => ({ id:`chat:${chat.id}`, icon:'◌', title:chat.title || 'Conversación', sub:state.projects[chat.projectId]?.name || 'Proyecto', group:'Conversaciones', run:() => { if (chat.projectId !== state.activeProjectId) switchProject(chat.projectId); switchChat(chat.id); } }));
-    return [...commands, ...projects, ...chats];
-  }
-
-  function renderCommandPalette() {
-    if (!els.commandResults) return;
-    const items = paletteItems(els.commandInput?.value || '');
-    state.commandItems = items;
-    state.commandIndex = Math.max(0, Math.min(state.commandIndex, items.length - 1));
-    if (!items.length) {
-      els.commandResults.innerHTML = '<div class="empty-note">No hay coincidencias.</div>';
-      return;
-    }
-    let currentGroup = '';
-    els.commandResults.innerHTML = items.map((item,index) => {
-      const group = item.group !== currentGroup ? `<div class="command-group-label">${escapeHtml(item.group)}</div>` : '';
-      currentGroup = item.group;
-      return `${group}<button class="command-item${index === state.commandIndex ? ' active' : ''}" data-command-index="${index}"><span class="command-item-icon">${escapeHtml(item.icon)}</span><span class="command-item-copy"><span class="command-item-title">${escapeHtml(item.title)}</span><span class="command-item-sub">${escapeHtml(item.sub || '')}</span></span>${item.shortcut ? `<span class="command-item-shortcut">${escapeHtml(item.shortcut)}</span>` : ''}</button>`;
-    }).join('');
-    $$('[data-command-index]', els.commandResults).forEach(button => button.addEventListener('click', () => runCommand(Number(button.dataset.commandIndex))));
-  }
-
-  function handleCommandKeydown(event) {
-    if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      state.commandIndex = Math.min(state.commandIndex + 1, state.commandItems.length - 1);
-      renderCommandPalette();
-    } else if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      state.commandIndex = Math.max(state.commandIndex - 1, 0);
-      renderCommandPalette();
-    } else if (event.key === 'Enter') {
-      event.preventDefault();
-      runCommand(state.commandIndex);
-    } else if (event.key === 'Escape') {
-      closeCommandPalette();
-    }
-  }
-
-  function runCommand(index) {
-    const item = state.commandItems[index];
-    if (!item) return;
-    closeCommandPalette();
-    item.run?.();
-  }
-
-  function openDrawer() {
-    renderProjectList();
-    renderChatList(els.drawerSearch?.value || '');
-    document.body.classList.add('drawer-visible');
-    els.drawer.classList.remove('closing');
-    els.backdrop.classList.add('open');
-    requestAnimationFrame(() => {
-      els.drawer.classList.add('open');
-      staggerDrawerItems();
-    });
-  }
-
-  function closeOverlays() {
-    const drawerWasOpen = els.drawer.classList.contains('open');
-    if (drawerWasOpen) {
-      els.drawer.classList.add('closing');
-      els.drawer.classList.remove('open');
-      setTimeout(() => els.drawer.classList.remove('closing'), 280);
-    }
-    els.sheet.classList.remove('open');
-    if (drawerWasOpen) setTimeout(() => els.backdrop.classList.remove('open'), 170);
-    else els.backdrop.classList.remove('open');
-    document.body.classList.remove('drawer-visible');
-  }
-
-  function staggerDrawerItems() {
-    $$('.project-item, .chat-item, .drawer-link', els.drawer).forEach((node, index) => {
-      node.style.setProperty('--stagger-index', String(Math.min(index, 18)));
-      node.classList.remove('stagger-in');
-      void node.offsetWidth;
-      node.classList.add('stagger-in');
-      setTimeout(() => node.classList.remove('stagger-in'), 420);
-    });
-  }
-
-  async function openPanel(panel) {
-    closeOverlays();
-    els.backdrop.classList.add('open');
-    els.sheet.classList.add('open');
-    els.sheetTitle.textContent = panelTitle(panel);
-    els.sheetBody.innerHTML = '<div class="empty-note">Cargando...</div>';
-    try {
-      if (panel === 'overview') await renderOverview();
-      else if (panel === 'channels') await renderChannels();
-      else if (panel === 'account') await renderAccount();
-      else if (panel === 'autonomy') await renderAutonomy();
-      else if (panel === 'professional') await renderProfessionalCenter();
-      else if (panel === 'agent') await renderAgentCenter();
-      else if (panel === 'projects') await renderProjects();
-      else if (panel === 'library') await renderLibrary();
-      else if (panel === 'memory') await renderMemory();
-      else if (panel === 'reminders') await renderReminders();
-      else if (panel === 'jobs') await renderJobs();
-      else if (panel === 'search') await renderKnowledgeSearch();
-      else if (panel === 'export') await renderExport();
-      else if (panel === 'providers') await renderProviders();
-      else if (panel === 'resilience') await renderResilience();
-      else if (panel === 'performance') await renderPerformance();
+      if (view === 'library') await renderLibrary();
+      else if (view === 'memory') await renderMemory();
+      else if (view === 'missions') await renderMissions();
+      else if (view === 'channels') await renderChannels();
       else await renderSystem();
     } catch (error) {
-      els.sheetBody.innerHTML = `<div class="empty-note">${escapeHtml(error.message || 'No se pudo cargar esta sección.')}</div>`;
+      if (error.status === 401) { clearSession(); openAccount(true); return; }
+      els.panelContent.innerHTML = `<div class="empty-state">${escapeHTML(explainError(error))}<br><br><button class="soft-btn" id="retryPanel">Volver a intentar</button></div>`;
+      $('#retryPanel')?.addEventListener('click', () => renderPanel(view));
     }
-  }
-
-  function panelTitle(panel) {
-    return ({ overview: 'Centro JARVIS', channels: 'WhatsApp y Telegram', account: 'Cuenta y privacidad', autonomy: 'Núcleo autónomo v46', professional: 'Centro profesional', agent: 'Agente de trabajo', projects: 'Proyectos', library: 'Biblioteca', memory: 'Memoria', reminders: 'Recordatorios', jobs: 'Trabajos autónomos', search: 'Buscar conocimiento', export: 'Exportar conversación', providers: 'Proveedores IA', resilience: 'Resiliencia y rutas', performance: 'Rendimiento y estabilidad', system: 'Estado y ajustes' })[panel] || 'JARVIS';
-  }
-
-  async function renderOverview() {
-    const data = await apiFetch(`/api/operations/overview?session_id=${encodeURIComponent(backendConversationId())}`);
-    const workflows = data.autonomy || {};
-    const semantic = data.semantic || {};
-    const channels = data.channels || {};
-    const configuredChannels = ['telegram', 'whatsapp'].filter(name => channels[name]?.configured).length;
-    els.sheetBody.innerHTML = `
-      <section class="operations-hero">
-        <div><span class="eyebrow">JARVIS ${escapeHtml(data.version || '46')}</span><h3>Todo el núcleo, sin ruido.</h3><p>Conversa normalmente o abre una herramienta únicamente cuando la necesites.</p></div>
-        <span class="operations-health">● Operativo</span>
-      </section>
-      <div class="operations-metrics">
-        <button data-open-panel="providers"><strong>${Number(data.providers?.configured?.length || 0)}</strong><span>modelos conectados</span></button>
-        <button data-open-panel="autonomy"><strong>${Number(workflows.running || 0) + Number(workflows.queued || 0)}</strong><span>misiones activas</span></button>
-        <button data-open-panel="memory"><strong>${Number(semantic.chunks || semantic.total_chunks || 0)}</strong><span>fragmentos semánticos</span></button>
-        <button data-open-panel="channels"><strong>${configuredChannels}/2</strong><span>canales conectados</span></button>
-      </div>
-      <div class="panel-grid operations-actions">
-        ${panelCard('Crear una misión', 'Planificación, herramientas, checkpoints y verificación.', 'autonomy')}
-        ${panelCard('Conectar canales', 'Usa JARVIS desde Telegram y WhatsApp.', 'channels')}
-        ${panelCard('Abrir biblioteca', 'Documentos, memoria y recuperación semántica.', 'library')}
-        ${panelCard('Cuenta y privacidad', data.identity?.required ? 'Acceso privado activado.' : 'Acceso privado opcional.', 'account')}
-      </div>
-      <div class="operations-safety"><span>✓ Aprobación humana</span><span>✓ Webhooks firmados</span><span>✓ Recuperación automática</span><span>✓ Sin autodespliegue inseguro</span></div>`;
-    $$('[data-open-panel]', els.sheetBody).forEach(btn => btn.addEventListener('click', () => openPanel(btn.dataset.openPanel)));
-  }
-
-  async function renderChannels() {
-    const data = await apiFetch('/api/channels/status');
-    const telegram = data.channels?.telegram || {};
-    const whatsapp = data.channels?.whatsapp || {};
-    const telegramUrl = `${normalizeBase(state.apiBase)}/api/channels/telegram/webhook`;
-    const whatsappUrl = `${normalizeBase(state.apiBase)}/api/channels/whatsapp/webhook`;
-    const badge = configured => `<span class="connection-badge ${configured ? 'ready' : 'pending'}">${configured ? 'Conectado' : 'Por configurar'}</span>`;
-    els.sheetBody.innerHTML = `
-      <div class="channel-intro"><h3>JARVIS donde ya conversas</h3><p>Los mensajes entrantes pasan por el mismo router, memoria, herramientas y recuperación que la interfaz web.</p></div>
-      <div class="channel-grid">
-        <article class="channel-card">
-          <div class="channel-card-head"><span class="channel-logo telegram">T</span><div><h3>Telegram</h3><p>Bot privado con comandos y misiones.</p></div>${badge(telegram.configured)}</div>
-          <ol><li>Crea el bot con <strong>@BotFather</strong>.</li><li>Configura token, secreto y chats permitidos en Render.</li><li>Registra este webhook HTTPS.</li></ol>
-          <div class="copy-field"><code>${escapeHtml(telegramUrl)}</code><button data-copy-value="${escapeHtml(telegramUrl)}">Copiar</button></div>
-          <button class="soft-btn channel-action" id="registerTelegramWebhook" ${telegram.configured ? '' : 'disabled'}>Registrar webhook</button>
-        </article>
-        <article class="channel-card">
-          <div class="channel-card-head"><span class="channel-logo whatsapp">W</span><div><h3>WhatsApp</h3><p>Cloud API oficial de Meta.</p></div>${badge(whatsapp.configured)}</div>
-          <ol><li>Crea una app Business en Meta.</li><li>Configura el número, token, secreto y lista permitida.</li><li>Usa esta URL como callback del webhook.</li></ol>
-          <div class="copy-field"><code>${escapeHtml(whatsappUrl)}</code><button data-copy-value="${escapeHtml(whatsappUrl)}">Copiar</button></div>
-          <p class="channel-note">Suscribe el campo <strong>messages</strong>. El token de verificación es el valor privado configurado en Render.</p>
-        </article>
-      </div>
-      <article class="panel-card channel-test">
-        <h3>Enviar una prueba confirmada</h3><p>La interfaz nunca envía mensajes externos sin confirmación explícita.</p>
-        <div class="form-row channel-test-row"><select class="text-input" id="channelTestType"><option value="telegram">Telegram</option><option value="whatsapp">WhatsApp</option></select><input class="text-input" id="channelTestRecipient" placeholder="Chat ID o número internacional"/></div>
-        <textarea class="text-area" id="channelTestMessage" placeholder="Mensaje de prueba"></textarea>
-        <button class="primary-btn" id="channelTestSend">Revisar y enviar</button>
-      </article>`;
-    $$('[data-copy-value]', els.sheetBody).forEach(button => button.addEventListener('click', async () => {
-      await navigator.clipboard.writeText(button.dataset.copyValue || '').catch(() => {});
-      toast('Dirección copiada');
-    }));
-    $('#registerTelegramWebhook', els.sheetBody)?.addEventListener('click', async () => {
-      if (!confirm(`Registrar ${telegramUrl} como webhook de Telegram?`)) return;
-      try {
-        await apiFetch('/api/channels/telegram/register-webhook', { method:'POST', body:JSON.stringify({ webhook_url:telegramUrl, drop_pending_updates:false }) });
-        toast('Webhook de Telegram registrado');
-        renderChannels();
-      } catch (error) { toast(error.message || 'No se pudo registrar el webhook.'); }
-    });
-    $('#channelTestSend', els.sheetBody)?.addEventListener('click', async () => {
-      const channel = $('#channelTestType', els.sheetBody)?.value || 'telegram';
-      const recipient = $('#channelTestRecipient', els.sheetBody)?.value.trim();
-      const message = $('#channelTestMessage', els.sheetBody)?.value.trim();
-      if (!recipient || !message) return toast('Completa destinatario y mensaje.');
-      if (!confirm(`¿Enviar este mensaje por ${channel}?`)) return;
-      try {
-        await apiFetch('/api/channels/send', { method:'POST', body:JSON.stringify({ channel, recipient, message, confirmed:true }) });
-        toast('Mensaje enviado');
-      } catch (error) { toast(error.message || 'No se pudo enviar el mensaje.'); }
-    });
-  }
-
-  async function renderAccount() {
-    const data = await apiFetch('/api/auth/status');
-    state.authUser = data.user || null;
-    if (!data.authenticated && state.authToken) {
-      state.authToken = '';
-      sessionStore.removeItem(STORE.authToken);
-      sessionStore.removeItem(STORE.authUser);
-    }
-    if (data.authenticated && data.user) {
-      sessionStore.setItem(STORE.authUser, JSON.stringify(data.user));
-      els.sheetBody.innerHTML = `
-        <section class="account-card"><span class="account-avatar">${escapeHtml((data.user.display_name || 'J').slice(0,1).toUpperCase())}</span><div><h3>${escapeHtml(data.user.display_name)}</h3><p>${escapeHtml(data.user.email)} · ${escapeHtml(data.user.role)}</p></div><span class="connection-badge ready">Sesión protegida</span></section>
-        <div class="panel-grid"><div class="panel-card"><h3>Privacidad</h3><p>El token permanece solo durante esta sesión del navegador. Las claves de proveedores nunca llegan al frontend.</p></div><div class="panel-card"><h3>Espacio personal</h3><p>${escapeHtml(data.user.workspace_session_id || '')}</p></div></div>
-        <button class="danger-btn account-logout" id="accountLogout">Cerrar sesión</button>`;
-      $('#accountLogout', els.sheetBody)?.addEventListener('click', async () => {
-        await apiFetch('/api/auth/logout', { method:'POST' }).catch(() => ({}));
-        state.authToken = ''; state.authUser = null;
-        sessionStore.removeItem(STORE.authToken); sessionStore.removeItem(STORE.authUser);
-        toast('Sesión cerrada'); renderAccount();
-      });
-      return;
-    }
-    const registration = data.registration_enabled ? `
-      <details class="auth-register"><summary>Crear la cuenta propietaria</summary><div class="auth-fields"><input class="text-input" id="registerName" autocomplete="name" placeholder="Nombre"/><input class="text-input" id="registerEmail" type="email" autocomplete="email" placeholder="Correo"/><input class="text-input" id="registerPassword" type="password" autocomplete="new-password" placeholder="Contraseña segura (12+ caracteres)"/><button class="soft-btn" id="registerAccount">Crear cuenta</button></div></details>` : '';
-    els.sheetBody.innerHTML = `
-      <div class="account-login"><span class="account-lock">◇</span><h3>Protege tu núcleo personal</h3><p>${data.auth_required ? 'Este núcleo privado requiere iniciar sesión antes de conversar.' : 'El inicio de sesión es opcional hasta que actives <code>JARVIS_AUTH_REQUIRED=true</code> en Render.'}</p><div class="auth-fields"><input class="text-input" id="loginEmail" type="email" autocomplete="username" placeholder="Correo"/><input class="text-input" id="loginPassword" type="password" autocomplete="current-password" placeholder="Contraseña"/><button class="primary-btn" id="loginAccount">Iniciar sesión</button></div>${registration}</div>`;
-    const finishAuth = result => {
-      state.authToken = result.token || ''; state.authUser = result.user || null;
-      sessionStore.setItem(STORE.authToken, state.authToken);
-      sessionStore.setItem(STORE.authUser, JSON.stringify(state.authUser));
-      toast('Núcleo privado conectado'); renderAccount();
-    };
-    $('#loginAccount', els.sheetBody)?.addEventListener('click', async () => {
-      try { finishAuth(await apiFetch('/api/auth/login', { method:'POST', body:JSON.stringify({ email:$('#loginEmail', els.sheetBody).value, password:$('#loginPassword', els.sheetBody).value }) })); }
-      catch (error) { toast(error.message || 'No fue posible iniciar sesión.'); }
-    });
-    $('#registerAccount', els.sheetBody)?.addEventListener('click', async () => {
-      try { finishAuth(await apiFetch('/api/auth/register', { method:'POST', body:JSON.stringify({ display_name:$('#registerName', els.sheetBody).value, email:$('#registerEmail', els.sheetBody).value, password:$('#registerPassword', els.sheetBody).value }) })); }
-      catch (error) { toast(error.message || 'No fue posible crear la cuenta.'); }
-    });
-  }
-
-  async function renderAutonomy() {
-    const sid = encodeURIComponent(backendConversationId());
-    const [statusData, workflowData, approvalData, automationData] = await Promise.all([
-      apiFetch(`/api/autonomy/status?session_id=${sid}`),
-      apiFetch(`/api/autonomy/workflows?session_id=${sid}&limit=20`),
-      apiFetch(`/api/autonomy/approvals?session_id=${sid}`),
-      apiFetch(`/api/automations?session_id=${sid}&limit=20`)
-    ]);
-    const counts = statusData.counts || {};
-    const semantic = statusData.semantic || {};
-    const workflows = workflowData.workflows || [];
-    const approvals = approvalData.approvals || [];
-    const automations = automationData.automations || [];
-    const active = ['queued','running','pausing','paused','awaiting_approval'].reduce((sum,key) => sum + Number(counts[key] || 0), 0);
-    const codeLab = statusData.code_lab || {};
-    const mcp = statusData.mcp || {};
-
-    const workflowCard = workflow => {
-      const steps = workflow.steps || [];
-      const completed = steps.filter(step => step.status === 'completed').length;
-      const progress = steps.length ? Math.round(completed / steps.length * 100) : 0;
-      const terminal = ['completed','failed','cancelled','rejected'].includes(workflow.status);
-      const canStart = ['planned','paused','failed'].includes(workflow.status);
-      return `<article class="autonomy-workflow-card">
-        <header><div><span class="autonomy-status ${escapeHtml(workflow.status)}">${escapeHtml(workflow.status)}</span><h3>${escapeHtml(workflow.objective || 'Workflow')}</h3><p>${escapeHtml(workflow.intent || 'general')} · ${steps.length} etapas · ${escapeHtml(workflow.project_name || 'General')}</p></div><strong>${progress}%</strong></header>
-        <div class="autonomy-progress"><i style="width:${progress}%"></i></div>
-        <div class="autonomy-step-rail">${steps.map(step => `<span class="${escapeHtml(step.status)}" title="${escapeHtml(step.label || step.name)}">${step.status === 'completed' ? '✓' : step.status === 'failed' ? '!' : '•'}</span>`).join('')}</div>
-        ${workflow.error ? `<p class="autonomy-error">${escapeHtml(workflow.error)}</p>` : ''}
-        ${workflow.result ? `<details class="autonomy-result"><summary>Ver resultado</summary><div>${renderMarkdown(workflow.result)}</div></details>` : ''}
-        <footer>
-          <button class="soft-btn" data-workflow-refresh="${escapeHtml(workflow.id)}">Actualizar</button>
-          ${canStart ? `<button class="primary-btn" data-workflow-action="start" data-workflow-id="${escapeHtml(workflow.id)}">${workflow.status === 'paused' ? 'Reanudar' : 'Iniciar'}</button>` : ''}
-          ${!terminal && workflow.status !== 'paused' ? `<button class="soft-btn" data-workflow-action="pause" data-workflow-id="${escapeHtml(workflow.id)}">Pausar</button>` : ''}
-          ${!terminal ? `<button class="danger-btn" data-workflow-action="cancel" data-workflow-id="${escapeHtml(workflow.id)}">Cancelar</button>` : ''}
-        </footer>
-      </article>`;
-    };
-
-    els.sheetBody.innerHTML = `
-      <section class="autonomy-hero">
-        <div class="autonomy-hero-copy"><span>JARVIS v46</span><h2>Objetivos que avanzan por etapas reales</h2><p>Planifica, recupera contexto, reúne evidencia, ejecuta, verifica y se detiene antes de cualquier acción sensible.</p></div>
-        <div class="autonomy-signal" aria-hidden="true"><i></i><i></i><i></i></div>
-      </section>
-      <section class="autonomy-create">
-        <textarea class="text-input" id="autonomyObjective" rows="3" placeholder="Describe un objetivo completo: qué necesitas, límites y resultado esperado..."></textarea>
-        <div class="autonomy-create-foot"><span>Proyecto: <strong>${escapeHtml(currentProject()?.name || 'General')}</strong></span><button class="primary-btn" id="createWorkflowBtn">Crear y ejecutar misión</button></div>
-      </section>
-      <div class="autonomy-metrics">
-        <div><strong>${active}</strong><span>activas</span></div><div><strong>${Number(counts.completed || 0)}</strong><span>completadas</span></div>
-        <div><strong>${Number(semantic.sources || 0)}</strong><span>fuentes en memoria</span></div><div><strong>${approvals.length}</strong><span>aprobaciones</span></div>
-      </div>
-      ${approvals.length ? `<section class="autonomy-section"><div class="section-panel-title">Requieren tu decisión</div><div class="approval-list">${approvals.map(item => `<article class="approval-card"><div><span>Riesgo ${escapeHtml(item.risk || 'alto')}</span><h3>${escapeHtml(item.action || 'Acción sensible')}</h3><p>${escapeHtml(item.summary || '')}</p></div><div><button class="soft-btn" data-approval="rejected" data-approval-id="${escapeHtml(item.id)}">Rechazar</button><button class="primary-btn" data-approval="approved" data-approval-id="${escapeHtml(item.id)}">Aprobar</button></div></article>`).join('')}</div></section>` : ''}
-      <section class="autonomy-section"><div class="section-panel-title row-title"><span>Misiones recientes</span><button class="soft-btn" id="refreshAutonomyBtn">Actualizar</button></div><div class="autonomy-workflow-list">${workflows.length ? workflows.map(workflowCard).join('') : '<div class="empty-note">Todavía no hay misiones autónomas. Crea la primera arriba.</div>'}</div></section>
-      <details class="autonomy-secondary"><summary>Automatizaciones e integraciones</summary>
-        <div class="autonomy-integration-grid"><div><strong>${automations.length}</strong><span>automatizaciones</span></div><div><strong>${mcp.configured ? 'Activo' : 'Opcional'}</strong><span>MCP</span></div><div><strong>${codeLab.available ? 'Aislado' : 'Opcional'}</strong><span>laboratorio de código</span></div></div>
-        <div class="automation-form"><input class="text-input" id="automationTitle" placeholder="Nombre de automatización"><textarea class="text-input" id="automationPrompt" rows="2" placeholder="Trabajo que JARVIS debe realizar"></textarea><div class="form-row"><select class="text-input" id="automationType"><option value="once">Una vez</option><option value="interval">Cada intervalo</option></select><input class="text-input" id="automationValue" placeholder="ISO 8601 o segundos"><button class="soft-btn" id="createAutomationBtn">Programar</button></div></div>
-        <div class="automation-list">${automations.map(item => `<div class="automation-row"><div><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.schedule_type)} · ${escapeHtml(item.status)}</small></div><span>${new Date(Number(item.next_run_at || 0) * 1000).toLocaleString()}</span></div>`).join('') || '<div class="empty-note">No hay automatizaciones.</div>'}</div>
-      </details>`;
-
-    $('#createWorkflowBtn', els.sheetBody)?.addEventListener('click', async () => {
-      const objective = $('#autonomyObjective', els.sheetBody)?.value.trim();
-      if (!objective) return toast('Escribe primero el objetivo.');
-      const button = $('#createWorkflowBtn', els.sheetBody);
-      button.disabled = true; button.textContent = 'Creando workflow...';
-      try {
-        await apiFetch('/api/autonomy/workflows', { method:'POST', body:JSON.stringify({ session_id:backendConversationId(), objective, mode:state.mode, project_name:currentProject()?.name || 'General', start:true }) });
-        toast('Misión autónoma iniciada');
-        renderAutonomy();
-      } catch (error) { toast(error.message || 'No se pudo crear la misión.'); button.disabled = false; button.textContent = 'Crear y ejecutar misión'; }
-    });
-    $('#refreshAutonomyBtn', els.sheetBody)?.addEventListener('click', renderAutonomy);
-    $$('[data-workflow-refresh]', els.sheetBody).forEach(button => button.addEventListener('click', renderAutonomy));
-    $$('[data-workflow-action]', els.sheetBody).forEach(button => button.addEventListener('click', async () => {
-      button.disabled = true;
-      await apiFetch(`/api/autonomy/workflows/${encodeURIComponent(button.dataset.workflowId)}/${button.dataset.workflowAction}?session_id=${sid}`, { method:'POST' }).catch(error => toast(error.message));
-      setTimeout(renderAutonomy, 250);
-    }));
-    $$('[data-approval]', els.sheetBody).forEach(button => button.addEventListener('click', async () => {
-      const approved = button.dataset.approval === 'approved';
-      const confirmed = !approved || window.confirm('¿Autoriza explícitamente esta acción sensible? JARVIS registrará la decisión antes de continuar.');
-      if (!confirmed) return;
-      await apiFetch(`/api/autonomy/approvals/${encodeURIComponent(button.dataset.approvalId)}`, { method:'POST', body:JSON.stringify({ session_id:backendConversationId(), decision:button.dataset.approval, note:'Decisión tomada desde la interfaz v46' }) }).catch(error => toast(error.message));
-      renderAutonomy();
-    }));
-    $('#createAutomationBtn', els.sheetBody)?.addEventListener('click', async () => {
-      const title = $('#automationTitle', els.sheetBody)?.value.trim();
-      const prompt = $('#automationPrompt', els.sheetBody)?.value.trim();
-      const schedule_type = $('#automationType', els.sheetBody)?.value || 'once';
-      const schedule_value = $('#automationValue', els.sheetBody)?.value.trim();
-      if (!title || !prompt || !schedule_value) return toast('Completa la automatización.');
-      await apiFetch('/api/automations', { method:'POST', body:JSON.stringify({ session_id:backendConversationId(), title, prompt, schedule_type, schedule_value }) }).then(() => { toast('Automatización guardada'); renderAutonomy(); }).catch(error => toast(error.message));
-    });
-  }
-
-  function panelCard(title, text, panel) {
-    return `<button class="panel-card" data-open-panel="${panel}" style="text-align:left;color:inherit;cursor:pointer"><h3>${title}</h3><p>${text}</p></button>`;
-  }
-
-  async function renderProjects() {
-    const projects = Object.values(state.projects).sort((a,b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-    els.sheetBody.innerHTML = `
-      <div class="project-hero premium-project-hero">
-        <div class="project-hero-icon">◈</div>
-        <div><h3>Espacios de trabajo</h3><p>Cada proyecto separa conversaciones, memoria, documentos, recordatorios y trabajos del núcleo.</p></div>
-      </div>
-      <div class="project-create-box">
-        <input class="text-input" id="projectNameInput" placeholder="Nombre del proyecto"/>
-        <input class="text-input" id="projectDescInput" placeholder="Descripción breve"/>
-        <button class="primary-btn" id="createProjectPanelBtn">Crear proyecto</button>
-      </div>
-      <div class="project-grid premium-project-grid">${projects.map(project => {
-        const chats = Object.values(state.chats).filter(chat => chat.projectId === project.id);
-        const messages = chats.reduce((total, chat) => total + (chat.messages?.length || 0), 0);
-        const active = project.id === state.activeProjectId;
-        return `
-          <article class="project-card${active ? ' active' : ''}" data-project-card="${escapeHtml(project.id)}">
-            <div class="project-card-top">
-              <span class="project-card-orb">${active ? '◆' : '◇'}</span>
-              ${active ? '<span class="project-active-badge">Activo</span>' : ''}
-              ${projects.length > 1 ? `<button class="project-card-delete" data-delete-project="${escapeHtml(project.id)}" title="Eliminar">×</button>` : ''}
-            </div>
-            <h3>${escapeHtml(project.name)}</h3>
-            <p>${escapeHtml(project.description || 'Sin descripción.')}</p>
-            <div class="project-stats">
-              <span><strong>${chats.length}</strong> chats</span>
-              <span><strong>${messages}</strong> mensajes</span>
-              <span>${escapeHtml(formatRelativeTime(project.updatedAt))}</span>
-            </div>
-          </article>`;
-      }).join('')}</div>`;
-    $('#createProjectPanelBtn', els.sheetBody)?.addEventListener('click', () => {
-      const name = $('#projectNameInput', els.sheetBody).value.trim();
-      if (!name) return;
-      const desc = $('#projectDescInput', els.sheetBody).value.trim();
-      const id = uid('project');
-      state.projects[id] = { id, name:name.slice(0,60), description:desc.slice(0,240), createdAt:Date.now(), updatedAt:Date.now() };
-      state.activeProjectId = id;
-      saveProjects();
-      renderProjectSwitcher();
-      renderProjectList();
-      createChat(false);
-      renderProjects();
-    });
-    $$('[data-project-card]', els.sheetBody).forEach(card => card.addEventListener('click', event => {
-      if (event.target.closest('[data-delete-project]')) return;
-      switchProject(card.dataset.projectCard);
-    }));
-    $$('[data-delete-project]', els.sheetBody).forEach(btn => btn.addEventListener('click', event => {
-      event.stopPropagation();
-      deleteProject(btn.dataset.deleteProject);
-      renderProjects();
-    }));
-  }
-
-  async function renderProfessionalCenter() {
-    const status = await apiFetch(`/api/professional/status?session_id=${encodeURIComponent(backendConversationId())}`).catch(() => ({ active:0, counts:{}, profiles:8 }));
-    const profiles = await apiFetch('/api/professional/profiles').catch(() => ({ profiles:[] }));
-    const roleItems = profiles.profiles || [];
-    els.sheetBody.innerHTML = `
-      <section class="professional-hero">
-        <div class="professional-hero-glow" aria-hidden="true"></div>
-        <div class="professional-hero-mark">✦</div>
-        <div class="professional-hero-copy">
-          <span class="professional-kicker">Unified Personal Intelligence v46</span>
-          <h3>Convierta objetivos en misiones verificables</h3>
-          <p>JARVIS forma un equipo de especialistas, define hitos, utiliza varios proveedores y audita el resultado antes de entregarlo.</p>
-        </div>
-        <div class="professional-status"><strong>${Number(status.active || 0)}</strong><span>misiones activas</span></div>
-      </section>
-      <div class="professional-role-strip" aria-label="Especialistas disponibles">
-        ${roleItems.slice(0,8).map(role => `<span title="${escapeHtml(role.mission || '')}"><b>${escapeHtml(role.icon || '◇')}</b>${escapeHtml(role.name || role.id || 'Especialista')}</span>`).join('')}
-      </div>
-      <div class="professional-template-grid">
-        <button data-professional-template="Investiga este tema con fuentes actuales, contrasta evidencia, analiza implicaciones y entrega un informe ejecutivo verificable."><span>⌕</span><strong>Investigación ejecutiva</strong><small>Fuentes, análisis, conclusiones y auditoría.</small></button>
-        <button data-professional-template="Analiza estos documentos o datos, identifica hallazgos, riesgos, inconsistencias y recomendaciones accionables."><span>▦</span><strong>Análisis profesional</strong><small>Documentos, datos, riesgos y decisiones.</small></button>
-        <button data-professional-template="Diseña e implementa una solución técnica completa, valida errores, ejecuta pruebas y entrega los archivos finales."><span>⌘</span><strong>Solución técnica</strong><small>Arquitectura, código, pruebas y entrega.</small></button>
-        <button data-professional-template="Convierte este objetivo en un plan ejecutable con hitos, dependencias, responsables, riesgos y criterios de éxito."><span>◆</span><strong>Dirección de proyecto</strong><small>Plan, prioridades, seguimiento y cierre.</small></button>
-      </div>
-      <div class="professional-builder">
-        <div class="professional-builder-head"><div><strong>Nueva misión</strong><small>Describe el resultado final; JARVIS organizará el trabajo.</small></div><span class="professional-secure">Verificación activa</span></div>
-        <div class="professional-form-grid">
-          <label><span>Nombre</span><input class="text-input" id="professionalTitleInput" placeholder="Ej. Informe económico trimestral" /></label>
-          <label><span>Nivel del equipo</span><select class="text-input" id="professionalTeamSize"><option value="4">Equipo equilibrado</option><option value="5" selected>Equipo completo</option><option value="6">Equipo ampliado</option></select></label>
-          <label class="professional-objective-field"><span>Objetivo y entregables</span><textarea class="text-input professional-objective" id="professionalObjectiveInput" placeholder="Explica qué debe lograr JARVIS, qué debe entregar y cualquier restricción importante..."></textarea></label>
-        </div>
-        <div class="professional-actions">
-          <button class="soft-btn" id="professionalPlanBtn">Diseñar misión</button>
-          <button class="primary-btn" id="professionalExecuteBtn">Iniciar misión</button>
-        </div>
-      </div>
-      <div class="professional-plan-output" id="professionalPlanOutput"><div class="professional-empty">El equipo, los hitos y los controles de calidad aparecerán aquí.</div></div>`;
-
-    $$('[data-professional-template]', els.sheetBody).forEach(button => button.addEventListener('click', () => {
-      const input = $('#professionalObjectiveInput', els.sheetBody);
-      input.value = button.dataset.professionalTemplate || '';
-      input.focus();
-    }));
-
-    const readPayload = () => ({
-      session_id: backendConversationId(),
-      title: $('#professionalTitleInput', els.sheetBody).value.trim() || 'Misión profesional JARVIS',
-      objective: $('#professionalObjectiveInput', els.sheetBody).value.trim(),
-      mode: state.mode,
-      project_name: currentProject()?.name || 'General',
-      max_roles: Number($('#professionalTeamSize', els.sheetBody).value || 5),
-    });
-
-    $('#professionalPlanBtn', els.sheetBody)?.addEventListener('click', async () => {
-      const payload = readPayload();
-      if (!payload.objective) return toast('Describe primero el objetivo');
-      const output = $('#professionalPlanOutput', els.sheetBody);
-      output.innerHTML = '<div class="professional-empty">Diseñando equipo y controles...</div>';
-      try {
-        const plan = await apiFetch('/api/professional/plan', { method:'POST', body:JSON.stringify(payload) });
-        output.innerHTML = renderProfessionalPlan(plan);
-      } catch (error) {
-        output.innerHTML = `<div class="professional-error">${escapeHtml(error.message || 'No se pudo diseñar la misión.')}</div>`;
-      }
-    });
-
-    $('#professionalExecuteBtn', els.sheetBody)?.addEventListener('click', async () => {
-      const payload = readPayload();
-      if (!payload.objective) return toast('Describe primero el objetivo');
-      const button = $('#professionalExecuteBtn', els.sheetBody);
-      button.disabled = true;
-      button.textContent = 'Preparando misión...';
-      try {
-        await apiFetch('/api/professional/execute', { method:'POST', body:JSON.stringify(payload) });
-        toast('La misión profesional comenzó');
-        setTimeout(() => openPanel('jobs'), 500);
-      } catch (error) {
-        toast(error.message || 'No se pudo iniciar la misión');
-        button.disabled = false;
-        button.textContent = 'Iniciar misión';
-      }
-    });
-  }
-
-  function renderProfessionalPlan(plan) {
-    const team = plan.team || [];
-    const milestones = plan.milestones || [];
-    const criteria = plan.success_criteria || [];
-    const budget = plan.budget || {};
-    return `<article class="professional-plan-card">
-      <header class="professional-plan-head">
-        <div><span>Plan profesional</span><h3>${escapeHtml(plan.intent || 'general')} · complejidad ${escapeHtml(plan.complexity || 'media')}</h3></div>
-        <div class="professional-plan-metrics"><span><strong>${team.length}</strong> especialistas</span><span><strong>${milestones.length}</strong> hitos</span><span><strong>${Number(budget.target_minutes || 8)}</strong> min objetivo</span></div>
-      </header>
-      <section class="professional-team-grid">${team.map(role => `<div class="professional-role-card"><span>${escapeHtml(role.icon || '◇')}</span><div><strong>${escapeHtml(role.name || role.id || 'Especialista')}</strong><small>${escapeHtml(role.mission || '')}</small></div></div>`).join('')}</section>
-      <section class="professional-timeline">${milestones.map((item,index) => `<div class="professional-milestone"><span>${index+1}</span><div><strong>${escapeHtml(item.name || `Hito ${index+1}`)}</strong><small>${escapeHtml(item.detail || '')}</small><em>Control: ${escapeHtml(item.quality_gate || 'Verificación de calidad')}</em></div></div>`).join('')}</section>
-      <section class="professional-criteria"><strong>Criterios de éxito</strong><ul>${criteria.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul></section>
-      <footer class="professional-plan-foot"><span>${plan.requires_approval ? 'Solicitará aprobación para acciones sensibles' : 'Ejecución interna segura'}</span><span>${budget.independent_verification ? 'Verificación independiente activada' : 'Verificación estándar'}</span></footer>
-    </article>`;
-  }
-
-  async function renderAgentCenter() {
-    const jobsData = await apiFetch(`/api/jobs?session_id=${encodeURIComponent(backendConversationId())}&limit=4`).catch(() => ({ jobs: [] }));
-    const recentJobs = jobsData.jobs || [];
-    els.sheetBody.innerHTML = `
-      <section class="agent-hero">
-        <div class="agent-hero-mark">✦</div>
-        <div><span class="agent-kicker">Execution Core</span><h3>Convierta un objetivo en trabajo verificable</h3><p>JARVIS analiza la solicitud, crea un plan, selecciona rutas, ejecuta en segundo plano y conserva checkpoints.</p></div>
-      </section>
-      <div class="agent-template-row" aria-label="Plantillas de trabajo">
-        <button data-agent-template="Investiga este tema con fuentes recientes, compara hallazgos y entrega un informe verificable.">Investigación</button>
-        <button data-agent-template="Analiza estos datos o documentos, identifica hallazgos, riesgos y conclusiones accionables.">Análisis</button>
-        <button data-agent-template="Resuelve este problema técnico, propone una solución, verifica riesgos y entrega pasos ejecutables.">Programación</button>
-        <button data-agent-template="Convierte este objetivo en un plan priorizado con responsables, dependencias y criterios de éxito.">Planificación</button>
-      </div>
-      <div class="agent-builder">
-        <label class="agent-field"><span>Nombre del trabajo</span><input class="text-input" id="agentTitleInput" placeholder="Ej. Informe económico semanal" /></label>
-        <label class="agent-field agent-field-wide"><span>Objetivo</span><textarea class="text-input agent-objective" id="agentObjectiveInput" placeholder="Describe claramente qué debe lograr JARVIS..."></textarea></label>
-        <div class="agent-controls">
-          <button class="soft-btn" id="previewAgentPlanBtn">Analizar plan</button>
-          <button class="primary-btn" id="executeAgentBtn">Iniciar trabajo</button>
-        </div>
-      </div>
-      <div class="agent-plan-output" id="agentPlanOutput"><div class="agent-plan-empty">El plan aparecerá aquí antes de ejecutarse.</div></div>
-      <div class="agent-recent-head"><div><strong>Actividad reciente</strong><small>Trabajos guardados en el proyecto activo</small></div><button class="soft-btn" id="openAllJobsBtn">Ver todos</button></div>
-      <div class="agent-recent-list">${recentJobs.length ? recentJobs.map(agentRecentJobCard).join('') : '<div class="empty-note">No hay trabajos recientes.</div>'}</div>`;
-
-    $$('[data-agent-template]', els.sheetBody).forEach(btn => btn.addEventListener('click', () => {
-      $('#agentObjectiveInput', els.sheetBody).value = btn.dataset.agentTemplate || '';
-      $('#agentObjectiveInput', els.sheetBody).focus();
-    }));
-    $('#openAllJobsBtn', els.sheetBody)?.addEventListener('click', () => openPanel('jobs'));
-    $$('[data-open-job-list]', els.sheetBody).forEach(btn => btn.addEventListener('click', () => openPanel('jobs')));
-    $('#previewAgentPlanBtn', els.sheetBody)?.addEventListener('click', async () => {
-      const objective = $('#agentObjectiveInput', els.sheetBody).value.trim();
-      if (!objective) return toast('Describe primero el objetivo');
-      const output = $('#agentPlanOutput', els.sheetBody);
-      output.innerHTML = '<div class="agent-plan-empty">Analizando objetivo...</div>';
-      try {
-        const plan = await apiFetch('/api/agents/plan', { method:'POST', body:JSON.stringify({ session_id:backendConversationId(), objective, mode:state.mode, project_name:currentProject()?.name || 'General' }) });
-        output.innerHTML = renderAgentPlan(plan);
-      } catch (error) {
-        output.innerHTML = `<div class="agent-plan-error">${escapeHtml(error.message || 'No se pudo crear el plan.')}</div>`;
-      }
-    });
-    $('#executeAgentBtn', els.sheetBody)?.addEventListener('click', async () => {
-      const objective = $('#agentObjectiveInput', els.sheetBody).value.trim();
-      const title = $('#agentTitleInput', els.sheetBody).value.trim() || objective.slice(0,72) || 'Trabajo JARVIS';
-      if (!objective) return toast('Describe primero el objetivo');
-      const button = $('#executeAgentBtn', els.sheetBody);
-      button.disabled = true;
-      button.textContent = 'Enviando...';
-      try {
-        await apiFetch('/api/agents/execute', { method:'POST', body:JSON.stringify({ session_id:backendConversationId(), title, objective, mode:state.mode, project_name:currentProject()?.name || 'General' }) });
-        toast('El agente comenzó a trabajar');
-        setTimeout(() => openPanel('jobs'), 450);
-      } catch (error) {
-        toast(error.message || 'No se pudo iniciar el trabajo');
-        button.disabled = false;
-        button.textContent = 'Iniciar trabajo';
-      }
-    });
-  }
-
-  function renderAgentPlan(data) {
-    const steps = data.steps || [];
-    const budget = data.budget || {};
-    return `<div class="agent-plan-card">
-      <div class="agent-plan-summary"><div><span>Ruta detectada</span><strong>${escapeHtml(data.intent_label || data.intent || 'General')}</strong></div><div><span>Complejidad</span><strong>${escapeHtml(data.complexity || 'media')}</strong></div><div><span>Tiempo objetivo</span><strong>${escapeHtml(String(budget.target_minutes || 5))} min</strong></div></div>
-      <ol class="agent-plan-steps">${steps.map((step,index) => `<li><span>${index + 1}</span><div><strong>${escapeHtml(step.label || step.name || `Paso ${index+1}`)}</strong><small>${escapeHtml(step.detail || 'Se guardará un checkpoint al completar este paso.')}</small></div></li>`).join('')}</ol>
-      <div class="agent-plan-foot"><span>Máx. ${Number(budget.max_attempts || 5)} intentos controlados</span><span>${data.requires_approval ? 'Requiere aprobación para acciones sensibles' : 'Ejecución segura automática'}</span></div>
-    </div>`;
-  }
-
-  function agentRecentJobCard(job) {
-    const progress = Math.max(0, Math.min(100, Number(job.progress || 0)));
-    return `<button class="agent-recent-job" data-open-job-list="1"><span class="agent-job-orb status-${escapeHtml(job.status || 'queued')}"></span><span><strong>${escapeHtml(job.title || 'Trabajo')}</strong><small>${escapeHtml(job.checkpoint || job.status || 'En cola')}</small></span><em>${progress}%</em></button>`;
-  }
-
-  async function renderJobs() {
-    const data = await apiFetch(`/api/jobs?session_id=${encodeURIComponent(backendConversationId())}`);
-    const jobs = data.jobs || [];
-    const workerCount = Number(data.workers || 0);
-    els.sheetBody.innerHTML = `
-      <div class="jobs-hero">
-        <div class="jobs-hero-icon">◉</div>
-        <div><h3>Trabajos persistentes</h3><p>${workerCount || '—'} worker(s) disponibles. Los trabajos guardan intentos, checkpoints y pueden pausarse, reanudarse o recuperarse.</p></div>
-      </div>
-      <div class="form-row"><input class="text-input" id="jobTitleInput" placeholder="Nombre del trabajo"/><input class="text-input" id="jobPromptInput" placeholder="Instrucción que JARVIS ejecutará"/><button class="primary-btn" id="createJobBtn">Ejecutar</button></div>
-      <div style="height:14px"></div>
-      <div class="list-stack">${jobs.length ? jobs.map(job => {
-        const status = String(job.status || 'queued');
-        const progress = Math.max(0,Math.min(100,Number(job.progress || 0)));
-        const canPause = ['queued','running','retrying'].includes(status);
-        const canResume = ['paused'].includes(status);
-        const canCancel = ['queued','running','retrying','paused','cancelling'].includes(status);
-        const canRetry = ['failed','cancelled'].includes(status);
-        return `<article class="job-card status-${escapeHtml(status)}">
-          <div class="job-card-head"><div><div class="list-title">${escapeHtml(job.title)}</div><div class="list-sub">${escapeHtml(status)} · ${progress}% · intento ${Number(job.attempt || 0)}/${Number(job.max_attempts || 0)}</div></div><span class="job-state">${escapeHtml(status)}</span></div>
-          <div class="job-progress"><span style="width:${progress}%"></span></div>
-          <div class="job-checkpoint">${escapeHtml(job.checkpoint || 'Esperando ejecución')}</div>
-          ${job.error ? `<div class="job-error">${escapeHtml(String(job.error).slice(0,300))}</div>` : ''}
-          ${job.result ? `<div class="job-result">${escapeHtml(String(job.result).slice(0,420))}</div>` : ''}
-          <div class="job-actions">
-            ${canPause ? `<button class="soft-btn" data-job-action="pause" data-job-id="${escapeHtml(job.id)}">Pausar</button>` : ''}
-            ${canResume ? `<button class="primary-btn" data-job-action="resume" data-job-id="${escapeHtml(job.id)}">Reanudar</button>` : ''}
-            ${canCancel ? `<button class="danger-btn" data-job-action="cancel" data-job-id="${escapeHtml(job.id)}">Cancelar</button>` : ''}
-            ${canRetry ? `<button class="soft-btn" data-job-action="retry" data-job-id="${escapeHtml(job.id)}">Reintentar</button>` : ''}
-            <button class="danger-btn" data-delete-job="${escapeHtml(job.id)}">Eliminar</button>
-          </div>
-        </article>`;
-      }).join('') : '<div class="empty-note">Todavía no hay trabajos autónomos en este proyecto.</div>'}</div>`;
-    $('#createJobBtn', els.sheetBody)?.addEventListener('click', async () => {
-      const title = $('#jobTitleInput', els.sheetBody).value.trim() || 'Trabajo autónomo';
-      const promptText = $('#jobPromptInput', els.sheetBody).value.trim();
-      if (!promptText) return;
-      await apiFetch('/api/jobs', { method:'POST', body:JSON.stringify({ session_id:backendConversationId(), title, prompt:promptText }) });
-      toast('Trabajo enviado al núcleo');
-      renderJobs();
-    });
-    $$('[data-job-action]', els.sheetBody).forEach(btn => btn.addEventListener('click', async () => {
-      const action = btn.dataset.jobAction;
-      const id = btn.dataset.jobId;
-      await apiFetch(`/api/jobs/${encodeURIComponent(id)}/${encodeURIComponent(action)}?session_id=${encodeURIComponent(backendConversationId())}`, { method:'POST' });
-      toast(`Acción ${action} registrada`);
-      setTimeout(renderJobs, 350);
-    }));
-    $$('[data-delete-job]', els.sheetBody).forEach(btn => btn.addEventListener('click', async () => {
-      await apiFetch(`/api/jobs/${encodeURIComponent(btn.dataset.deleteJob)}?session_id=${encodeURIComponent(backendConversationId())}`, { method:'DELETE' });
-      renderJobs();
-    }));
-  }
-
-  async function renderKnowledgeSearch() {
-    els.sheetBody.innerHTML = `
-      <div class="form-row"><input class="text-input" id="knowledgeQuery" placeholder="Busca en memorias, documentos y conversaciones..."/><button class="primary-btn" id="knowledgeSearchBtn">Buscar</button></div>
-      <div style="height:14px"></div><div id="knowledgeResults" class="empty-note">Escribe una consulta para buscar en el conocimiento del proyecto.</div>`;
-    const execute = async () => {
-      const query = $('#knowledgeQuery', els.sheetBody).value.trim();
-      if (!query) return;
-      const [remote, localHits] = await Promise.all([
-        apiFetch(`/api/knowledge/search?session_id=${encodeURIComponent(backendConversationId())}&query=${encodeURIComponent(query)}&limit=8`),
-        Promise.resolve(searchLocalChats(query))
-      ]);
-      const memories = remote.memories || [];
-      const documents = remote.documents || [];
-      $('#knowledgeResults', els.sheetBody).innerHTML = `
-        ${searchSection('Conversaciones locales', localHits.map(hit => ({ title:hit.title, text:hit.preview })))}
-        ${searchSection('Memoria', memories.map(item => ({ title:item.category || 'Recuerdo', text:item.content })))}
-        ${searchSection('Documentos', documents.map(item => ({ title:item.file_name || 'Documento', text:item.excerpt || '' })))}
-        ${!localHits.length && !memories.length && !documents.length ? '<div class="empty-note">No se encontraron coincidencias.</div>' : ''}`;
-    };
-    $('#knowledgeSearchBtn', els.sheetBody)?.addEventListener('click', execute);
-    $('#knowledgeQuery', els.sheetBody)?.addEventListener('keydown', event => { if (event.key === 'Enter') execute(); });
-  }
-
-  function searchSection(title, items) {
-    if (!items.length) return '';
-    return `<section class="search-result-section"><h3>${escapeHtml(title)}</h3>${items.map(item => `<div class="search-hit"><div class="search-hit-title">${escapeHtml(item.title)}</div><div class="search-hit-text">${escapeHtml(String(item.text || '').slice(0,700))}</div></div>`).join('')}</section>`;
-  }
-
-  function searchLocalChats(query) {
-    const needle = query.toLowerCase();
-    return Object.values(state.chats)
-      .filter(chat => chat.projectId === state.activeProjectId)
-      .map(chat => {
-        const text = (chat.messages || []).map(item => item.content || '').join('\n');
-        const index = text.toLowerCase().indexOf(needle);
-        if (index < 0 && !(chat.title || '').toLowerCase().includes(needle)) return null;
-        const start = Math.max(0, index - 90);
-        return { id:chat.id, title:chat.title || 'Conversación', preview:text.slice(start,start+260) };
-      })
-      .filter(Boolean)
-      .slice(0,10);
-  }
-
-  async function renderExport() {
-    const chat = currentChat();
-    const count = chat?.messages?.length || 0;
-    els.sheetBody.innerHTML = `
-      <div class="project-hero"><h3>${escapeHtml(chat?.title || 'Conversación')}</h3><p>${count} mensajes · proyecto ${escapeHtml(currentProject()?.name || 'General')}</p></div>
-      <div class="export-actions">
-        <button class="export-card" id="exportMarkdown"><strong>Exportar Markdown</strong><span>Documento legible con toda la conversación.</span></button>
-        <button class="export-card" id="exportJson"><strong>Exportar JSON</strong><span>Datos estructurados para respaldo o integración.</span></button>
-      </div>`;
-    $('#exportMarkdown', els.sheetBody)?.addEventListener('click', () => exportCurrentChat('markdown'));
-    $('#exportJson', els.sheetBody)?.addEventListener('click', () => exportCurrentChat('json'));
-  }
-
-  function exportCurrentChat(format) {
-    const chat = currentChat();
-    if (!chat) return;
-    const project = currentProject();
-    const safeName = `${project?.name || 'JARVIS'}-${chat.title || 'conversacion'}`.replace(/[^a-z0-9_-]+/gi,'-').replace(/-+/g,'-').slice(0,80);
-    if (format === 'json') {
-      downloadFile(`${safeName}.json`, JSON.stringify({ project, chat, exportedAt:new Date().toISOString() }, null, 2), 'application/json');
-      return;
-    }
-    const lines = [`# ${chat.title || 'Conversación JARVIS'}`, '', `Proyecto: ${project?.name || 'General'}`, `Exportado: ${new Date().toLocaleString()}`, ''];
-    (chat.messages || []).forEach(message => {
-      lines.push(message.role === 'user' ? '## Usuario' : '## J.A.R.V.I.S.', '', message.content || '', '');
-    });
-    downloadFile(`${safeName}.md`, lines.join('\n'), 'text/markdown');
-  }
-
-  function downloadFile(name, content, type) {
-    const blob = new Blob([content], { type:`${type};charset=utf-8` });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-    toast('Archivo exportado');
   }
 
   async function renderLibrary() {
-    const data = await apiFetch(`/api/library?session_id=${encodeURIComponent(backendConversationId())}`);
+    const data = await request(`/api/library?session_id=${encodeURIComponent(backendSessionId())}`);
     const docs = data.documents || [];
-    const totalCharacters = docs.reduce((sum, doc) => sum + Number(doc.characters || 0), 0);
-    els.sheetBody.innerHTML = `
-      <div class="library-hero">
-        <div class="library-hero-icon">▤</div>
-        <div class="library-hero-copy"><h3>Biblioteca del proyecto</h3><p>Centraliza documentos, código y archivos de referencia para consultarlos desde JARVIS.</p></div>
-        <button class="primary-btn" id="uploadFromPanel">Subir archivo</button>
-      </div>
-      <div class="library-stats">
-        <span><strong>${docs.length}</strong> archivos</span>
-        <span><strong>${totalCharacters.toLocaleString()}</strong> caracteres indexados</span>
-        <span>PDF · Office · texto · código</span>
-      </div>
-      <div class="document-grid" id="libraryList">${docs.length ? docs.map(doc => listDocument(doc)).join('') : `
-        <div class="library-empty">
-          <span class="library-empty-icon">⇧</span>
-          <strong>Tu biblioteca está vacía</strong>
-          <small>Sube un archivo para resumirlo, buscar información o utilizarlo como contexto.</small>
-        </div>`}</div>`;
-    $('#uploadFromPanel', els.sheetBody)?.addEventListener('click', () => els.fileInput.click());
-    $$('[data-delete-doc]', els.sheetBody).forEach(btn => btn.addEventListener('click', async () => {
-      await apiFetch(`/api/library/${encodeURIComponent(btn.dataset.deleteDoc)}?session_id=${encodeURIComponent(backendConversationId())}`, { method: 'DELETE' });
+    els.panelContent.innerHTML = `
+      <div class="panel-grid"><article class="panel-card"><h3>Archivos disponibles</h3><strong class="metric">${docs.length}</strong><p>Documentos vinculados al espacio actual.</p></article><article class="panel-card"><h3>Subida segura</h3><p>Máximo 12 MB por archivo. PDF, Word, Excel, PowerPoint, texto y código.</p><button class="primary-btn" id="libraryUploadBtn" style="margin-top:12px">Subir archivo</button><input id="libraryFileInput" type="file" hidden /></article></div>
+      <section class="panel-section"><div class="panel-section-head"><h3>Documentos</h3></div><div class="list-stack">${docs.length ? docs.map(doc => `<article class="list-row"><div><strong>${escapeHTML(doc.file_name || doc.name || 'Documento')}</strong><small>${escapeHTML(doc.file_type || '')} · ${escapeHTML(String(doc.created_at || ''))}</small></div><button class="danger-btn" data-delete-doc="${escapeHTML(doc.id)}">Eliminar</button></article>`).join('') : '<div class="empty-state">Todavía no hay documentos.</div>'}</div></section>`;
+    $('#libraryUploadBtn').addEventListener('click', () => $('#libraryFileInput').click());
+    $('#libraryFileInput').addEventListener('change', async event => {
+      const file = event.target.files[0]; if (!file) return;
+      if (file.size > 12*1024*1024) return toast('El archivo supera 12 MB.');
+      const button = $('#libraryUploadBtn'); button.disabled = true; button.textContent = 'Subiendo…';
+      try {
+        await request('/api/library/upload', { method:'POST', body:JSON.stringify({ session_id:backendSessionId(), file_name:file.name, file_b64:await fileToBase64(file) }) }, { timeoutMs:65000 });
+        toast('Archivo guardado'); renderLibrary();
+      } catch (error) { toast(explainError(error)); button.disabled = false; button.textContent = 'Subir archivo'; }
+    });
+    $$('[data-delete-doc]').forEach(button => button.addEventListener('click', async () => {
+      if (!confirm('¿Eliminar este documento de JARVIS?')) return;
+      await request(`/api/library/${encodeURIComponent(button.dataset.deleteDoc)}?session_id=${encodeURIComponent(backendSessionId())}`, { method:'DELETE' });
       renderLibrary();
     }));
   }
 
-  function listDocument(doc) {
-    const extension = fileExtension(doc.file_name || doc.file_type || '');
-    const icon = documentIcon(extension);
-    return `<article class="document-card">
-      <div class="document-icon ${escapeHtml(extension || 'file')}">${icon}</div>
-      <div class="document-copy">
-        <div class="document-title" title="${escapeHtml(doc.file_name)}">${escapeHtml(doc.file_name)}</div>
-        <div class="document-meta">${escapeHtml((doc.file_type || extension || 'archivo').toUpperCase())} · ${Number(doc.characters || 0).toLocaleString()} caracteres</div>
-        <div class="document-status"><span></span> Indexado y disponible</div>
-      </div>
-      <button class="document-delete" data-delete-doc="${escapeHtml(doc.id)}" aria-label="Eliminar documento" title="Eliminar">×</button>
-    </article>`;
-  }
-
-  function fileExtension(name) {
-    const clean = String(name || '').toLowerCase().split('?')[0];
-    return clean.includes('.') ? clean.split('.').pop().slice(0, 6) : clean.replace(/[^a-z0-9]/g, '').slice(0, 6);
-  }
-
-  function documentIcon(extension) {
-    if (extension === 'pdf') return 'PDF';
-    if (['doc', 'docx'].includes(extension)) return 'W';
-    if (['xls', 'xlsx', 'xlsm', 'csv'].includes(extension)) return 'X';
-    if (['ppt', 'pptx'].includes(extension)) return 'P';
-    if (['js', 'py', 'html', 'css', 'json'].includes(extension)) return '&lt;/&gt;';
-    return '▤';
-  }
-
   async function renderMemory() {
-    const data = await apiFetch(`/api/memory?session_id=${encodeURIComponent(backendConversationId())}`);
-    const items = data.memories || [];
-    els.sheetBody.innerHTML = `
-      <div class="form-row"><input class="text-input" id="memoryInput" placeholder="Algo que JARVIS deba recordar..."/><button class="primary-btn" id="saveMemoryBtn">Guardar</button></div>
-      <div style="height:14px"></div>
-      <div class="list-stack">${items.length ? items.map(item => `<div class="list-item"><div class="list-main"><div class="list-title">${escapeHtml(item.content)}</div><div class="list-sub">${escapeHtml(item.category || 'recuerdo')} · importancia ${item.importance || 3}</div></div><button class="danger-btn" data-delete-memory="${escapeHtml(item.id)}">Eliminar</button></div>`).join('') : '<div class="empty-note">JARVIS todavía no ha guardado recuerdos aquí.</div>'}</div>`;
-    $('#saveMemoryBtn', els.sheetBody)?.addEventListener('click', async () => {
-      const content = $('#memoryInput', els.sheetBody).value.trim();
-      if (!content) return;
-      await apiFetch('/api/memory', { method:'POST', body:JSON.stringify({ session_id:backendConversationId(), content, category:'preference', importance:3 }) });
-      renderMemory();
+    const data = await request(`/api/memory?session_id=${encodeURIComponent(backendSessionId())}`);
+    const memories = data.memories || [];
+    els.panelContent.innerHTML = `
+      <div class="panel-card"><h3>Guardar un recuerdo</h3><p>Conserva únicamente preferencias o información útil que quieras reutilizar.</p><div class="form-grid" style="margin-top:13px"><input class="text-input" id="memoryContent" placeholder="Ejemplo: Prefiero respuestas breves"/><select class="text-input" id="memoryCategory"><option value="preference">Preferencia</option><option value="project">Proyecto</option><option value="fact">Dato</option></select><button class="primary-btn" id="saveMemory">Guardar</button></div></div>
+      <section class="panel-section"><div class="panel-section-head"><h3>Recuerdos</h3><span class="status-tag">${memories.length}</span></div><div class="list-stack">${memories.length ? memories.map(item => `<article class="list-row"><div><strong>${escapeHTML(item.content)}</strong><small>${escapeHTML(item.category || 'memory')} · importancia ${Number(item.importance || 3)}</small></div><button class="danger-btn" data-delete-memory="${escapeHTML(item.id)}">Eliminar</button></article>`).join('') : '<div class="empty-state">JARVIS no ha guardado recuerdos todavía.</div>'}</div></section>`;
+    $('#saveMemory').addEventListener('click', async () => {
+      const content = $('#memoryContent').value.trim(); if (!content) return;
+      await request('/api/memory', { method:'POST', body:JSON.stringify({ session_id:backendSessionId(), content, category:$('#memoryCategory').value, importance:3 }) });
+      toast('Recuerdo guardado'); renderMemory();
     });
-    $$('[data-delete-memory]', els.sheetBody).forEach(btn => btn.addEventListener('click', async () => {
-      await apiFetch(`/api/memory/${encodeURIComponent(btn.dataset.deleteMemory)}?session_id=${encodeURIComponent(backendConversationId())}`, { method:'DELETE' });
-      renderMemory();
+    $$('[data-delete-memory]').forEach(button => button.addEventListener('click', async () => {
+      await request(`/api/memory/${encodeURIComponent(button.dataset.deleteMemory)}?session_id=${encodeURIComponent(backendSessionId())}`, { method:'DELETE' }); renderMemory();
     }));
   }
 
-  async function renderReminders() {
-    const data = await apiFetch(`/api/reminders?session_id=${encodeURIComponent(backendConversationId())}`);
-    const items = data.reminders || [];
-    els.sheetBody.innerHTML = `<div class="empty-note">Para crear un recordatorio, escribe en el chat: “Recuérdame mañana a las 8 revisar JARVIS”.</div><div class="list-stack">${items.length ? items.map(item => `<div class="list-item"><div class="list-main"><div class="list-title">${escapeHtml(item.title)}</div><div class="list-sub">${escapeHtml(item.due_at || '')} · ${escapeHtml(item.status || '')}</div></div><button class="danger-btn" data-delete-reminder="${escapeHtml(item.id)}">Cancelar</button></div>`).join('') : ''}</div>`;
-    $$('[data-delete-reminder]', els.sheetBody).forEach(btn => btn.addEventListener('click', async () => {
-      await apiFetch(`/api/reminders/${encodeURIComponent(btn.dataset.deleteReminder)}?session_id=${encodeURIComponent(backendConversationId())}`, { method:'DELETE' });
-      renderReminders();
-    }));
-  }
-
-  async function renderProviders() {
-    const data = await apiFetch('/api/providers');
-    const gateway = data.gateway || {};
-    const providers = gateway.providers || {};
-    const configured = new Set(gateway.configured || []);
-    const labels = { groq:'Groq', openai:'OpenAI', anthropic:'Claude', gemini:'Google Gemini', compatible:'Proveedor compatible', ollama:'Ollama' };
-    const descriptions = {
-      groq:'Velocidad, clasificación, conversación y respuestas cotidianas.',
-      openai:'Razonamiento, programación, agentes y tareas complejas.',
-      anthropic:'Análisis profundo, programación, documentos extensos y redacción de alta calidad.',
-      gemini:'Investigación, contexto amplio y procesamiento multimodal.',
-      compatible:'Servidor adicional con interfaz compatible con OpenAI.',
-      ollama:'Ruta local o privada para contingencia y trabajo sin proveedor externo.'
-    };
-    const order = gateway.order || Object.keys(providers);
-    const cards = order.map(name => {
-      const item = providers[name] || {};
-      const stats = item.stats || {};
-      const models = item.models || [];
-      const isConfigured = configured.has(name) || Boolean(item.configured);
-      return `<article class="provider-card ${isConfigured ? 'is-online' : 'is-optional'}">
-        <div class="provider-card-head">
-          <div class="provider-logo provider-${escapeHtml(name)}">${escapeHtml((labels[name] || name).slice(0,1))}</div>
-          <div class="provider-state ${isConfigured ? 'online' : 'optional'}"><span></span>${isConfigured ? 'Configurado' : 'Opcional'}</div>
-        </div>
-        <h3>${escapeHtml(labels[name] || name)}</h3>
-        <p>${escapeHtml(descriptions[name] || '')}</p>
-        <div class="provider-models">${models.length ? models.map(model => `<span>${escapeHtml(model)}</span>`).join('') : '<span>Sin modelos configurados</span>'}</div>
-        <div class="provider-metrics">
-          <span><strong>${Math.round(Number(stats.success_rate || 0) * 100)}%</strong> éxito</span>
-          <span><strong>${Number(stats.average_latency_ms || 0).toFixed(0)}</strong> ms</span>
-          <span><strong>${Number(stats.requests || 0)}</strong> solicitudes</span>
-        </div>
-      </article>`;
-    }).join('');
-    els.sheetBody.innerHTML = `
-      <div class="providers-hero">
-        <div class="providers-icon">◫</div>
-        <div><h3>Multi-Provider Gateway</h3><p>JARVIS selecciona automáticamente la ruta más conveniente según tarea, velocidad, capacidad y disponibilidad.</p></div>
-      </div>
-      <div class="provider-summary">
-        <div><strong>${configured.size}</strong><span>proveedores configurados</span></div>
-        <div><strong>${order.length}</strong><span>rutas reconocidas</span></div>
-        <div><strong>${escapeHtml((gateway.order || []).join(' → ') || 'Sin orden')}</strong><span>orden base</span></div>
-      </div>
-      <div class="provider-grid">${cards}</div>
-      <div style="height:18px"></div>
-      <div class="route-lab">
-        <div class="section-panel-title">Laboratorio de enrutamiento</div>
-        <p>Escribe una tarea para ver qué proveedor priorizaría JARVIS. Esta vista no consume tokens.</p>
-        <div class="form-row"><input class="text-input" id="routePreviewInput" placeholder="Ejemplo: investiga la inflación y compara fuentes oficiales"/><button class="primary-btn" id="routePreviewBtn">Analizar ruta</button></div>
-        <div id="routePreviewResult" class="route-preview-result"></div>
-      </div>`;
-    $('#routePreviewBtn', els.sheetBody)?.addEventListener('click', async () => {
-      const input = $('#routePreviewInput', els.sheetBody);
-      const resultBox = $('#routePreviewResult', els.sheetBody);
-      const message = input?.value.trim();
-      if (!message) return;
-      resultBox.innerHTML = '<div class="empty-note">Evaluando proveedores...</div>';
+  async function renderMissions() {
+    const data = await request(`/api/autonomy/workflows?session_id=${encodeURIComponent(backendSessionId())}&limit=20`);
+    const workflows = data.workflows || [];
+    els.panelContent.innerHTML = `
+      <div class="panel-card"><h3>Nueva misión</h3><p>JARVIS dividirá el objetivo en etapas, guardará checkpoints y se detendrá antes de acciones sensibles.</p><div class="form-grid" style="margin-top:13px"><input class="text-input" id="missionObjective" placeholder="Describe un resultado concreto"/><select class="text-input" id="missionMode"><option value="auto">Automático</option><option value="research">Investigación</option><option value="professional">Profesional</option></select><button class="primary-btn" id="createMission">Crear misión</button></div></div>
+      <section class="panel-section"><div class="panel-section-head"><h3>Misiones recientes</h3><span class="status-tag">${workflows.length}</span></div><div class="list-stack">${workflows.length ? workflows.map(item => { const steps=item.steps||[]; const done=steps.filter(step=>step.status==='completed').length; const progress=steps.length?Math.round(done/steps.length*100):0; return `<article class="list-row"><div><strong>${escapeHTML(item.objective || 'Misión')}</strong><small>${escapeHTML(item.status || 'planned')} · ${done}/${steps.length} etapas<div class="job-progress"><i style="width:${progress}%"></i></div></small></div><span class="status-tag ${item.status==='completed'?'ok':'warn'}">${progress}%</span></article>`; }).join('') : '<div class="empty-state">No hay misiones todavía.</div>'}</div></section>`;
+    $('#createMission').addEventListener('click', async () => {
+      const objective = $('#missionObjective').value.trim(); if (!objective) return;
+      const button=$('#createMission'); button.disabled=true; button.textContent='Creando…';
       try {
-        const preview = await apiFetch('/api/providers/route-preview', { method:'POST', body:JSON.stringify({ message, mode:'auto' }) });
-        const rows = preview.routes || [];
-        resultBox.innerHTML = `<div class="route-preview-meta">Intención: <strong>${escapeHtml(preview.intent || 'general')}</strong> · modo: <strong>${escapeHtml(preview.mode || 'auto')}</strong></div>${rows.map((row,index) => `<div class="route-preview-row ${row.configured ? '' : 'disabled'}"><span class="route-rank">${index + 1}</span><div><strong>${escapeHtml(labels[row.provider] || row.provider)}</strong><small>${row.configured ? `${(row.models || []).length} modelo(s) elegible(s)` : 'No configurado'}</small></div><b>${row.score >= 0 ? Number(row.score).toFixed(2) : '—'}</b></div>`).join('')}`;
-      } catch (error) {
-        resultBox.innerHTML = `<div class="empty-note">${escapeHtml(error.message || 'No se pudo evaluar la ruta.')}</div>`;
-      }
+        await request('/api/autonomy/workflows', { method:'POST', body:JSON.stringify({ session_id:backendSessionId(), objective, mode:$('#missionMode').value, project_name:'General', start:true }) }, { timeoutMs:30000 });
+        toast('Misión iniciada'); renderMissions();
+      } catch(error) { toast(explainError(error)); button.disabled=false; button.textContent='Crear misión'; }
     });
   }
 
-
-  async function renderResilience() {
-    const data = await apiFetch(`/api/resilience/status?session_id=${encodeURIComponent(backendConversationId())}`);
-    const providers = data.providers || {};
-    const summary = data.summary_24h || {};
-    const limits = data.limits || {};
-    const recent = data.recent_runs || [];
-    const providerCards = [
-      ['Groq', Boolean(providers.groq?.configured), (providers.groq?.models || []).map(item => item.model).join(', ') || 'Sin modelos'],
-      ['OpenAI', Boolean(providers.openai?.configured), (providers.openai?.models || []).join(', ') || 'Opcional'],
-      ['Claude', Boolean(providers.anthropic?.configured), (providers.anthropic?.models || []).join(', ') || 'Opcional'],
-      ['Google Gemini', Boolean(providers.gemini?.configured), (providers.gemini?.models || []).join(', ') || 'Opcional'],
-      ['Proveedor compatible', Boolean(providers.openai_compatible?.configured), (providers.openai_compatible?.models || []).join(', ') || 'Opcional'],
-      ['Ollama local', Boolean(providers.ollama?.configured), (providers.ollama?.models || []).join(', ') || 'Opcional'],
-      ['Rutas locales', true, 'Cálculo, SymPy, documentos, memoria, caché y búsqueda'],
-    ];
-    els.sheetBody.innerHTML = `
-      <div class="resilience-hero">
-        <div class="resilience-icon">⟲</div>
-        <div><h3>Núcleo de resolución resistente</h3><p>JARVIS prueba rutas locales, caché, modelos, proveedores secundarios y búsqueda antes de entregar un resultado degradado.</p></div>
-      </div>
-      <div class="panel-grid resilience-grid">
-        ${providerCards.map(([name,configured,detail]) => `<div class="panel-card resilience-provider"><div class="provider-state ${configured ? 'online' : 'optional'}"><span></span>${configured ? 'Activo' : 'Opcional'}</div><h3>${escapeHtml(name)}</h3><p>${escapeHtml(detail)}</p></div>`).join('')}
-      </div>
-      <div style="height:14px"></div>
+  async function renderChannels() {
+    const data = await request('/api/channels/status');
+    const telegram = data.channels?.telegram || data.telegram || {};
+    const whatsapp = data.channels?.whatsapp || data.whatsapp || {};
+    const base = state.apiBase || location.origin;
+    els.panelContent.innerHTML = `
       <div class="panel-grid">
-        <div class="panel-card"><h3>Resoluciones en 24 h</h3><p>${Number(summary.total || 0).toLocaleString()} solicitudes registradas</p></div>
-        <div class="panel-card"><h3>Verificadas</h3><p>${Number(summary.verified || 0).toLocaleString()} resultados superaron la comprobación</p></div>
-        <div class="panel-card"><h3>Intentos promedio</h3><p>${Number(summary.average_attempts || 0).toFixed(1)} rutas por solicitud</p></div>
-        <div class="panel-card"><h3>Presupuesto de resolución</h3><p>Hasta ${limits.max_resolution_attempts || 0} rutas · ${limits.web_search_attempts || 0} intentos de búsqueda</p></div>
+        <article class="panel-card channel-card"><span class="channel-icon">T</span><div><h3>Telegram</h3><p>${telegram.configured ? 'Token y secreto configurados.' : 'Faltan variables en Render.'}</p></div><span class="status-tag ${telegram.configured?'ok':'warn'}">${telegram.configured?'Listo':'Pendiente'}</span></article>
+        <article class="panel-card channel-card"><span class="channel-icon">W</span><div><h3>WhatsApp</h3><p>${whatsapp.configured ? 'Cloud API configurada.' : 'Faltan variables en Render.'}</p></div><span class="status-tag ${whatsapp.configured?'ok':'warn'}">${whatsapp.configured?'Listo':'Pendiente'}</span></article>
       </div>
-      <div style="height:16px"></div>
-      <div class="section-panel-title">Ejecuciones recientes</div>
-      <div class="list-stack">${recent.length ? recent.map(run => `
-        <div class="list-item resolution-run">
-          <div class="list-main">
-            <div class="list-title">${escapeHtml(humanIntent(run.intent || 'general'))}</div>
-            <div class="list-sub">${escapeHtml(humanRoute(run.route || 'resilient'))} · ${Number(run.attempts || 0)} intento(s) · ${run.verified ? 'verificado' : 'resultado parcial'}</div>
-          </div>
-          <span class="run-status ${run.verified ? 'verified' : 'partial'}">${run.verified ? '✓' : '•'}</span>
-        </div>`).join('') : '<div class="empty-note">Todavía no hay ejecuciones registradas.</div>'}</div>`;
-  }
-
-  async function renderPerformance() {
-    const data = await apiFetch(`/api/performance?session_id=${encodeURIComponent(backendConversationId())}&hours=24`);
-    const runtime = data.runtime || {};
-    const memory = runtime.cache?.memory || {};
-    const redis = runtime.cache?.redis || {};
-    const metrics = runtime.metrics?.operations || {};
-    const circuits = runtime.circuits || {};
-    const circuitEntries = Object.entries(circuits);
-    const openCircuits = circuitEntries.filter(([,value]) => value.state === 'open');
-    const chatMetric = metrics['chat:resolve'] || {};
-    const jobs = data.jobs || {};
-    els.sheetBody.innerHTML = `
-      <div class="performance-hero">
-        <div class="performance-icon">⌁</div>
-        <div><h3>Multi-Provider Performance Core</h3><p>Telemetría local para detectar lentitud, reutilizar resultados y aislar proveedores que fallen repetidamente.</p></div>
-      </div>
-      <div class="panel-grid performance-grid">
-        <div class="panel-card metric-card"><span>Latencia media</span><strong>${Number(chatMetric.avg_ms || 0).toFixed(0)} ms</strong><small>P95 ${Number(chatMetric.p95_ms || 0).toFixed(0)} ms</small></div>
-        <div class="panel-card metric-card"><span>Caché L1</span><strong>${Math.round(Number(memory.hit_rate || 0) * 100)}%</strong><small>${Number(memory.items || 0)} objetos activos</small></div>
-        <div class="panel-card metric-card"><span>Solicitudes unificadas</span><strong>${Number(runtime.singleflight?.collapsed_requests || 0)}</strong><small>trabajos duplicados evitados</small></div>
-        <div class="panel-card metric-card"><span>Circuitos abiertos</span><strong>${openCircuits.length}</strong><small>${circuitEntries.length} rutas observadas</small></div>
-        <div class="panel-card metric-card"><span>Workers</span><strong>${Number(jobs.workers || 0)}</strong><small>${Number(jobs.active_futures || 0)} activos</small></div>
-        <div class="panel-card metric-card"><span>Redis</span><strong>${redis.configured ? (redis.connected ? 'Activo' : 'Respaldo') : 'Opcional'}</strong><small>${Number(redis.hits || 0)} aciertos</small></div>
-      </div>
-      <div style="height:16px"></div>
-      <div class="section-panel-title">Operaciones observadas</div>
-      <div class="performance-table">${Object.entries(metrics).length ? Object.entries(metrics).sort((a,b) => Number(b[1].requests || 0) - Number(a[1].requests || 0)).slice(0,14).map(([name,item]) => `<div class="performance-row"><span>${escapeHtml(name)}</span><strong>${Number(item.avg_ms || 0).toFixed(0)} ms</strong><small>${Math.round(Number(item.success_rate || 0)*100)}% éxito · ${Number(item.requests || 0)} solicitudes</small></div>`).join('') : '<div class="empty-note">La telemetría aparecerá después de utilizar JARVIS.</div>'}</div>
-      <div style="height:16px"></div>
-      <div class="section-panel-title">Circuitos de protección</div>
-      <div class="list-stack">${circuitEntries.length ? circuitEntries.map(([name,item]) => `<div class="list-item"><div class="list-main"><div class="list-title">${escapeHtml(name)}</div><div class="list-sub">${escapeHtml(item.state || 'closed')} · ${Number(item.failures || 0)} fallos · ${Number(item.successes || 0)} éxitos</div></div><span class="run-status ${item.state === 'open' ? 'partial' : 'verified'}">${item.state === 'open' ? '!' : '✓'}</span></div>`).join('') : '<div class="empty-note">No hay circuitos registrados todavía.</div>'}</div>`;
+      <section class="panel-section"><div class="panel-card"><h3>Webhook de Telegram</h3><p><code>${escapeHTML(base)}/api/channels/telegram/webhook</code></p><button class="soft-btn" id="registerTelegram" style="margin-top:12px" ${telegram.configured?'':'disabled'}>Registrar webhook</button></div></section>
+      <section class="panel-section"><div class="panel-card"><h3>Webhook de WhatsApp</h3><p>En Meta configura: <code>${escapeHTML(base)}/api/channels/whatsapp/webhook</code></p></div></section>
+      <section class="panel-section"><div class="panel-card"><h3>Enviar mensaje de prueba</h3><div class="form-grid" style="margin-top:13px"><select class="text-input" id="channelType"><option value="telegram">Telegram</option><option value="whatsapp">WhatsApp</option></select><input class="text-input" id="channelRecipient" placeholder="Chat ID o número"/><button class="primary-btn" id="sendChannelTest">Preparar envío</button></div><textarea class="text-input" id="channelMessage" placeholder="Mensaje" style="margin-top:8px;min-height:80px"></textarea></div></section>`;
+    $('#registerTelegram').addEventListener('click', async () => {
+      if (!confirm('¿Registrar el webhook seguro de Telegram?')) return;
+      await request('/api/channels/telegram/register-webhook', { method:'POST', body:JSON.stringify({ webhook_url:`${base}/api/channels/telegram/webhook`, drop_pending_updates:false }) });
+      toast('Webhook registrado'); renderChannels();
+    });
+    $('#sendChannelTest').addEventListener('click', async () => {
+      const channel=$('#channelType').value, recipient=$('#channelRecipient').value.trim(), message=$('#channelMessage').value.trim();
+      if (!recipient || !message) return toast('Completa destinatario y mensaje.');
+      if (!confirm(`¿Confirmas enviar este mensaje por ${channel}?`)) return;
+      await request('/api/channels/send', { method:'POST', body:JSON.stringify({ channel, recipient, message, confirmed:true }) }, { timeoutMs:30000 });
+      toast('Mensaje enviado');
+    });
   }
 
   async function renderSystem() {
-    const [health, checks] = await Promise.all([apiFetch('/api/health'), apiFetch('/api/self-check')]);
-    const configured = health.groq_configured ? 'Configurado' : 'No configurado';
-    els.sheetBody.innerHTML = `
+    const checks = await Promise.allSettled([
+      request('/api/health/live'), request('/api/health/ready'), request('/api/auth/status'), request('/api/providers')
+    ]);
+    const live = valueOf(checks[0]), ready=valueOf(checks[1]), auth=valueOf(checks[2]), providers=valueOf(checks[3]);
+    const configured = providers.providers?.filter?.(item=>item.configured)?.length || providers.configured?.length || 0;
+    els.panelContent.innerHTML = `
       <div class="panel-grid">
-        <div class="panel-card"><h3>Núcleo</h3><p>${escapeHtml(health.status || 'desconocido')}</p></div>
-        <div class="panel-card"><h3>Modelo</h3><p>${escapeHtml(health.model || '—')}</p></div>
-        <div class="panel-card"><h3>Groq</h3><p>${configured}</p></div>
-        <div class="panel-card"><h3>Base de datos</h3><p>${health.database_ok ? 'Operativa' : 'Revisar configuración'}</p></div>
+        <article class="panel-card"><h3>Proceso</h3><strong class="metric">${live.status==='ok'?'Operativo':'Revisar'}</strong><p>Versión ${escapeHTML(live.version || state.core.version || '—')}</p></article>
+        <article class="panel-card"><h3>Preparación</h3><strong class="metric">${ready.status==='ready'?'Lista':'Revisar'}</strong><p>Base de datos y recursos de interfaz.</p></article>
+        <article class="panel-card"><h3>Acceso</h3><strong class="metric">${auth.authenticated?'Conectado':auth.auth_required?'Privado':'Público'}</strong><p>${auth.authenticated?'Sesión válida':auth.auth_required?'Inicia sesión para utilizar funciones':'No requiere sesión'}</p></article>
+        <article class="panel-card"><h3>Proveedores</h3><strong class="metric">${configured}</strong><p>Rutas generativas configuradas.</p></article>
       </div>
-      <div style="height:14px"></div>
-      <div class="panel-card"><h3>Autodiagnóstico</h3><p>${Object.entries(checks.checks || {}).map(([k,v]) => `${escapeHtml(k)}: ${v.ok ? '✓' : '✕'}`).join(' · ')}</p></div>
-      <div style="height:14px"></div>
-      <div class="panel-card">
-        <h3>Conexión avanzada</h3>
-        <p>En GitHub Pages, este campo debe contener la URL pública del backend de Render. El valor inicial se toma de static/config.js.</p>
-        <div style="height:10px"></div>
-        <div class="form-row"><input class="text-input" id="apiBaseInput" placeholder="https://tu-backend.onrender.com" value="${escapeHtml(state.apiBase)}"/><button class="soft-btn" id="saveApiBase">Guardar</button></div>
-      </div>`;
-    $('#saveApiBase', els.sheetBody)?.addEventListener('click', () => {
-      state.apiBase = normalizeBase($('#apiBaseInput', els.sheetBody).value);
-      if (state.apiBase) storage.setItem(STORE.apiBase, state.apiBase); else storage.removeItem(STORE.apiBase);
-      toast('Conexión guardada');
-      checkHealth({ wake:true });
-    });
+      <section class="panel-section"><div class="panel-card"><h3>Dirección activa</h3><p><code>${escapeHTML(state.apiBase || location.origin)}</code></p><div class="button-row"><button class="soft-btn" id="openConnectionSettings">Cambiar conexión</button><button class="soft-btn" id="openAccountSettings">Cuenta personal</button></div></div></section>`;
+    $('#openConnectionSettings').addEventListener('click', openConnection);
+    $('#openAccountSettings').addEventListener('click', () => openAccount(false));
   }
 
-  async function apiFetch(path, options = {}) {
-    const authHeaders = state.authToken ? { Authorization: `Bearer ${state.authToken}` } : {};
-    const response = await resilientFetch(apiUrl(path), {
-      ...options,
-      headers: { 'Content-Type':'application/json', ...authHeaders, ...(options.headers || {}) }
-    }, { attempts: options.method && options.method !== 'GET' ? 2 : 3, retryStatuses: [429, 502, 503, 504] });
-    const raw = await response.text();
-    let data = {};
-    try { data = raw ? JSON.parse(raw) : {}; }
-    catch { throw new Error(`Respuesta no válida del servidor (HTTP ${response.status}).`); }
-    if (!response.ok) throw new Error(data.detail || data.reply || `Error HTTP ${response.status}`);
-    return data;
-  }
+  function valueOf(result) { return result.status === 'fulfilled' ? result.value : {}; }
 
-  async function requestJarvis(payload, signal) {
-    const authHeaders = state.authToken ? { Authorization: `Bearer ${state.authToken}` } : {};
-    const requestOptions = {
-      method: 'POST',
-      headers: { 'Content-Type':'application/json', 'Accept':'application/x-ndjson, application/json', ...authHeaders },
-      body: JSON.stringify(payload),
-      signal
-    };
-
-    const parseStandardResponse = async response => {
-      const raw = await response.text();
-      let data = {};
-      try { data = raw ? JSON.parse(raw) : {}; }
-      catch { throw new Error(`El servidor respondió con contenido no válido (HTTP ${response.status}).`); }
-      if (!response.ok) {
-        const retry = data.retry_after_seconds ? ` Intenta nuevamente en ${data.retry_after_seconds} segundos.` : '';
-        const error = new Error((data.detail || data.reply || `Error HTTP ${response.status}`) + retry);
-        error.status = response.status;
-        error.data = data;
-        throw error;
-      }
-      return data;
-    };
-
+  async function openAccount(force = false) {
+    closeSidebar();
     try {
-      const response = await resilientFetch(apiUrl('/api/jarvis/stream'), requestOptions, { attempts: 2, timeoutMs: 45000, retryStatuses: [408, 425, 429, 500, 502, 503, 504] });
-      const contentType = response.headers.get('content-type') || '';
-      if (!response.ok || !response.body || !contentType.includes('application/x-ndjson')) {
-        return parseStandardResponse(response);
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let finalData = null;
-      while (true) {
-        const { value, done } = await reader.read();
-        buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          let event;
-          try { event = JSON.parse(line); }
-          catch { continue; }
-          if (event.type === 'progress') {
-            const stage = event.stage || 'Trabajando';
-            els.thinkingText.textContent = stage;
-            setStatus(stage, 'warning');
-          } else if (event.type === 'final') {
-            finalData = event.data || {};
-          }
+      const data = await request('/api/auth/status', {}, { attempts:1, timeoutMs:12000 });
+      state.auth = { required:Boolean(data.auth_required), registration:Boolean(data.registration_enabled), authenticated:Boolean(data.authenticated) };
+      state.user = data.user || null;
+      if (data.authenticated) {
+        updateAccountUI();
+        if (force) return;
+        const logout = confirm(`Sesión activa: ${data.user?.email || 'cuenta personal'}\n\n¿Cerrar sesión?`);
+        if (logout) {
+          await request('/api/auth/logout', { method:'POST' }).catch(()=>({}));
+          clearSession(); updateAccountUI(); toast('Sesión cerrada'); openAccount(true);
         }
-        if (done) break;
-      }
-      if (buffer.trim()) {
-        try {
-          const event = JSON.parse(buffer);
-          if (event.type === 'final') finalData = event.data || {};
-        } catch {}
-      }
-      if (!finalData) throw new Error('La conexión terminó antes de recibir el resultado final.');
-      return finalData;
-    } catch (error) {
-      if (error.name === 'AbortError') throw error;
-      if (Number(error?.status || 0) === 401) throw error;
-      setStatus('Recuperando resultado por ruta compatible', 'warning');
-      const fallback = await resilientFetch(apiUrl('/api/jarvis'), requestOptions, { attempts: 2, timeoutMs: 50000, retryStatuses: [408, 425, 429, 500, 502, 503, 504] });
-      return parseStandardResponse(fallback);
-    }
-  }
-
-  function createRequestId() {
-    if (window.crypto?.randomUUID) return window.crypto.randomUUID();
-    return `req_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-  }
-
-  async function resilientFetch(url, options = {}, config = {}) {
-    const attempts = Math.max(1, Number(config.attempts || 3));
-    const timeoutMs = Math.max(4000, Number(config.timeoutMs || 30000));
-    const retryStatuses = new Set(config.retryStatuses || [408, 425, 429, 500, 502, 503, 504]);
-    const outerSignal = options.signal;
-    let lastError = null;
-
-    for (let index = 0; index < attempts; index++) {
-      const controller = new AbortController();
-      let timedOut = false;
-      const forwardAbort = () => controller.abort(outerSignal?.reason);
-      if (outerSignal) {
-        if (outerSignal.aborted) throw new DOMException('Solicitud cancelada', 'AbortError');
-        outerSignal.addEventListener('abort', forwardAbort, { once: true });
-      }
-      const timer = setTimeout(() => {
-        timedOut = true;
-        controller.abort('timeout');
-      }, timeoutMs);
-
-      try {
-        const response = await fetch(url, { ...options, signal: controller.signal });
-        clearTimeout(timer);
-        outerSignal?.removeEventListener('abort', forwardAbort);
-        if (!retryStatuses.has(response.status) || index === attempts - 1) return response;
-        const retryHeader = Number(response.headers.get('Retry-After') || 0);
-        const waitMs = retryHeader > 0 ? retryHeader * 1000 : Math.min(850 * (2 ** index), 5000);
-        setStatus(`Recuperando conexión · intento ${index + 2}`, 'warning');
-        await sleep(waitMs);
-      } catch (error) {
-        clearTimeout(timer);
-        outerSignal?.removeEventListener('abort', forwardAbort);
-        if (outerSignal?.aborted) throw new DOMException('Solicitud cancelada', 'AbortError');
-        lastError = timedOut ? new Error(`Tiempo de espera agotado después de ${Math.round(timeoutMs / 1000)} segundos.`) : error;
-        if (index === attempts - 1) throw lastError;
-        setStatus(`Buscando ruta alternativa · intento ${index + 2}`, 'warning');
-        await sleep(Math.min(850 * (2 ** index), 5000));
-      }
-    }
-    throw lastError || new Error('No fue posible establecer conexión.');
-  }
-
-  async function checkHealth({ wake = false } = {}) {
-    if (!navigator.onLine) { setStatus('Sin conexión', 'error'); return; }
-    setStatus(wake ? 'Despertando núcleo' : 'Verificando núcleo', 'warning');
-    const delays = wake ? [0, 2500, 5000, 8000, 12000, 18000, 25000] : [0];
-    state.wakeRetrying = true;
-    for (let i = 0; i < delays.length; i++) {
-      if (delays[i]) await sleep(delays[i]);
-      try {
-        const data = await apiFetch('/api/health');
-        setStatus(data.status === 'ok' ? 'Núcleo operativo' : 'Modo local activo', data.status === 'ok' ? 'online' : 'warning');
-        state.wakeRetrying = false;
         return;
-      } catch {
-        if (i < delays.length - 1) setStatus(`Despertando núcleo · intento ${i + 2}`, 'warning');
       }
+      if (state.token) clearSession();
+      els.registerTab.hidden = !data.registration_enabled;
+      setAuthMode(data.first_user_pending && data.registration_enabled ? 'register' : 'login');
+      els.authCopy.textContent = data.first_user_pending ? 'Crea la primera cuenta propietaria para activar JARVIS.' : 'Inicia sesión para utilizar las funciones privadas.';
+      if (!els.authModal.open) els.authModal.showModal();
+    } catch (error) {
+      els.connectionExplanation.textContent = explainError(error);
+      openConnection();
     }
-    state.wakeRetrying = false;
-    setStatus('Núcleo inaccesible', 'error');
   }
 
-  function setStatus(text, type) {
-    els.statusText.textContent = text;
-    els.statusPill.classList.remove('online', 'error', 'warning');
-    els.statusPill.dataset.state = type || 'neutral';
-    if (type === 'online') els.statusPill.classList.add('online');
-    if (type === 'error') els.statusPill.classList.add('error');
-    if (type === 'warning') els.statusPill.classList.add('warning');
+  function setAuthMode(mode) {
+    state.authMode = mode;
+    $$('[data-auth-tab]').forEach(button => button.classList.toggle('active', button.dataset.authTab === mode));
+    els.nameField.hidden = mode !== 'register';
+    els.authTitle.textContent = mode === 'register' ? 'Crea tu cuenta propietaria' : 'Bienvenido de nuevo';
+    els.authSubmit.textContent = mode === 'register' ? 'Crear cuenta y conectar' : 'Iniciar sesión';
+    els.authPassword.autocomplete = mode === 'register' ? 'new-password' : 'current-password';
+    els.authError.hidden = true;
   }
 
-  async function pollNotifications() {
-    setInterval(async () => {
+  async function submitAuth(event) {
+    event.preventDefault();
+    const email=els.authEmail.value.trim(), password=els.authPassword.value;
+    const payload = state.authMode === 'register' ? { display_name:els.authName.value.trim(), email, password } : { email, password };
+    els.authSubmit.disabled = true; els.authSubmit.textContent = 'Conectando…'; els.authError.hidden = true;
+    try {
+      const result = await request(state.authMode === 'register' ? '/api/auth/register' : '/api/auth/login', { method:'POST', body:JSON.stringify(payload) }, { timeoutMs:20000 });
+      state.token=result.token || ''; state.user=result.user || null; state.auth.authenticated=true;
+      session.setItem(KEYS.token,state.token); saveUser(); updateAccountUI();
+      els.authModal.close(); setStatus('Núcleo operativo','online'); toast('Cuenta conectada');
+      startNotificationPolling();
+    } catch(error) {
+      els.authError.textContent = explainError(error); els.authError.hidden=false;
+    } finally {
+      els.authSubmit.disabled=false; els.authSubmit.textContent=state.authMode==='register'?'Crear cuenta y conectar':'Iniciar sesión';
+    }
+  }
+
+  function saveUser() { session.setItem(KEYS.user, JSON.stringify(state.user || null)); }
+  function clearSession() { state.token=''; state.user=null; state.auth.authenticated=false; session.removeItem(KEYS.token); session.removeItem(KEYS.user); }
+  function updateAccountUI() {
+    const name=state.user?.display_name || 'Cuenta personal';
+    els.accountName.textContent=name;
+    els.accountState.textContent=state.auth.authenticated?'Sesión protegida':state.auth.required?'Inicia sesión':'Acceso opcional';
+    els.avatar.textContent=(name.trim()[0] || 'C').toUpperCase();
+  }
+
+  function openConnection() {
+    closeSidebar();
+    els.apiBaseInput.value=state.apiBase || (isGitHubPages?configuredBase:location.origin);
+    els.connectionResult.textContent='';
+    if (!els.connectionModal.open) els.connectionModal.showModal();
+  }
+
+  async function saveConnection() {
+    const value=normalizeBase(els.apiBaseInput.value);
+    if (!/^https?:\/\//i.test(value)) { els.connectionResult.textContent='Escribe una URL completa que comience con https://'; return; }
+    state.apiBase = (!isGitHubPages && value === normalizeBase(location.origin)) ? '' : value;
+    if (state.apiBase) local.setItem(KEYS.api,state.apiBase); else local.removeItem(KEYS.api);
+    await testConnection();
+  }
+
+  async function testConnection() {
+    els.connectionResult.textContent='Comprobando…';
+    const ok=await bootCore();
+    if (ok) { els.connectionResult.textContent='✓ Núcleo conectado correctamente.'; setTimeout(()=>els.connectionModal.close(),650); }
+    else els.connectionResult.textContent='No se pudo conectar. Confirma que Render esté Live y que esta sea la URL del Web Service.';
+  }
+
+  let notificationTimer;
+  function startNotificationPolling() {
+    if (notificationTimer) return;
+    notificationTimer=setInterval(async()=>{
+      if (!state.core.online || (state.auth.required && !state.auth.authenticated)) return;
       try {
-        const data = await apiFetch(`/api/notifications?session_id=${encodeURIComponent(backendConversationId())}`);
-        (data.notifications || []).forEach(item => toast(`Recordatorio: ${item.title}`));
-      } catch { /* notificaciones son secundarias */ }
-    }, 60000);
+        const data=await request(`/api/notifications?session_id=${encodeURIComponent(backendSessionId())}`,{}, { attempts:1,timeoutMs:12000 });
+        (data.notifications||[]).forEach(item=>toast(`Recordatorio: ${item.title}`));
+      } catch { /* Las notificaciones no cambian el estado del núcleo. */ }
+    },60000);
   }
 
   function startVoiceInput() {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) { toast('El dictado no está disponible en este navegador'); return; }
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'es-HN';
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-    recognition.onstart = () => toast('Escuchando...');
-    recognition.onerror = () => toast('No se pudo usar el micrófono');
-    recognition.onresult = e => {
-      els.userInput.value = e.results[0][0].transcript || '';
-      saveDraft(); autoResize(); els.userInput.focus();
-    };
+    const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if (!Recognition) return toast('El dictado no está disponible en este navegador.');
+    const recognition=new Recognition(); recognition.lang='es-HN'; recognition.interimResults=false;
+    recognition.onresult=event=>{ els.messageInput.value=`${els.messageInput.value} ${event.results[0][0].transcript}`.trim(); autoResize(); };
+    recognition.onerror=()=>toast('No fue posible utilizar el micrófono.');
     recognition.start();
   }
 
-  function updateOfflineBanner() {
-    els.offlineBanner?.classList.toggle('show', !navigator.onLine);
-  }
-
-  async function registerServiceWorker() {
-    if (!('serviceWorker' in navigator)) return;
-    try {
-      const swUrl = new URL('./service-worker.js', document.baseURI).href;
-      await navigator.serviceWorker.register(swUrl);
-    } catch (error) {
-      console.warn('No se pudo registrar el modo offline:', error);
-    }
-  }
-
-  function humanIntent(intent) {
-    return ({ research:'Investigación', documents:'Documentos', math:'Matemática', code:'Programación', writing:'Escritura', planning:'Planificación', memory:'Memoria', reminders:'Recordatorios', general:'Conversación' })[intent] || intent;
-  }
-
-  function humanRoute(route) {
-    return ({ direct:'Ruta local', direct_web:'Búsqueda directa', autonomous:'Agente autónomo', cache:'Caché', degraded:'Modo local', degraded_web:'Web en modo local', provider_research:'Investigación multirruta', secondary_provider:'Proveedor secundario', multi_provider:'Gateway multimodelo', consensus_verified:'Consejo de calidad', similar_cache:'Caché similar', resilient_web:'Búsqueda resistente', resilient_local:'Resolución local', resilient_documents:'Biblioteca local', verified_repair:'Respuesta reparada' })[route] || route;
-  }
-
-  function humanToolName(name) {
-    return ({ web_search:'Búsqueda web', calculator:'Calculadora', sympy_solve:'Matemática', memory_save:'Memoria guardada', memory_search:'Memoria consultada', memory_delete:'Memoria eliminada', reminder_create:'Recordatorio', reminder_list:'Recordatorios', reminder_cancel:'Recordatorio cancelado', document_search:'Biblioteca' })[name] || name.replaceAll('_',' ');
-  }
-
-  function escapeHtml(value) {
-    return String(value ?? '').replace(/[&<>'"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' })[c]);
-  }
-
   function toast(message) {
-    els.toast.textContent = message;
-    els.toast.classList.add('show');
-    clearTimeout(toast.timer);
-    toast.timer = setTimeout(() => els.toast.classList.remove('show'), 2500);
+    clearTimeout(state.toastTimer); els.toast.textContent=String(message||''); els.toast.classList.add('show');
+    state.toastTimer=setTimeout(()=>els.toast.classList.remove('show'),3200);
   }
 
-  function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+  function registerServiceWorker() {
+    if (!('serviceWorker' in navigator) || location.protocol === 'file:') return;
+    navigator.serviceWorker.register('./service-worker.js?v=47').catch(()=>{});
+  }
 })();

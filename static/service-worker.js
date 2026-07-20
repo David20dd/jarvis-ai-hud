@@ -1,28 +1,4 @@
-const CACHE_NAME = 'jarvis-unified-personal-static-v46-1';
-const CORE = [
-  './', './index.html',
-  './styles.css?v=46.1', './app.js?v=46.1', './config.js?v=46.1',
-  './manifest.webmanifest?v=46.1', './favicon-v46.svg?v=46.1',
-  './jarvis-reactor-v46.svg'
-];
-self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(CORE)).then(() => self.skipWaiting()));
-});
-self.addEventListener('activate', event => {
-  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key)))).then(() => self.clients.claim()));
-});
-self.addEventListener('fetch', event => {
-  const request = event.request;
-  if (request.method !== 'GET') return;
-  const url = new URL(request.url);
-  if (url.pathname.includes('/api/')) return;
-  event.respondWith(
-    fetch(request).then(response => {
-      if (response.ok && url.origin === self.location.origin) {
-        const copy = response.clone();
-        caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
-      }
-      return response;
-    }).catch(() => caches.match(request).then(hit => hit || caches.match('./index.html')))
-  );
-});
+// Compatibilidad para instalaciones antiguas que registraron un worker desde /static/.
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', event => event.waitUntil(self.clients.claim()));
+self.addEventListener('fetch', () => {});

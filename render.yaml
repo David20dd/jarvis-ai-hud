@@ -33,7 +33,7 @@ services:
       - key: JARVIS_DB_FILE
         value: jarvis_memory.db
       - key: JARVIS_AUTH_REQUIRED
-        value: "false"
+        value: "true"
       - key: JARVIS_REGISTRATION_ENABLED
         value: "false"
       - key: JARVIS_AUTH_SESSION_DAYS

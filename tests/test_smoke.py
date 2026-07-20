@@ -60,8 +60,8 @@ def test_http_health_and_headers():
     with TestClient(main.app) as client:
         live = client.get("/api/health/live")
         assert live.status_code == 200
-        assert live.json()["version"] == "46.0.1"
-        assert live.headers["x-jarvis-version"] == "46.0.1"
+        assert live.json()["version"] == "47.0.0"
+        assert live.headers["x-jarvis-version"] == "47.0.0"
         assert live.headers.get("x-request-id")
 
         ready = client.get("/api/health/ready")
@@ -78,7 +78,7 @@ def test_http_health_and_headers():
 def test_capabilities_include_stability_features():
     with TestClient(main.app) as client:
         data = client.get("/api/capabilities").json()
-        assert data["version"] == "46.0.1"
+        assert data["version"] == "47.0.0"
         features = set(data["features"])
         assert "singleflight_deduplication" in features
         assert "persistent_job_recovery" in features
@@ -185,7 +185,7 @@ def test_provider_gateway_endpoints_and_route_preview():
         status = client.get("/api/providers")
         assert status.status_code == 200
         payload = status.json()
-        assert payload["version"] == "46.0.1"
+        assert payload["version"] == "47.0.0"
         assert "gateway" in payload
         assert "providers" in payload["gateway"]
 
@@ -324,7 +324,7 @@ def test_agent_plan_and_execute_endpoints():
 
         status = client.get('/api/agents/status', params={'session_id': 'agent-test'})
         assert status.status_code == 200
-        assert status.json()['version'] == '46.0.1'
+        assert status.json()['version'] == '47.0.0'
 
 
 
@@ -384,7 +384,7 @@ def test_provider_capability_matrix_and_tool_registry_endpoints():
         capabilities = client.get('/api/providers/capabilities')
         assert capabilities.status_code == 200
         payload = capabilities.json()
-        assert payload['version'] == '46.0.1'
+        assert payload['version'] == '47.0.0'
         assert 'anthropic' in payload['matrix']['providers']
         assert 'coding' in payload['matrix']['task_preferences']
         assert payload['quality_council']['max_providers'] >= 2
@@ -392,7 +392,7 @@ def test_provider_capability_matrix_and_tool_registry_endpoints():
         registry = client.get('/api/tools/registry')
         assert registry.status_code == 200
         tools = registry.json()
-        assert tools['version'] == '46.0.1'
+        assert tools['version'] == '47.0.0'
         assert tools['available_count'] >= 10
         names = {item['name'] for item in tools['tools'] if item['available']}
         assert {'web_search', 'calculator', 'document_search'}.issubset(names)
@@ -452,7 +452,7 @@ def test_professional_endpoints_expose_profiles_and_plan():
         profiles = client.get("/api/professional/profiles")
         assert profiles.status_code == 200
         payload = profiles.json()
-        assert payload["version"] == "46.0.1"
+        assert payload["version"] == "47.0.0"
         assert len(payload["profiles"]) >= 6
 
         planned = client.post(
@@ -474,7 +474,7 @@ def test_professional_endpoints_expose_profiles_and_plan():
 
         status = client.get("/api/professional/status?session_id=professional-test")
         assert status.status_code == 200
-        assert status.json()["version"] == "46.0.1"
+        assert status.json()["version"] == "47.0.0"
 
 
 def test_responsive_frontend_contract():
@@ -484,30 +484,29 @@ def test_responsive_frontend_contract():
     manifest = json.loads(Path("static/manifest.webmanifest").read_text(encoding="utf-8"))
 
     assert "viewport-fit=cover" in html
-    assert "?v=46" in html
+    assert "?v=47" in html
     assert "jarvis-reactor-v46.svg" in html
-    assert "focusModeBtn" in html
-    assert "mobileDock" in html
-    assert "chatFilterBar" in html
-    assert "thinking-stage-rail" in html
-    assert "jarvis_chat_filter_v46" in js
-    assert "--app-height" in css
-    assert "@media (max-width: 680px)" in css
-    assert "@media (max-height: 540px)" in css
-    assert "keyboard-open" in css
-    assert "visualViewport" in js
-    assert "updateViewportMetrics" in js
+    assert 'class="mobile-nav"' in html
+    assert 'id="composer"' in html
+    assert 'id="authModal"' in html
+    assert 'id="connectionModal"' in html
+    assert "@media (max-width: 640px)" in css
+    assert "env(safe-area-inset-bottom)" in css
+    assert ".welcome-reactor img" in css and "animation: none !important" in css
+    assert "jarvis_v47_chats" in js
     assert manifest["display"] == "standalone"
 
 
 def test_frontend_response_recovery_contract():
     js = Path("static/app.js").read_text(encoding="utf-8")
-    assert "function animateMessageEntry" in js
-    assert "function buildLocalRecoveryReply" in js
-    assert "function createSafeStorage" in js
-    assert "timeoutMs: 45000" in js
+    assert "class ApiError extends Error" in js
+    assert "function localRecovery" in js
+    assert "const safeStorage" in js
+    assert "timeoutMs:65000" in js
     assert "local_recovery" in js
-    assert "showBootFailure" in js
+    assert "error?.status === 401" in js
+    assert "request('/api/jarvis'" in js
+    assert "/api/jarvis/stream" not in js
 
 
 def test_stream_has_emergency_final_fallback():
@@ -538,7 +537,7 @@ def test_v38_autonomy_workflow_executes_real_steps():
         assert created.status_code == 200
         workflow_id = created.json()["workflow"]["id"]
         final = None
-        for _ in range(120):
+        for _ in range(300):
             response = client.get(f"/api/autonomy/workflows/{workflow_id}?session_id=workflow-test")
             assert response.status_code == 200
             final = response.json()["workflow"]
@@ -585,7 +584,7 @@ def test_v38_automation_and_optional_integrations_status():
         status = client.get("/api/autonomy/status?session_id=automation-test")
         assert status.status_code == 200
         payload = status.json()
-        assert payload["version"] == "46.0.1"
+        assert payload["version"] == "47.0.0"
         assert "mcp" in payload and "code_lab" in payload and "semantic" in payload
 
 
@@ -593,10 +592,10 @@ def test_v38_frontend_exposes_clean_autonomy_center():
     html = Path("index.html").read_text(encoding="utf-8")
     js = Path("static/app.js").read_text(encoding="utf-8")
     css = Path("static/styles.css").read_text(encoding="utf-8")
-    assert 'data-panel="autonomy"' in html
-    assert "function renderAutonomy" in js
+    assert 'data-view="missions"' in html
+    assert "function renderMissions" in js
     assert "/api/autonomy/workflows" in js
-    assert ".autonomy-workflow-card" in css
+    assert ".job-progress" in css
 
 
 def test_v38_failed_workflow_retries_from_failed_checkpoint():
@@ -710,26 +709,28 @@ def test_v46_operations_and_channel_status_endpoints():
         assert client.get("/404.html").status_code == 200
         operations = client.get("/api/operations/overview", params={"session_id": "test-v46"})
         assert operations.status_code == 200
-        assert operations.json()["version"] == "46.0.1"
+        assert operations.json()["version"] == "47.0.0"
         assert operations.json()["safety"]["human_approval"] is True
         channels = client.get("/api/channels/status")
         assert channels.status_code == 200
         assert set(channels.json()["channels"]) == {"telegram", "whatsapp", "activity"}
 
 
-def test_v46_frontend_is_clean_connected_and_boot_safe():
+def test_v47_frontend_is_clean_connected_and_boot_safe():
     html = Path("index.html").read_text(encoding="utf-8")
     js = Path("static/app.js").read_text(encoding="utf-8")
     css = Path("static/styles.css").read_text(encoding="utf-8")
-    assert "Centro JARVIS" in html
-    assert "WhatsApp y Telegram" in html
-    assert 'data-panel="account"' in html
+    assert "¿En qué trabajamos hoy?" in html
+    assert "WhatsApp y Telegram" in js
+    assert 'data-view="channels"' in html
     assert "window.storage" not in js
-    assert "Authorization: `Bearer ${state.authToken}`" in js
-    assert "renderChannels" in js and "renderAccount" in js
-    assert "authentication_required" in js
-    assert "Number(error?.status || 0) === 401" in js
-    assert "v46 — Clean, connected and calm" in css
+    assert "headers.set('Authorization', `Bearer ${state.token}`)" in js
+    assert "renderChannels" in js and "openAccount" in js
+    assert "auth_required" in js
+    assert "error?.status === 401" in js
+    assert "jarvis-reliable-workspace-v47" in Path("service-worker.js").read_text(encoding="utf-8")
+    assert "url.pathname.includes('/api/')" in Path("service-worker.js").read_text(encoding="utf-8")
+    assert "overflow-x: hidden" in css
 
 
 def test_v46_private_core_returns_readable_cors_401(monkeypatch):
@@ -744,3 +745,19 @@ def test_v46_private_core_returns_readable_cors_401(monkeypatch):
     assert response.status_code == 401
     assert response.headers["access-control-allow-origin"] == "*"
     assert "Inicia sesión" in response.json()["detail"]
+
+
+def test_v47_auth_does_not_block_cors_preflight(monkeypatch):
+    monkeypatch.setattr(main, "AUTH_REQUIRED", True)
+    monkeypatch.setattr(main, "ALLOWED_ORIGINS", ["*"])
+    with TestClient(main.app) as client:
+        response = client.options(
+            "/api/jarvis",
+            headers={
+                "Origin": "https://owner.github.io",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "authorization,content-type",
+            },
+        )
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "*"

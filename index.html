@@ -3,263 +3,148 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <meta name="theme-color" content="#070b11" />
-  <meta name="description" content="J.A.R.V.I.S. v46: inteligencia personal multimodelo, automatización verificable y acceso desde web, Telegram y WhatsApp." />
-  <meta name="referrer" content="strict-origin-when-cross-origin" />
-  <title>J.A.R.V.I.S. — Unified Personal Intelligence v46</title>
-  <link rel="icon" href="./static/favicon-v46.svg?v=46.1" type="image/svg+xml" />
-  <link rel="shortcut icon" href="./static/favicon-v46.svg?v=46.1" type="image/svg+xml" />
-  <link rel="apple-touch-icon" href="./static/apple-touch-icon.png" />
-  <link rel="manifest" href="./static/manifest.webmanifest?v=46" />
-  <link rel="stylesheet" href="./static/styles.css?v=46.1" />
-
-  <script defer src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/styles/github-dark.min.css" />
-  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/highlight.min.js"></script>
-  <script>
-    window.MathJax = {
-      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
-      svg: { fontCache: 'global' }
-    };
-  </script>
-  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
-  <script src="./static/config.js?v=46"></script>
-  <script defer src="./static/app.js?v=46.1"></script>
+  <meta name="theme-color" content="#0b1017" />
+  <meta name="description" content="J.A.R.V.I.S. v47: espacio de trabajo personal, confiable y sencillo." />
+  <title>J.A.R.V.I.S. — Reliable Workspace v47</title>
+  <link rel="icon" href="./static/favicon-v46.svg?v=47" type="image/svg+xml" />
+  <link rel="manifest" href="./static/manifest.webmanifest?v=47" />
+  <link rel="stylesheet" href="./static/styles.css?v=47" />
+  <script defer src="./static/config.js?v=47"></script>
+  <script defer src="./static/app.js?v=47"></script>
 </head>
 <body>
-  <a class="skip-link" href="#userInput">Ir al campo de mensaje</a>
-  <div class="ambient" id="ambientGlow" aria-hidden="true"></div>
+  <div class="app" id="app">
+    <div class="scrim" id="scrim"></div>
 
-  <div class="app">
-    <header class="topbar">
-      <div class="top-left">
-        <button class="icon-btn" id="menuBtn" aria-label="Abrir menú" title="Menú">
-          <svg viewBox="0 0 24 24"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/></svg>
+    <aside class="sidebar" id="sidebar" aria-label="Navegación principal">
+      <header class="sidebar-head">
+        <button class="brand" id="brandBtn" aria-label="Ir al chat">
+          <span class="brand-reactor"><img src="./static/jarvis-reactor-v46.svg" alt="" /></span>
+          <span><strong>J.A.R.V.I.S.</strong><small>Reliable Workspace</small></span>
         </button>
-        <div class="brand">
-          <div class="brand-reactor-wrap" aria-hidden="true"><img class="brand-reactor" src="./static/jarvis-reactor-v46.svg" alt="" /></div>
-          <div class="brand-copy">
-            <div class="brand-name">J.A.R.V.I.S.</div>
-            <div class="brand-sub">Cinematic Multi-Agent Interface</div>
-          </div>
+        <button class="icon-btn sidebar-close" id="sidebarClose" aria-label="Cerrar menú">×</button>
+      </header>
+
+      <button class="new-chat" id="newChatBtn"><span>＋</span>Nueva conversación</button>
+
+      <nav class="primary-nav" aria-label="Espacios de JARVIS">
+        <button class="nav-btn active" data-view="chat"><span>◌</span>Chat</button>
+        <button class="nav-btn" data-view="library"><span>▤</span>Biblioteca</button>
+        <button class="nav-btn" data-view="memory"><span>◇</span>Memoria</button>
+        <button class="nav-btn" data-view="missions"><span>✦</span>Misiones</button>
+        <button class="nav-btn" data-view="channels"><span>↗</span>Canales</button>
+      </nav>
+
+      <section class="history">
+        <div class="section-label"><span>Conversaciones</span><button id="searchChatsBtn" aria-label="Buscar conversaciones">⌕</button></div>
+        <input class="chat-search" id="chatSearch" placeholder="Buscar…" autocomplete="off" hidden />
+        <div class="chat-list" id="chatList"></div>
+      </section>
+
+      <footer class="sidebar-foot">
+        <button class="account-button" id="accountBtn"><span class="avatar" id="avatar">C</span><span><strong id="accountName">Cuenta personal</strong><small id="accountState">Comprobar acceso</small></span><em>›</em></button>
+      </footer>
+    </aside>
+
+    <main class="workspace">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="icon-btn menu-btn" id="menuBtn" aria-label="Abrir menú">☰</button>
+          <div class="mobile-brand"><img src="./static/jarvis-reactor-v46.svg" alt="" /><strong>JARVIS</strong></div>
+          <select id="modeSelect" class="mode-select" aria-label="Modo de respuesta">
+            <option value="auto">Automático</option>
+            <option value="fast">Rápido</option>
+            <option value="research">Investigación</option>
+            <option value="math">Matemática</option>
+            <option value="professional">Profesional</option>
+          </select>
         </div>
-        <button class="project-switcher" id="projectBtn" type="button" title="Cambiar proyecto" aria-label="Cambiar proyecto">
-          <span class="project-orb" aria-hidden="true"></span>
-          <span class="project-label" id="projectName">General</span>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5z"/></svg>
-        </button>
-      </div>
-
-      <div class="top-right">
-        <button class="icon-btn command-btn" id="commandBtn" aria-label="Abrir comandos" title="Comandos · Ctrl+K">
-          <svg viewBox="0 0 24 24"><path d="M9.5 3a6.5 6.5 0 1 0 3.98 11.64L19.85 21 21 19.85l-6.36-6.37A6.5 6.5 0 0 0 9.5 3zm0 2a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9z"/></svg>
-          <span class="command-key">Ctrl K</span>
-        </button>
-        <div class="status-pill" id="statusPill" title="Estado del núcleo">
-          <span class="status-dot"></span>
-          <span id="statusText">Verificando núcleo</span>
+        <div class="topbar-actions">
+          <button class="status-button checking" id="statusButton"><i></i><span id="statusText">Comprobando núcleo</span></button>
+          <button class="icon-btn" id="diagnosticsBtn" aria-label="Diagnóstico">⌁</button>
+          <button class="icon-btn" id="mobileNewBtn" aria-label="Nueva conversación">＋</button>
         </div>
-        <button class="icon-btn" id="workspaceBtn" aria-label="Abrir herramientas" title="Herramientas">
-          <svg viewBox="0 0 24 24"><path d="M7 2h10a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm0 2v16h10V4zm2 3h6v2H9zm0 4h6v2H9zm0 4h4v2H9z"/></svg>
-        </button>
-        <button class="icon-btn" id="newChatTopBtn" aria-label="Nueva conversación" title="Nueva conversación">
-          <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></svg>
-        </button>
-      </div>
-    </header>
+      </header>
 
-    <main class="main">
-      <section class="chat-shell" aria-label="Conversación con JARVIS">
-        <div class="chat-scroll" id="chatScroll">
+      <section class="chat-view view active" id="chatView">
+        <div class="conversation" id="conversation">
           <section class="welcome" id="welcome">
-            <div class="welcome-layout">
-              <div class="welcome-visual">
-                <div class="core-label" aria-hidden="true"><span></span> Núcleo multiagente</div>
-                <button class="reactor-wrap" id="reactorFx" type="button" aria-label="Activar núcleo visual de JARVIS" title="Activar núcleo visual">
-                  <span class="reactor-aura" aria-hidden="true"></span>
-                  <span class="reactor-orbit one" aria-hidden="true"></span>
-                  <span class="reactor-orbit two" aria-hidden="true"></span>
-                  <span class="reactor-orbit three" aria-hidden="true"></span>
-                  <span class="reactor-scan" aria-hidden="true"></span>
-                  <div class="reactor-picture reactor-svg-shell"><img class="reactor-img" src="./static/jarvis-reactor-v46.svg" alt="Reactor vectorial de JARVIS con núcleo triangular invertido" /></div>
-                </button>
-                <div class="core-caption" aria-hidden="true">
-                  <span>Multimodelo</span><i></i><span>Agentes</span><i></i><span>Verificación</span>
-                </div>
-              </div>
-
-              <div class="welcome-content">
-                <div class="welcome-kicker">Unified Personal Intelligence · v46</div>
-                <h1 class="welcome-title">¿Qué construiremos <span class="accent">hoy</span>?</h1>
-                <p class="welcome-sub">Investiga, analiza, programa y organiza objetivos complejos con una experiencia clara, profesional y diseñada para trabajar sin distracciones.</p>
-
-                <div class="capability-strip" aria-label="Capacidades principales">
-                  <span><b>01</b> Planeación inteligente</span>
-                  <span><b>02</b> Ejecución por etapas</span>
-                  <span><b>03</b> Resultado verificado</span>
-                </div>
-
-                <div class="suggestions" aria-label="Acciones rápidas">
-                  <button class="suggestion" data-prompt="Convierte este objetivo en una misión profesional, asigna especialistas, ejecútala por etapas y verifica el resultado.">
-                    <span class="suggestion-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2 3.5 6.5v5c0 5.2 3.6 9.6 8.5 10.5 4.9-.9 8.5-5.3 8.5-10.5v-5L12 2Zm0 2.2 6.4 3.4v3.9c0 4-2.6 7.5-6.4 8.5-3.8-1-6.4-4.5-6.4-8.5V7.6L12 4.2Zm-1.1 4.1v3.1H7.8v2h3.1v3.1h2v-3.1H16v-2h-3.1V8.3h-2Z"/></svg></span>
-                    <span class="suggestion-copy"><strong>Misión profesional</strong><span>Plan, especialistas, ejecución y control de calidad.</span></span>
-                    <span class="suggestion-arrow" aria-hidden="true">↗</span>
-                  </button>
-                  <button class="suggestion" data-prompt="Ayúdame a analizar un documento y extraer sus puntos principales.">
-                    <span class="suggestion-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 2h8l4 4v16H6V2Zm2 2v16h8V7h-3V4H8Zm2 7h4v2h-4v-2Zm0 4h4v2h-4v-2Z"/></svg></span>
-                    <span class="suggestion-copy"><strong>Analizar documentos</strong><span>PDF, Word, Excel, presentaciones, texto y código.</span></span>
-                    <span class="suggestion-arrow" aria-hidden="true">↗</span>
-                  </button>
-                  <button class="suggestion" data-prompt="Resuelve esta ecuación paso a paso y explícamela de forma sencilla.">
-                    <span class="suggestion-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4V4Zm2 2v12h12V6H6Zm2 2h3v2H8V8Zm5 0h3v2h-3V8Zm-5 4h8v2H8v-2Zm0 4h3v2H8v-2Zm5 0h3v2h-3v-2Z"/></svg></span>
-                    <span class="suggestion-copy"><strong>Resolver matemática</strong><span>Cálculo exacto, álgebra y explicaciones paso a paso.</span></span>
-                    <span class="suggestion-arrow" aria-hidden="true">↗</span>
-                  </button>
-                  <button class="suggestion" data-prompt="Diseña una solución técnica completa, comprueba riesgos y entrega pasos o código ejecutable.">
-                    <span class="suggestion-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m8.7 16.6-4.6-4.6 4.6-4.6 1.4 1.4L6.9 12l3.2 3.2-1.4 1.4Zm6.6 0-1.4-1.4 3.2-3.2-3.2-3.2 1.4-1.4 4.6 4.6-4.6 4.6ZM10.2 19l2.1-14 2 .3-2.1 14-2-.3Z"/></svg></span>
-                    <span class="suggestion-copy"><strong>Construir solución</strong><span>Arquitectura, programación, riesgos y entrega completa.</span></span>
-                    <span class="suggestion-arrow" aria-hidden="true">↗</span>
-                  </button>
-                </div>
-              </div>
+            <div class="welcome-reactor" aria-hidden="true">
+              <span class="orbit orbit-a"></span><span class="orbit orbit-b"></span>
+              <img src="./static/jarvis-reactor-v46.svg" alt="" />
+            </div>
+            <p class="eyebrow">JARVIS · ESPACIO PERSONAL</p>
+            <h1>¿En qué trabajamos hoy?</h1>
+            <p class="welcome-copy">Pregunta, analiza un archivo o convierte una idea en una misión. El núcleo te dirá claramente si necesita iniciar sesión o revisar una conexión.</p>
+            <div class="suggestions">
+              <button data-prompt="Ayúdame a organizar mis prioridades de hoy."><span>01</span><strong>Organizar mi día</strong><small>Prioridades y plan breve</small></button>
+              <button data-prompt="Investiga este tema y separa hechos, fuentes y conclusiones: "><span>02</span><strong>Investigar</strong><small>Evidencia y conclusiones</small></button>
+              <button data-prompt="Analiza el archivo que voy a adjuntar y dame los hallazgos principales."><span>03</span><strong>Analizar archivo</strong><small>PDF, Word, Excel y texto</small></button>
+              <button data-prompt="Crea una misión profesional para resolver este objetivo: "><span>04</span><strong>Crear una misión</strong><small>Plan, ejecución y verificación</small></button>
             </div>
           </section>
-
           <div class="messages" id="messages" aria-live="polite"></div>
-
-          <div class="thinking-wrap" id="thinkingWrap" aria-live="polite" aria-label="JARVIS está preparando una respuesta">
-            <div class="thinking-card">
-              <span class="thinking-reactor" aria-hidden="true"><img src="./static/jarvis-reactor-v46.svg" alt="" /></span>
-              <span class="thinking-copy"><strong id="thinkingText">Preparando respuesta</strong><small id="thinkingDetail">Analizando la solicitud y seleccionando la mejor ruta.</small></span>
-              <span class="thinking-stage-rail" aria-hidden="true">
-                <span data-thinking-stage="0">Analiza</span><i></i>
-                <span data-thinking-stage="1">Planifica</span><i></i>
-                <span data-thinking-stage="2">Ejecuta</span><i></i>
-                <span data-thinking-stage="3">Verifica</span>
-              </span>
-            </div>
-          </div>
+          <div class="thinking" id="thinking" hidden><span class="thinking-core"></span><div><strong id="thinkingTitle">JARVIS está trabajando</strong><small id="thinkingDetail">Analizando la solicitud…</small></div></div>
         </div>
-
-        <button class="jump-btn" id="jumpBtn" type="button">
-          <svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor"><path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg>
-          Volver a la respuesta
-        </button>
 
         <div class="composer-zone">
-          <div class="attachments" id="attachments"></div>
-          <div class="composer">
-            <div class="composer-main">
-              <button class="icon-btn" id="attachBtn" type="button" aria-label="Adjuntar archivo" title="Adjuntar archivo">
-                <svg viewBox="0 0 24 24"><path d="M16.5 6.5 8.7 14.3a3 3 0 1 0 4.24 4.24l8.49-8.49a5 5 0 1 0-7.07-7.07L5.88 11.46a7 7 0 1 0 9.9 9.9l6.36-6.36-1.41-1.41-6.36 6.36a5 5 0 1 1-7.07-7.07l8.49-8.49a3 3 0 0 1 4.24 4.24l-8.49 8.49a1 1 0 1 1-1.41-1.41l7.79-7.79z"/></svg>
-              </button>
-              <textarea id="userInput" rows="1" maxlength="30000" placeholder="Pregunta, investiga, crea o analiza algo..."></textarea>
-              <button class="icon-btn" id="micBtn" type="button" aria-label="Dictado de voz" title="Dictado de voz">
-                <svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11z"/></svg>
-              </button>
-              <button class="icon-btn primary" id="sendBtn" type="button" aria-label="Enviar" title="Enviar">
-                <svg id="sendIcon" viewBox="0 0 24 24"><path d="M3.4 20.4 21 12 3.4 3.6 3 10l12 2-12 2z"/></svg>
-              </button>
-            </div>
-            <div class="composer-foot">
-              <button class="mode-btn" id="modeBtn" type="button">Modo automático</button>
-              <span class="composer-hint">Enter para enviar · Shift+Enter para nueva línea</span>
-            </div>
-          </div>
-          <input class="sr-only" id="fileInput" type="file" multiple accept=".pdf,.docx,.xlsx,.xlsm,.pptx,.txt,.md,.csv,.json,.py,.js,.html,.css" />
+          <div class="attachments" id="attachments" hidden></div>
+          <form class="composer" id="composer">
+            <input type="file" id="fileInput" multiple hidden accept=".pdf,.docx,.xlsx,.xlsm,.pptx,.txt,.md,.csv,.json,.py,.js,.html,.css,image/*" />
+            <button type="button" class="composer-icon" id="attachBtn" aria-label="Adjuntar archivo">⌕</button>
+            <textarea id="messageInput" rows="1" maxlength="12000" placeholder="Escribe un mensaje…"></textarea>
+            <button type="button" class="composer-icon voice-btn" id="voiceBtn" aria-label="Dictar mensaje">◉</button>
+            <button class="send-btn" id="sendBtn" type="submit" aria-label="Enviar"><span>➤</span></button>
+          </form>
+          <p class="composer-hint">Enter para enviar · Shift+Enter para una línea nueva</p>
         </div>
       </section>
+
+      <section class="panel-view view" id="panelView">
+        <header class="panel-header"><button class="icon-btn" id="panelBack" aria-label="Volver">←</button><div><p id="panelEyebrow">JARVIS</p><h2 id="panelTitle">Panel</h2></div><button class="soft-btn" id="panelRefresh">Actualizar</button></header>
+        <div class="panel-content" id="panelContent"></div>
+      </section>
     </main>
+
+    <nav class="mobile-nav" aria-label="Navegación móvil">
+      <button class="active" data-view="chat"><span>◌</span><small>Chat</small></button>
+      <button data-view="library"><span>▤</span><small>Archivos</small></button>
+      <button id="mobileCompose"><span class="mobile-plus">＋</span><small>Nuevo</small></button>
+      <button data-view="missions"><span>✦</span><small>Misiones</small></button>
+      <button data-view="channels"><span>↗</span><small>Canales</small></button>
+    </nav>
   </div>
 
-  <div class="backdrop" id="backdrop"></div>
+  <dialog class="modal" id="authModal">
+    <form method="dialog" class="modal-shell auth-shell" id="authForm">
+      <button class="modal-close" value="cancel" aria-label="Cerrar">×</button>
+      <div class="modal-mark"><img src="./static/jarvis-reactor-v46.svg" alt="" /></div>
+      <p class="eyebrow">ACCESO PERSONAL</p>
+      <h2 id="authTitle">Conecta tu núcleo</h2>
+      <p id="authCopy">Inicia sesión para utilizar las funciones privadas.</p>
+      <div class="auth-tabs"><button type="button" class="active" data-auth-tab="login">Iniciar sesión</button><button type="button" data-auth-tab="register" id="registerTab">Crear cuenta</button></div>
+      <div class="field" id="nameField" hidden><label for="authName">Nombre</label><input id="authName" autocomplete="name" /></div>
+      <div class="field"><label for="authEmail">Correo</label><input id="authEmail" type="email" autocomplete="username" required /></div>
+      <div class="field"><label for="authPassword">Contraseña</label><input id="authPassword" type="password" autocomplete="current-password" required /></div>
+      <p class="form-error" id="authError" hidden></p>
+      <button class="primary-btn wide" id="authSubmit" value="default">Continuar</button>
+      <small class="privacy-note">El token permanece solo en esta sesión del navegador. Las claves de IA nunca se guardan aquí.</small>
+    </form>
+  </dialog>
 
-  <aside class="drawer" id="drawer" aria-label="Menú lateral">
-    <div class="drawer-head drawer-head-clean">
-      <div class="drawer-identity">
-        <div class="drawer-reactor" aria-hidden="true"><img src="./static/jarvis-reactor-v46.svg" alt="" /></div>
-        <div><div class="drawer-brand">J.A.R.V.I.S.</div><div class="drawer-subtitle">Unified Personal Intelligence v46</div></div>
-      </div>
-      <button class="icon-btn" id="closeDrawerBtn" aria-label="Cerrar menú"><svg viewBox="0 0 24 24"><path d="m18.3 5.7-1.4-1.4L12 9.2 7.1 4.3 5.7 5.7l4.9 4.9-4.9 4.9 1.4 1.4 4.9-4.9 4.9 4.9 1.4-1.4-4.9-4.9z"/></svg></button>
-    </div>
-    <div class="drawer-body drawer-body-clean">
-      <button class="new-chat clean-new-chat" id="newChatBtn"><svg viewBox="0 0 24 24" width="19" height="19" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></svg><span>Nueva conversación</span><kbd>⌘⇧N</kbd></button>
-      <div class="drawer-search-wrap clean-search">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 3a6.5 6.5 0 1 0 3.98 11.64L19.85 21 21 19.85l-6.36-6.37A6.5 6.5 0 0 0 9.5 3zm0 2a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9z"/></svg>
-        <input id="drawerSearch" type="search" placeholder="Buscar conversaciones..." autocomplete="off" />
-      </div>
-      <div class="chat-filter-bar" id="chatFilterBar" role="tablist" aria-label="Filtrar conversaciones">
-        <button type="button" role="tab" data-chat-filter="all" aria-selected="true">Todas</button>
-        <button type="button" role="tab" data-chat-filter="pinned" aria-selected="false">Fijadas</button>
-        <button type="button" role="tab" data-chat-filter="recent" aria-selected="false">Recientes</button>
-      </div>
-      <div class="drawer-section compact-project-section">
-        <div class="section-label section-label-row"><span>Proyecto activo</span><button id="quickNewProjectBtn" type="button" title="Nuevo proyecto">+</button></div>
-        <div class="project-list compact-project-list" id="projectList"></div>
-      </div>
-      <div class="drawer-section chat-history-section">
-        <div class="section-label section-label-row"><span>Conversaciones <b id="chatCountBadge">0</b></span><button type="button" data-panel="search" title="Buscar conocimiento">⌕</button></div>
-        <div class="chat-list grouped-chat-list" id="chatList"></div>
-      </div>
-    </div>
-    <nav class="drawer-foot drawer-foot-clean" aria-label="Navegación principal">
-      <div class="drawer-primary-nav">
-        <button class="drawer-link primary-nav-link agent-nav-link" data-panel="overview"><span>✦</span><span>Centro JARVIS</span><small>v46</small></button>
-        <button class="drawer-link primary-nav-link" data-panel="projects"><span>◆</span><span>Proyectos</span></button>
-        <button class="drawer-link primary-nav-link" data-panel="library"><span>▣</span><span>Biblioteca</span></button>
-        <button class="drawer-link primary-nav-link" data-panel="channels"><span>◉</span><span>WhatsApp y Telegram</span></button>
-        <button class="drawer-link primary-nav-link" data-panel="system"><span>⚙</span><span>Ajustes</span></button>
-      </div>
-      <button class="more-tools-toggle" id="moreToolsBtn" type="button" aria-expanded="false">
-        <span>Más herramientas</span><svg viewBox="0 0 24 24"><path d="m7 10 5 5 5-5z"/></svg>
-      </button>
-      <div class="more-tools-group" id="moreToolsGroup" hidden>
-        <button class="drawer-link" data-panel="autonomy"><span>✦</span> Misiones autónomas</button>
-        <button class="drawer-link" data-panel="account"><span>◇</span> Cuenta y privacidad</button>
-        <button class="drawer-link" data-panel="jobs"><span>◉</span> Trabajos</button>
-        <button class="drawer-link" data-panel="professional"><span>◇</span> Centro profesional</button>
-        <button class="drawer-link" data-panel="agent"><span>✦</span> Agente de trabajo</button>
-        <button class="drawer-link" data-panel="memory"><span>◈</span> Memoria</button>
-        <button class="drawer-link" data-panel="reminders"><span>◷</span> Recordatorios</button>
-        <button class="drawer-link" data-panel="search"><span>⌕</span> Buscar conocimiento</button>
-        <button class="drawer-link" data-panel="export"><span>⇩</span> Exportar conversación</button>
-        <button class="drawer-link" data-panel="providers"><span>◫</span> Proveedores IA</button>
-        <button class="drawer-link" data-panel="resilience"><span>⟲</span> Resiliencia y rutas</button>
-        <button class="drawer-link" data-panel="performance"><span>⌁</span> Rendimiento</button>
-        <button class="drawer-link" id="focusModeBtn" type="button"><span>◌</span><span class="focus-mode-label">Modo enfoque</span></button>
-      </div>
-    </nav>
-  </aside>
+  <dialog class="modal" id="connectionModal">
+    <form method="dialog" class="modal-shell">
+      <button class="modal-close" value="cancel" aria-label="Cerrar">×</button>
+      <div class="connection-illustration"><span></span><i></i></div>
+      <p class="eyebrow">CONEXIÓN</p>
+      <h2>Conecta JARVIS con su núcleo</h2>
+      <p id="connectionExplanation">Comprueba la dirección del backend y vuelve a intentarlo.</p>
+      <div class="field"><label for="apiBaseInput">URL del backend</label><input id="apiBaseInput" placeholder="https://tu-servicio.onrender.com" /></div>
+      <div class="button-row"><button type="button" class="soft-btn" id="resetConnection">Usar dirección original</button><button type="button" class="primary-btn" id="saveConnection">Guardar y probar</button></div>
+      <div class="diagnostic-result" id="connectionResult"></div>
+    </form>
+  </dialog>
 
-  <section class="sheet" id="sheet" aria-modal="true" role="dialog" aria-labelledby="sheetTitle">
-    <div class="sheet-head">
-      <div class="sheet-title" id="sheetTitle">Herramientas</div>
-      <button class="icon-btn" id="closeSheetBtn" aria-label="Cerrar"><svg viewBox="0 0 24 24"><path d="m18.3 5.7-1.4-1.4L12 9.2 7.1 4.3 5.7 5.7l4.9 4.9-4.9 4.9 1.4 1.4 4.9-4.9 4.9 4.9 1.4-1.4-4.9-4.9z"/></svg></button>
-    </div>
-    <div class="sheet-body" id="sheetBody"></div>
-  </section>
-
-  <section class="command-palette" id="commandPalette" role="dialog" aria-modal="true" aria-labelledby="commandTitle">
-    <div class="command-box">
-      <div class="command-input-wrap">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 3a6.5 6.5 0 1 0 3.98 11.64L19.85 21 21 19.85l-6.36-6.37A6.5 6.5 0 0 0 9.5 3zm0 2a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9z"/></svg>
-        <input id="commandInput" autocomplete="off" placeholder="Busca comandos, proyectos o conversaciones..." />
-        <kbd>Esc</kbd>
-      </div>
-      <div class="command-results" id="commandResults"></div>
-      <div class="command-foot"><span id="commandTitle">Centro de comandos</span><span>↑↓ navegar · Enter ejecutar</span></div>
-    </div>
-  </section>
-
-  <nav class="mobile-dock" id="mobileDock" aria-label="Navegación móvil">
-    <button type="button" id="mobileMenuBtn" aria-label="Abrir conversaciones"><svg viewBox="0 0 24 24"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/></svg><span>Chats</span></button>
-    <button type="button" id="mobileToolsBtn" aria-label="Abrir herramientas"><svg viewBox="0 0 24 24"><path d="M7 2h10a2 2 0 0 1 2 2v16H5V4a2 2 0 0 1 2-2Zm0 2v14h10V4H7Zm2 3h6v2H9Zm0 4h6v2H9Z"/></svg><span>Herramientas</span></button>
-    <button type="button" class="mobile-dock-primary" id="mobileNewChatBtn" aria-label="Nueva conversación"><svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></svg><span>Nuevo</span></button>
-    <button type="button" id="mobileFocusBtn" aria-label="Alternar modo enfoque"><svg viewBox="0 0 24 24"><path d="M4 9V4h5v2H6v3H4Zm11-5h5v5h-2V6h-3V4ZM6 15v3h3v2H4v-5h2Zm12 0h2v5h-5v-2h3v-3ZM9 9h6v6H9V9Z"/></svg><span>Enfoque</span></button>
-  </nav>
-
-  <div class="offline-banner" id="offlineBanner" role="status">Modo local: la interfaz sigue disponible, pero el núcleo de Render no tiene conexión.</div>
   <div class="toast" id="toast" role="status"></div>
 </body>
 </html>
