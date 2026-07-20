@@ -90,9 +90,9 @@
     mode: 'jarvis_nexus_mode',
     projects: 'jarvis_nexus_projects_v11',
     activeProject: 'jarvis_nexus_active_project_v11',
-    moreToolsOpen: 'jarvis_clean_more_tools_v30',
-    focusMode: 'jarvis_focus_mode_v30',
-    chatFilter: 'jarvis_chat_filter_v30'
+    moreToolsOpen: 'jarvis_clean_more_tools_v38',
+    focusMode: 'jarvis_focus_mode_v38',
+    chatFilter: 'jarvis_chat_filter_v38'
   };
 
   const MODES = [
@@ -156,7 +156,7 @@
   }
 
   function init() {
-    document.title = window.JARVIS_CONFIG?.APP_NAME || 'J.A.R.V.I.S. — Reliable Intelligence v30';
+    document.title = window.JARVIS_CONFIG?.APP_NAME || 'J.A.R.V.I.S. — Autonomous Professional Intelligence v38';
     ensureProjects();
     migrateChatsToProjects();
     if (!state.activeChatId || !state.chats[state.activeChatId] || currentChat()?.projectId !== state.activeProjectId) {
@@ -1095,7 +1095,7 @@ Revisa que Render esté en estado **Live**, que \`static/config.js\` apunte a la
     const avatarWrap = document.createElement('div');
     avatarWrap.className = 'assistant-avatar';
     const avatar = document.createElement('img');
-    const reactorRef = document.querySelector('.brand-reactor')?.getAttribute('src') || './static/jarvis-reactor-v30.svg';
+    const reactorRef = document.querySelector('.brand-reactor')?.getAttribute('src') || './static/jarvis-reactor-v38.svg';
     avatar.src = resolveAssetUrl(reactorRef);
     avatar.alt = 'JARVIS';
     avatarWrap.appendChild(avatar);
@@ -1313,6 +1313,7 @@ Revisa que Render esté en estado **Live**, que \`static/config.js\` apunte a la
       { id:'new-project', icon:'◆', title:'Nuevo proyecto', sub:'Crear un espacio de trabajo independiente', run:createProjectFlow },
       { id:'projects', icon:'◇', title:'Administrar proyectos', sub:'Cambiar, crear o eliminar proyectos', run:() => openPanel('projects') },
       { id:'library', icon:'▣', title:'Abrir biblioteca', sub:'Documentos del proyecto activo', run:() => openPanel('library') },
+      { id:'autonomy', icon:'✦', title:'Núcleo autónomo', sub:'Workflows, evidencia, aprobaciones y automatizaciones', run:() => openPanel('autonomy') },
       { id:'professional', icon:'✦', title:'Centro profesional', sub:'Equipo especializado, hitos y control de calidad', run:() => openPanel('professional') },
       { id:'agent', icon:'◇', title:'Agente de trabajo', sub:'Planificación y ejecución básica por etapas', run:() => openPanel('agent') },
       { id:'memory', icon:'◈', title:'Abrir memoria', sub:'Recuerdos y preferencias del proyecto', run:() => openPanel('memory') },
@@ -1443,6 +1444,7 @@ Revisa que Render esté en estado **Live**, que \`static/config.js\` apunte a la
     els.sheetBody.innerHTML = '<div class="empty-note">Cargando...</div>';
     try {
       if (panel === 'overview') await renderOverview();
+      else if (panel === 'autonomy') await renderAutonomy();
       else if (panel === 'professional') await renderProfessionalCenter();
       else if (panel === 'agent') await renderAgentCenter();
       else if (panel === 'projects') await renderProjects();
@@ -1462,7 +1464,7 @@ Revisa que Render esté en estado **Live**, que \`static/config.js\` apunte a la
   }
 
   function panelTitle(panel) {
-    return ({ overview: 'Centro JARVIS', professional: 'Centro profesional', agent: 'Agente de trabajo', projects: 'Proyectos', library: 'Biblioteca', memory: 'Memoria', reminders: 'Recordatorios', jobs: 'Trabajos autónomos', search: 'Buscar conocimiento', export: 'Exportar conversación', providers: 'Proveedores IA', resilience: 'Resiliencia y rutas', performance: 'Rendimiento y estabilidad', system: 'Estado y ajustes' })[panel] || 'JARVIS';
+    return ({ overview: 'Centro JARVIS', autonomy: 'Núcleo autónomo v38', professional: 'Centro profesional', agent: 'Agente de trabajo', projects: 'Proyectos', library: 'Biblioteca', memory: 'Memoria', reminders: 'Recordatorios', jobs: 'Trabajos autónomos', search: 'Buscar conocimiento', export: 'Exportar conversación', providers: 'Proveedores IA', resilience: 'Resiliencia y rutas', performance: 'Rendimiento y estabilidad', system: 'Estado y ajustes' })[panel] || 'JARVIS';
   }
 
   async function renderOverview() {
@@ -1470,14 +1472,108 @@ Revisa que Render esté en estado **Live**, que \`static/config.js\` apunte a la
     const c = data.counts || {};
     els.sheetBody.innerHTML = `
       <div class="panel-grid">
-        ${panelCard('Centro profesional', 'Equipo especializado y misiones verificables', 'professional')}
+        ${panelCard('Núcleo autónomo', 'Workflows reales, evidencia y aprobaciones', 'autonomy')}
         ${panelCard('Proyecto activo', escapeHtml(currentProject()?.name || 'General'), 'projects')}
         ${panelCard('Biblioteca', `${c.documents || 0} documentos`, 'library')}
         ${panelCard('Trabajos', `${c.jobs || 0} registrados`, 'jobs')}
       </div>
       <div style="height:14px"></div>
-      <div class="panel-card"><h3>Estado del núcleo</h3><p>Versión ${escapeHtml(data.version || '30.0.0')} · ${escapeHtml(data.status || 'operativo')} · ${Number(data.usage_24h?.total_tokens || 0).toLocaleString()} tokens en 24 horas.</p></div>`;
+      <div class="panel-card"><h3>Estado del núcleo</h3><p>Versión ${escapeHtml(data.version || '38.0.0')} · ${escapeHtml(data.status || 'operativo')} · ${Number(data.usage_24h?.total_tokens || 0).toLocaleString()} tokens en 24 horas.</p></div>`;
     $$('[data-open-panel]', els.sheetBody).forEach(btn => btn.addEventListener('click', () => openPanel(btn.dataset.openPanel)));
+  }
+
+  async function renderAutonomy() {
+    const sid = encodeURIComponent(backendConversationId());
+    const [statusData, workflowData, approvalData, automationData] = await Promise.all([
+      apiFetch(`/api/autonomy/status?session_id=${sid}`),
+      apiFetch(`/api/autonomy/workflows?session_id=${sid}&limit=20`),
+      apiFetch(`/api/autonomy/approvals?session_id=${sid}`),
+      apiFetch(`/api/automations?session_id=${sid}&limit=20`)
+    ]);
+    const counts = statusData.counts || {};
+    const semantic = statusData.semantic || {};
+    const workflows = workflowData.workflows || [];
+    const approvals = approvalData.approvals || [];
+    const automations = automationData.automations || [];
+    const active = ['queued','running','pausing','paused','awaiting_approval'].reduce((sum,key) => sum + Number(counts[key] || 0), 0);
+    const codeLab = statusData.code_lab || {};
+    const mcp = statusData.mcp || {};
+
+    const workflowCard = workflow => {
+      const steps = workflow.steps || [];
+      const completed = steps.filter(step => step.status === 'completed').length;
+      const progress = steps.length ? Math.round(completed / steps.length * 100) : 0;
+      const terminal = ['completed','failed','cancelled','rejected'].includes(workflow.status);
+      const canStart = ['planned','paused','failed'].includes(workflow.status);
+      return `<article class="autonomy-workflow-card">
+        <header><div><span class="autonomy-status ${escapeHtml(workflow.status)}">${escapeHtml(workflow.status)}</span><h3>${escapeHtml(workflow.objective || 'Workflow')}</h3><p>${escapeHtml(workflow.intent || 'general')} · ${steps.length} etapas · ${escapeHtml(workflow.project_name || 'General')}</p></div><strong>${progress}%</strong></header>
+        <div class="autonomy-progress"><i style="width:${progress}%"></i></div>
+        <div class="autonomy-step-rail">${steps.map(step => `<span class="${escapeHtml(step.status)}" title="${escapeHtml(step.label || step.name)}">${step.status === 'completed' ? '✓' : step.status === 'failed' ? '!' : '•'}</span>`).join('')}</div>
+        ${workflow.error ? `<p class="autonomy-error">${escapeHtml(workflow.error)}</p>` : ''}
+        ${workflow.result ? `<details class="autonomy-result"><summary>Ver resultado</summary><div>${renderMarkdown(workflow.result)}</div></details>` : ''}
+        <footer>
+          <button class="soft-btn" data-workflow-refresh="${escapeHtml(workflow.id)}">Actualizar</button>
+          ${canStart ? `<button class="primary-btn" data-workflow-action="start" data-workflow-id="${escapeHtml(workflow.id)}">${workflow.status === 'paused' ? 'Reanudar' : 'Iniciar'}</button>` : ''}
+          ${!terminal && workflow.status !== 'paused' ? `<button class="soft-btn" data-workflow-action="pause" data-workflow-id="${escapeHtml(workflow.id)}">Pausar</button>` : ''}
+          ${!terminal ? `<button class="danger-btn" data-workflow-action="cancel" data-workflow-id="${escapeHtml(workflow.id)}">Cancelar</button>` : ''}
+        </footer>
+      </article>`;
+    };
+
+    els.sheetBody.innerHTML = `
+      <section class="autonomy-hero">
+        <div class="autonomy-hero-copy"><span>JARVIS v38</span><h2>Objetivos que avanzan por etapas reales</h2><p>Planifica, recupera contexto, reúne evidencia, ejecuta, verifica y se detiene antes de cualquier acción sensible.</p></div>
+        <div class="autonomy-signal" aria-hidden="true"><i></i><i></i><i></i></div>
+      </section>
+      <section class="autonomy-create">
+        <textarea class="text-input" id="autonomyObjective" rows="3" placeholder="Describe un objetivo completo: qué necesitas, límites y resultado esperado..."></textarea>
+        <div class="autonomy-create-foot"><span>Proyecto: <strong>${escapeHtml(currentProject()?.name || 'General')}</strong></span><button class="primary-btn" id="createWorkflowBtn">Crear y ejecutar misión</button></div>
+      </section>
+      <div class="autonomy-metrics">
+        <div><strong>${active}</strong><span>activas</span></div><div><strong>${Number(counts.completed || 0)}</strong><span>completadas</span></div>
+        <div><strong>${Number(semantic.sources || 0)}</strong><span>fuentes en memoria</span></div><div><strong>${approvals.length}</strong><span>aprobaciones</span></div>
+      </div>
+      ${approvals.length ? `<section class="autonomy-section"><div class="section-panel-title">Requieren tu decisión</div><div class="approval-list">${approvals.map(item => `<article class="approval-card"><div><span>Riesgo ${escapeHtml(item.risk || 'alto')}</span><h3>${escapeHtml(item.action || 'Acción sensible')}</h3><p>${escapeHtml(item.summary || '')}</p></div><div><button class="soft-btn" data-approval="rejected" data-approval-id="${escapeHtml(item.id)}">Rechazar</button><button class="primary-btn" data-approval="approved" data-approval-id="${escapeHtml(item.id)}">Aprobar</button></div></article>`).join('')}</div></section>` : ''}
+      <section class="autonomy-section"><div class="section-panel-title row-title"><span>Misiones recientes</span><button class="soft-btn" id="refreshAutonomyBtn">Actualizar</button></div><div class="autonomy-workflow-list">${workflows.length ? workflows.map(workflowCard).join('') : '<div class="empty-note">Todavía no hay misiones autónomas. Crea la primera arriba.</div>'}</div></section>
+      <details class="autonomy-secondary"><summary>Automatizaciones e integraciones</summary>
+        <div class="autonomy-integration-grid"><div><strong>${automations.length}</strong><span>automatizaciones</span></div><div><strong>${mcp.configured ? 'Activo' : 'Opcional'}</strong><span>MCP</span></div><div><strong>${codeLab.available ? 'Aislado' : 'Opcional'}</strong><span>laboratorio de código</span></div></div>
+        <div class="automation-form"><input class="text-input" id="automationTitle" placeholder="Nombre de automatización"><textarea class="text-input" id="automationPrompt" rows="2" placeholder="Trabajo que JARVIS debe realizar"></textarea><div class="form-row"><select class="text-input" id="automationType"><option value="once">Una vez</option><option value="interval">Cada intervalo</option></select><input class="text-input" id="automationValue" placeholder="ISO 8601 o segundos"><button class="soft-btn" id="createAutomationBtn">Programar</button></div></div>
+        <div class="automation-list">${automations.map(item => `<div class="automation-row"><div><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.schedule_type)} · ${escapeHtml(item.status)}</small></div><span>${new Date(Number(item.next_run_at || 0) * 1000).toLocaleString()}</span></div>`).join('') || '<div class="empty-note">No hay automatizaciones.</div>'}</div>
+      </details>`;
+
+    $('#createWorkflowBtn', els.sheetBody)?.addEventListener('click', async () => {
+      const objective = $('#autonomyObjective', els.sheetBody)?.value.trim();
+      if (!objective) return toast('Escribe primero el objetivo.');
+      const button = $('#createWorkflowBtn', els.sheetBody);
+      button.disabled = true; button.textContent = 'Creando workflow...';
+      try {
+        await apiFetch('/api/autonomy/workflows', { method:'POST', body:JSON.stringify({ session_id:backendConversationId(), objective, mode:state.mode, project_name:currentProject()?.name || 'General', start:true }) });
+        toast('Misión autónoma iniciada');
+        renderAutonomy();
+      } catch (error) { toast(error.message || 'No se pudo crear la misión.'); button.disabled = false; button.textContent = 'Crear y ejecutar misión'; }
+    });
+    $('#refreshAutonomyBtn', els.sheetBody)?.addEventListener('click', renderAutonomy);
+    $$('[data-workflow-refresh]', els.sheetBody).forEach(button => button.addEventListener('click', renderAutonomy));
+    $$('[data-workflow-action]', els.sheetBody).forEach(button => button.addEventListener('click', async () => {
+      button.disabled = true;
+      await apiFetch(`/api/autonomy/workflows/${encodeURIComponent(button.dataset.workflowId)}/${button.dataset.workflowAction}?session_id=${sid}`, { method:'POST' }).catch(error => toast(error.message));
+      setTimeout(renderAutonomy, 250);
+    }));
+    $$('[data-approval]', els.sheetBody).forEach(button => button.addEventListener('click', async () => {
+      const approved = button.dataset.approval === 'approved';
+      const confirmed = !approved || window.confirm('¿Autoriza explícitamente esta acción sensible? JARVIS registrará la decisión antes de continuar.');
+      if (!confirmed) return;
+      await apiFetch(`/api/autonomy/approvals/${encodeURIComponent(button.dataset.approvalId)}`, { method:'POST', body:JSON.stringify({ session_id:backendConversationId(), decision:button.dataset.approval, note:'Decisión tomada desde la interfaz v38' }) }).catch(error => toast(error.message));
+      renderAutonomy();
+    }));
+    $('#createAutomationBtn', els.sheetBody)?.addEventListener('click', async () => {
+      const title = $('#automationTitle', els.sheetBody)?.value.trim();
+      const prompt = $('#automationPrompt', els.sheetBody)?.value.trim();
+      const schedule_type = $('#automationType', els.sheetBody)?.value || 'once';
+      const schedule_value = $('#automationValue', els.sheetBody)?.value.trim();
+      if (!title || !prompt || !schedule_value) return toast('Completa la automatización.');
+      await apiFetch('/api/automations', { method:'POST', body:JSON.stringify({ session_id:backendConversationId(), title, prompt, schedule_type, schedule_value }) }).then(() => { toast('Automatización guardada'); renderAutonomy(); }).catch(error => toast(error.message));
+    });
   }
 
   function panelCard(title, text, panel) {
@@ -1549,7 +1645,7 @@ Revisa que Render esté en estado **Live**, que \`static/config.js\` apunte a la
         <div class="professional-hero-glow" aria-hidden="true"></div>
         <div class="professional-hero-mark">✦</div>
         <div class="professional-hero-copy">
-          <span class="professional-kicker">Reliable Intelligence v30</span>
+          <span class="professional-kicker">Autonomous Professional Intelligence v38</span>
           <h3>Convierta objetivos en misiones verificables</h3>
           <p>JARVIS forma un equipo de especialistas, define hitos, utiliza varios proveedores y audita el resultado antes de entregarlo.</p>
         </div>

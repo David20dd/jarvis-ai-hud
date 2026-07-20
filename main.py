@@ -34,7 +34,21 @@ except ImportError:  # El núcleo local sigue funcionando sin el SDK opcional.
     Groq = None  # type: ignore
 from pydantic import BaseModel, Field
 
-from jarvis_core import RuntimeSupport, ToolRegistry, compact_messages, disk_status
+from jarvis_core import (
+    AutomationStore,
+    AutonomyPlanner,
+    AutonomyStore,
+    CodeLab,
+    EvaluationStore,
+    MCPManager,
+    ResearchCollector,
+    ResultVerifier,
+    RuntimeSupport,
+    SemanticIndex,
+    ToolRegistry,
+    compact_messages,
+    disk_status,
+)
 from jarvis_core.professional import (
     build_professional_execution_prompt,
     build_professional_plan,
@@ -71,6 +85,9 @@ logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
 )
 logger = logging.getLogger("jarvis")
+
+APP_VERSION = "38.0.0"
+APP_EDITION = "Autonomous Professional Intelligence"
 
 DB_FILE = os.getenv("JARVIS_DB_FILE", "jarvis_memory.db").strip() or "jarvis_memory.db"
 BASE_DIR = Path(__file__).resolve().parent
@@ -135,6 +152,9 @@ JOB_RETRY_BASE_SECONDS = max(1, min(int(os.getenv("JARVIS_JOB_RETRY_BASE_SECONDS
 METRICS_SAMPLES = max(50, min(int(os.getenv("JARVIS_METRICS_SAMPLES", "500")), 5000))
 TELEMETRY_SAMPLE_RATE = max(0.0, min(float(os.getenv("JARVIS_TELEMETRY_SAMPLE_RATE", "0.25")), 1.0))
 MAINTENANCE_INTERVAL_SECONDS = max(30, min(int(os.getenv("JARVIS_MAINTENANCE_INTERVAL_SECONDS", "300")), 3600))
+CODE_LAB_ENABLED = os.getenv("JARVIS_CODE_LAB_ENABLED", "false").strip().lower() not in {"0", "false", "no", "off"}
+CODE_LAB_TIMEOUT_SECONDS = max(2, min(int(os.getenv("JARVIS_CODE_LAB_TIMEOUT_SECONDS", "12")), 60))
+MCP_SERVERS_JSON = os.getenv("JARVIS_MCP_SERVERS_JSON", "").strip()
 
 runtime = RuntimeSupport(
     redis_url=REDIS_URL,
@@ -143,6 +163,15 @@ runtime = RuntimeSupport(
     circuit_recovery_seconds=CIRCUIT_RECOVERY_SECONDS,
     metrics_samples=METRICS_SAMPLES,
 )
+autonomy_store = AutonomyStore(DB_FILE)
+autonomy_planner = AutonomyPlanner()
+result_verifier = ResultVerifier()
+semantic_index = SemanticIndex(DB_FILE)
+research_collector = ResearchCollector()
+automation_store = AutomationStore(DB_FILE)
+evaluation_store = EvaluationStore(DB_FILE)
+code_lab = CodeLab(CODE_LAB_ENABLED, CODE_LAB_TIMEOUT_SECONDS)
+mcp_manager = MCPManager(MCP_SERVERS_JSON)
 
 
 def _provider_models(names: List[str], provider: str) -> List[ProviderModel]:
@@ -172,6 +201,7 @@ provider_gateway = MultiProviderGateway(
 JOB_EXECUTOR = ThreadPoolExecutor(max_workers=JOB_WORKERS, thread_name_prefix="jarvis-job")
 _job_submit_lock = threading.RLock()
 _job_futures: Dict[str, Any] = {}
+_workflow_futures: Dict[str, Any] = {}
 _maintenance_stop = threading.Event()
 _maintenance_thread: Optional[threading.Thread] = None
 
@@ -413,6 +443,10 @@ def init_db() -> None:
         for column, statement in migrations.items():
             if column not in job_columns:
                 conn.execute(statement)
+    autonomy_store.init_schema()
+    semantic_index.init_schema()
+    automation_store.init_schema()
+    evaluation_store.init_schema()
 
 
 def _maintenance_cycle() -> Dict[str, Any]:
@@ -443,8 +477,21 @@ def _maintenance_cycle() -> Dict[str, Any]:
     for row in stale:
         if _submit_job(row["id"]):
             recovered += 1
+    dispatched_automations = 0
+    for item in automation_store.due(limit=20):
+        try:
+            job_id = _create_job_record(
+                item["session_id"],
+                f"Automatización: {item['title']}",
+                item["prompt"],
+            )
+            automation_store.mark_dispatched(item["id"], job_id)
+            _submit_job(job_id)
+            dispatched_automations += 1
+        except Exception as exc:
+            automation_store.mark_error(item["id"], safe_error_text(exc))
     runtime.metrics.record("maintenance", (time.perf_counter() - started) * 1000, "success")
-    return {"cleaned": cleaned, "recovered_jobs": recovered}
+    return {"cleaned": cleaned, "recovered_jobs": recovered, "dispatched_automations": dispatched_automations}
 
 
 def _maintenance_loop() -> None:
@@ -477,22 +524,24 @@ async def lifespan(_: FastAPI):
     _ensure_job_executor()
     _start_maintenance()
     recovered = _recover_interrupted_jobs()
+    recovered_workflows = _recover_interrupted_workflows()
     logger.info(
-        "J.A.R.V.I.S. Reliable Intelligence v30 iniciado | public_mode=%s | redis=%s | jobs_recuperados=%s",
+        "J.A.R.V.I.S. v38 iniciado | public_mode=%s | redis=%s | jobs_recuperados=%s | workflows_recuperados=%s",
         PUBLIC_MODE,
         bool(REDIS_URL),
         recovered,
+        recovered_workflows,
     )
     yield
     _stop_maintenance()
     JOB_EXECUTOR.shutdown(wait=False, cancel_futures=True)
     provider_gateway.close()
-    logger.info("J.A.R.V.I.S. Reliable Intelligence v30 detenido")
+    logger.info("J.A.R.V.I.S. v38 detenido")
 
 
 app = FastAPI(
-    title="J.A.R.V.I.S. Reliable Intelligence v30",
-    version="30.0.0",
+    title=f"J.A.R.V.I.S. {APP_EDITION} v38",
+    version=APP_VERSION,
     lifespan=lifespan,
 )
 
@@ -561,7 +610,7 @@ async def request_observability(request: Request, call_next):
         elif response.status_code >= 400:
             status = "cancelled" if response.status_code == 499 else "error"
         response.headers["X-Request-ID"] = request_id
-        response.headers["X-JARVIS-Version"] = "30.0.0"
+        response.headers["X-JARVIS-Version"] = APP_VERSION
         if request.url.path.startswith("/api/"):
             response.headers.setdefault("Cache-Control", "no-store")
         return response
@@ -669,6 +718,69 @@ class ProviderRouteInput(BaseModel):
 class WhatsAppStatusInput(BaseModel):
     connected: bool = False
     qr_raw: Optional[str] = None
+
+
+class WorkflowInput(BaseModel):
+    session_id: str
+    objective: str = Field(min_length=1, max_length=30000)
+    mode: str = "auto"
+    project_name: str = "General"
+    start: bool = True
+
+
+class ApprovalDecisionInput(BaseModel):
+    session_id: str
+    decision: str = Field(pattern="^(approved|rejected)$")
+    note: str = Field(default="", max_length=2000)
+
+
+class SemanticSearchInput(BaseModel):
+    session_id: str
+    query: str = Field(min_length=1, max_length=12000)
+    project_name: str = ""
+    source_types: List[str] = Field(default_factory=list)
+    limit: int = Field(default=8, ge=1, le=30)
+
+
+class ResearchInput(BaseModel):
+    session_id: str
+    query: str = Field(min_length=1, max_length=12000)
+    max_sources: int = Field(default=12, ge=2, le=30)
+
+
+class AutomationInput(BaseModel):
+    session_id: str
+    title: str = Field(min_length=1, max_length=300)
+    prompt: str = Field(min_length=1, max_length=30000)
+    schedule_type: str = Field(default="once", pattern="^(once|interval)$")
+    schedule_value: str = Field(min_length=1, max_length=120)
+
+
+class AutomationStatusInput(BaseModel):
+    session_id: str
+    status: str = Field(pattern="^(active|paused|cancelled)$")
+
+
+class MCPCallInput(BaseModel):
+    session_id: str
+    server: str = Field(min_length=1, max_length=120)
+    tool: str = Field(min_length=1, max_length=120)
+    arguments: Dict[str, Any] = Field(default_factory=dict)
+    confirmed: bool = False
+
+
+class CodeLabInput(BaseModel):
+    session_id: str
+    language: str = Field(pattern="^(python|javascript)$")
+    code: str = Field(max_length=50000)
+    confirmed: bool = False
+
+
+class EvaluationInput(BaseModel):
+    session_id: str
+    target_type: str = Field(default="response", max_length=80)
+    target_id: str = Field(default="manual", max_length=160)
+    checks: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 # -----------------------------------------------------------------------------
@@ -1118,6 +1230,18 @@ def memory_save(
             )
 
     log_activity(sid, "memory", "Memoria guardada", content, "completed")
+    try:
+        semantic_index.index_source(
+            session_id=sid,
+            project_name="General",
+            source_type="memory",
+            source_id=memory_id,
+            title=f"Memoria: {category}",
+            content=content,
+            metadata={"category": category, "importance": importance},
+        )
+    except Exception:
+        logger.exception("No se pudo indexar semánticamente la memoria %s", memory_id)
     return {
         "id": memory_id,
         "category": category,
@@ -1168,6 +1292,8 @@ def memory_delete(session_id: str, memory_id: str) -> Dict[str, Any]:
             (memory_id, sid),
         )
     deleted = cursor.rowcount > 0
+    if deleted:
+        semantic_index.delete_source(sid, "memory", memory_id)
     log_activity(sid, "memory", "Memoria eliminada", memory_id, "completed" if deleted else "not_found")
     return {"deleted": deleted, "id": memory_id}
 
@@ -1613,6 +1739,27 @@ def document_search(session_id: str, query: str, limit: int = 5) -> Dict[str, An
     return {"query": query, "matches": [dict(row) for row in rows]}
 
 
+def semantic_search(
+    session_id: str,
+    query: str,
+    project_name: str = "",
+    source_types: Optional[List[str]] = None,
+    limit: int = 8,
+) -> Dict[str, Any]:
+    return semantic_index.search(
+        session_id=safe_session_id(session_id), query=query, project_name=project_name,
+        source_types=source_types, limit=limit,
+    )
+
+
+def deep_research_tool(session_id: str, query: str, max_sources: int = 12) -> Dict[str, Any]:
+    sid = safe_session_id(session_id)
+    return research_collector.collect(
+        query, lambda value, limit: web_search(sid, value, max_results=limit),
+        max_sources=max_sources,
+    )
+
+
 TOOL_FUNCTIONS: Dict[str, Callable[..., Any]] = {
     "web_search": web_search,
     "calculator": calculator,
@@ -1625,6 +1772,8 @@ TOOL_FUNCTIONS: Dict[str, Callable[..., Any]] = {
     "reminder_cancel": reminder_cancel,
     "current_datetime": current_datetime,
     "document_search": document_search,
+    "semantic_search": semantic_search,
+    "deep_research": deep_research_tool,
 }
 
 
@@ -1777,6 +1926,33 @@ TOOLS: List[Dict[str, Any]] = [
                     "query": {"type": "string", "description": "Puede estar vacío para obtener los documentos recientes"},
                     "limit": {"type": "integer", "minimum": 1, "maximum": 10},
                 },
+                ["query"],
+            ),
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "semantic_search",
+            "description": "Busca recuerdos y fragmentos de documentos por significado, incluso si la consulta no usa las mismas palabras.",
+            "parameters": object_schema(
+                {
+                    "query": {"type": "string"},
+                    "project_name": {"type": "string"},
+                    "source_types": {"type": "array", "items": {"type": "string", "enum": ["memory", "document"]}},
+                    "limit": {"type": "integer", "minimum": 1, "maximum": 20},
+                },
+                ["query"],
+            ),
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "deep_research",
+            "description": "Realiza investigación multifase y devuelve evidencia deduplicada con fuentes y puntuación de calidad.",
+            "parameters": object_schema(
+                {"query": {"type": "string"}, "max_sources": {"type": "integer", "minimum": 2, "maximum": 20}},
                 ["query"],
             ),
         },
@@ -3030,11 +3206,25 @@ def save_document(session_id: str, file_name: str, file_b64: str) -> Dict[str, A
         )
 
     log_activity(sid, "document", "Documento añadido", file_name, "completed")
+    semantic_status: Dict[str, Any] = {}
+    try:
+        semantic_status = semantic_index.index_source(
+            session_id=sid,
+            project_name="General",
+            source_type="document",
+            source_id=document_id,
+            title=file_name,
+            content=text[:1_500_000],
+            metadata={"file_type": extension},
+        )
+    except Exception:
+        logger.exception("No se pudo indexar semánticamente el documento %s", document_id)
     return {
         "id": document_id,
         "file_name": file_name,
         "file_type": extension,
         "characters": len(text),
+        "semantic_index": semantic_status,
     }
 
 
@@ -3172,7 +3362,7 @@ async def consultar_jarvis_stream(data: ChatInput, request: Request):
             "Probando alternativas y caché",
             "Verificando el resultado",
         ]
-        yield json.dumps({"type": "progress", "stage": states[0], "version": "30.0.0"}, ensure_ascii=False) + "\n"
+        yield json.dumps({"type": "progress", "stage": states[0], "version": APP_VERSION}, ensure_ascii=False) + "\n"
         task = asyncio.create_task(consultar_jarvis(data, request))
         index = 1
         while not task.done():
@@ -3434,6 +3624,26 @@ def _job_row(job_id: str) -> Optional[Dict[str, Any]]:
     return dict(row) if row else None
 
 
+def _create_job_record(session_id: str, title: str, prompt: str) -> str:
+    sid = safe_session_id(session_id)
+    prompt = (prompt or "").strip()
+    if not prompt:
+        raise ValueError("El trabajo necesita una instrucción.")
+    job_id = str(uuid.uuid4())
+    now = time.time()
+    with db_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO jobs(
+                id, session_id, title, prompt, status, progress, created_at, updated_at,
+                attempt, max_attempts, control, checkpoint, next_run_at
+            ) VALUES (?, ?, ?, ?, 'queued', 0, ?, ?, 0, ?, '', 'en cola', 0)
+            """,
+            (job_id, sid, (title or "Trabajo autónomo")[:300], prompt[:30000], now, now, JOB_MAX_ATTEMPTS),
+        )
+    return job_id
+
+
 def _job_control(job_id: str) -> str:
     row = _job_row(job_id)
     return str((row or {}).get("control", "") or "").strip().lower()
@@ -3611,6 +3821,201 @@ def execute_background_job(job_id: str, session_id: str, prompt: str) -> None:
             return
 
 
+def _workflow_control(workflow_id: str) -> str:
+    workflow = autonomy_store.get_workflow(workflow_id)
+    return str((workflow or {}).get("control", "") or "").lower()
+
+
+def _workflow_context(workflow: Dict[str, Any]) -> str:
+    blocks: List[str] = []
+    for step in workflow.get("steps", []):
+        output = step.get("output") or {}
+        if output:
+            blocks.append(f"## {step.get('label', step.get('name', 'Etapa'))}\n{json.dumps(output, ensure_ascii=False, default=str)}")
+    if workflow.get("evidence"):
+        blocks.append("## Evidencia\n" + json.dumps(workflow["evidence"], ensure_ascii=False, default=str))
+    return "\n\n".join(blocks)[-50000:]
+
+
+def _execute_workflow_step(workflow: Dict[str, Any], step: Dict[str, Any]) -> Dict[str, Any]:
+    sid = workflow["session_id"]
+    objective = workflow["objective"]
+    kind = step.get("kind")
+    name = step.get("name")
+    if kind == "approval":
+        if step.get("approval_status") == "approved":
+            return {
+                "approved": True,
+                "note": "La autorización quedó registrada. La acción externa solo se ejecuta mediante un conector explícitamente configurado.",
+            }
+        approval = autonomy_store.create_approval(workflow["id"], step)
+        autonomy_store.update_workflow(workflow["id"], status="awaiting_approval", control="approval")
+        raise PermissionError(f"approval:{approval['id']}")
+    if name == "understand":
+        return {
+            "objective": objective,
+            "intent": workflow["intent"],
+            "project_name": workflow["project_name"],
+            "success_criteria": workflow.get("plan", {}).get("success_criteria", []),
+        }
+    if step.get("tool_name") == "semantic_search":
+        data = step.get("input") or {}
+        result = semantic_index.search(
+            session_id=sid,
+            query=str(data.get("query") or objective),
+            project_name="" if workflow["project_name"] == "General" else workflow["project_name"],
+            source_types=data.get("source_types") or None,
+            limit=int(data.get("limit", 8)),
+        )
+        for match in result.get("matches", []):
+            autonomy_store.add_evidence(
+                workflow["id"], step["id"], source_type=match.get("source_type", "semantic"),
+                title=match.get("title", ""), excerpt=match.get("content", ""),
+                confidence=float(match.get("score", 0.5)), metadata={"source_id": match.get("source_id", "")},
+            )
+        return result
+    if step.get("tool_name") == "deep_research":
+        data = step.get("input") or {}
+        pack = research_collector.collect(
+            str(data.get("query") or objective),
+            lambda query, limit: web_search(sid, query, max_results=limit),
+            max_sources=int(data.get("max_sources", 12)),
+        )
+        for item in pack.get("evidence", []):
+            autonomy_store.add_evidence(
+                workflow["id"], step["id"], source_type="web", title=item.get("title", ""),
+                url=item.get("url", ""), excerpt=item.get("snippet", ""),
+                confidence=float(item.get("quality", 0.5)), metadata={"query": item.get("query", "")},
+            )
+        return pack
+    if kind == "model":
+        latest = autonomy_store.get_workflow(workflow["id"]) or workflow
+        context = _workflow_context(latest)
+        prompt = (
+            f"OBJETIVO AUTÓNOMO: {objective}\n\n"
+            f"ROL DE ESTA ETAPA: {step.get('role', 'specialist')}\n"
+            f"TAREA: {step.get('description', '')}\n\n"
+            f"CONTEXTO Y EVIDENCIA DE ETAPAS ANTERIORES:\n{context or 'Sin contexto adicional.'}\n\n"
+            "Produce un resultado útil, verificable y final. No inventes fuentes ni acciones. Señala límites reales."
+        )
+        result = resilient_resolve(
+            sid, prompt, project_name=workflow["project_name"], mode=workflow["mode"],
+            intent_info={"intent": workflow["intent"]},
+        )
+        return {
+            "reply": str(result.get("reply", "")),
+            "model": result.get("model"),
+            "mode": result.get("mode"),
+            "verified": result.get("verified"),
+            "tools": result.get("tools", []),
+        }
+    if kind == "verify":
+        latest = autonomy_store.get_workflow(workflow["id"]) or workflow
+        replies = [
+            str((item.get("output") or {}).get("reply", ""))
+            for item in latest.get("steps", []) if (item.get("output") or {}).get("reply")
+        ]
+        result_text = replies[-1] if replies else _workflow_context(latest)
+        completed = sum(1 for item in latest.get("steps", []) if item.get("status") == "completed")
+        verification = result_verifier.verify(
+            objective, result_text, intent=workflow["intent"], evidence_count=len(latest.get("evidence", [])),
+            completed_steps=completed, total_steps=len(latest.get("steps", [])),
+        )
+        verification["result"] = result_text
+        return verification
+    return {"status": "completed", "note": step.get("description", "Etapa local completada.")}
+
+
+def execute_autonomy_workflow(workflow_id: str) -> None:
+    workflow = autonomy_store.get_workflow(workflow_id)
+    if not workflow:
+        return
+    autonomy_store.update_workflow(workflow_id, status="running", control="", error="")
+    try:
+        while True:
+            workflow = autonomy_store.get_workflow(workflow_id)
+            if not workflow:
+                return
+            control = str(workflow.get("control", "") or "").lower()
+            if control == "cancel":
+                autonomy_store.update_workflow(workflow_id, status="cancelled", completed_at=time.time(), control="")
+                return
+            if control == "pause":
+                autonomy_store.update_workflow(workflow_id, status="paused")
+                return
+            step = autonomy_store.pending_step(workflow_id)
+            if not step:
+                refreshed = autonomy_store.get_workflow(workflow_id) or workflow
+                replies = [str((item.get("output") or {}).get("reply", "")) for item in refreshed.get("steps", []) if (item.get("output") or {}).get("reply")]
+                verification_outputs = [item.get("output") or {} for item in refreshed.get("steps", []) if item.get("kind") == "verify"]
+                verification = verification_outputs[-1] if verification_outputs else {}
+                result = replies[-1] if replies else "Workflow completado. Revisa los resultados de cada etapa."
+                autonomy_store.update_workflow(
+                    workflow_id, status="completed", result=result[:250000], verification=verification,
+                    current_step=len(refreshed.get("steps", [])), completed_at=time.time(), control="",
+                )
+                evaluation_store.record(
+                    refreshed["session_id"], "workflow", workflow_id,
+                    [
+                        {"name": "verification", "score": float(verification.get("score", 0.7)), "weight": 2},
+                        {"name": "completion", "score": 1.0, "weight": 1},
+                    ],
+                )
+                log_activity(refreshed["session_id"], "autonomy", "Workflow completado", workflow_id, "completed")
+                return
+            autonomy_store.update_workflow(workflow_id, status="running", current_step=int(step["step_index"]))
+            autonomy_store.update_step(step["id"], status="running", started_at=time.time(), attempt=int(step.get("attempt", 0)) + 1, error="")
+            try:
+                output = _execute_workflow_step(workflow, step)
+                autonomy_store.update_step(step["id"], status="completed", output=output, completed_at=time.time())
+            except PermissionError as exc:
+                if str(exc).startswith("approval:"):
+                    autonomy_store.update_step(step["id"], status="pending")
+                    return
+                raise
+            except Exception as exc:
+                detail = safe_error_text(exc)
+                autonomy_store.update_step(step["id"], status="failed", error=detail, completed_at=time.time())
+                autonomy_store.update_workflow(workflow_id, status="failed", error=detail, completed_at=time.time())
+                log_activity(workflow["session_id"], "autonomy", "Workflow falló", detail, "failed")
+                return
+    except Exception as exc:
+        detail = safe_error_text(exc)
+        autonomy_store.update_workflow(workflow_id, status="failed", error=detail, completed_at=time.time())
+        logger.exception("Falló workflow %s", workflow_id)
+
+
+def _submit_workflow(workflow_id: str) -> bool:
+    workflow = autonomy_store.get_workflow(workflow_id)
+    if not workflow:
+        return False
+    with _job_submit_lock:
+        future = _workflow_futures.get(workflow_id)
+        if future is not None and not future.done():
+            return False
+        _workflow_futures[workflow_id] = _ensure_job_executor().submit(execute_autonomy_workflow, workflow_id)
+        return True
+
+
+def _recover_interrupted_workflows() -> int:
+    try:
+        recovered = 0
+        with db_connection() as conn:
+            rows = conn.execute(
+                "SELECT id FROM autonomy_workflows WHERE status IN ('queued','running') ORDER BY created_at LIMIT 100"
+            ).fetchall()
+            conn.execute(
+                "UPDATE autonomy_workflows SET status = 'queued', control = '', updated_at = ? WHERE status IN ('queued','running')",
+                (time.time(),),
+            )
+        for row in rows:
+            recovered += int(_submit_workflow(row["id"]))
+        return recovered
+    except Exception:
+        logger.exception("No se pudieron recuperar workflows autónomos")
+        return 0
+
+
 
 @app.post("/api/whatsapp/update_qr")
 def update_whatsapp_status(data: WhatsAppStatusInput, request: Request):
@@ -3669,14 +4074,14 @@ def agent_status(session_id: str):
         ).fetchall()
     counts = {row["status"]: row["total"] for row in rows}
     active = sum(counts.get(status, 0) for status in ("queued", "running", "retrying", "paused", "cancelling"))
-    return {"status": "ok", "active": active, "counts": counts, "version": "30.0.0"}
+    return {"status": "ok", "active": active, "counts": counts, "version": APP_VERSION}
 
 
 @app.get("/api/professional/profiles")
 def professional_profiles():
     return {
         "status": "ok",
-        "version": "30.0.0",
+        "version": APP_VERSION,
         "profiles": role_catalog_payload(),
         "principles": [
             "Planificación antes de la ejecución",
@@ -3753,7 +4158,7 @@ def professional_status(session_id: str):
     active = sum(counts.get(status, 0) for status in ("queued", "running", "retrying", "paused", "cancelling"))
     return {
         "status": "ok",
-        "version": "30.0.0",
+        "version": APP_VERSION,
         "active": active,
         "counts": counts,
         "profiles": len(role_catalog_payload()),
@@ -3768,19 +4173,7 @@ def create_job(data: JobInput, request: Request):
     prompt = data.prompt.strip()
     if not prompt:
         raise HTTPException(status_code=400, detail="El trabajo necesita una instrucción.")
-    job_id = str(uuid.uuid4())
-    now = time.time()
-    with db_connection() as conn:
-        conn.execute(
-            """
-            INSERT INTO jobs(
-                id, session_id, title, prompt, status, progress, created_at, updated_at,
-                attempt, max_attempts, control, checkpoint, next_run_at
-            )
-            VALUES (?, ?, ?, ?, 'queued', 0, ?, ?, 0, ?, '', 'en cola', 0)
-            """,
-            (job_id, sid, title, prompt[:30000], now, now, JOB_MAX_ATTEMPTS),
-        )
+    job_id = _create_job_record(sid, title, prompt)
     _submit_job(job_id)
     log_activity(sid, "job", "Trabajo autónomo creado", title, "queued")
     return {"status": "queued", "job_id": job_id, "title": title, "max_attempts": JOB_MAX_ATTEMPTS}
@@ -3905,7 +4298,10 @@ def delete_document(document_id: str, session_id: str, request: Request):
     sid = safe_session_id(session_id)
     with db_connection() as conn:
         cursor = conn.execute("DELETE FROM documents WHERE id = ? AND session_id = ?", (document_id, sid))
-    return {"deleted": cursor.rowcount > 0}
+    deleted = cursor.rowcount > 0
+    if deleted:
+        semantic_index.delete_source(sid, "document", document_id)
+    return {"deleted": deleted}
 
 
 @app.post("/api/session/reset")
@@ -3945,6 +4341,241 @@ def knowledge_search(session_id: str, query: str, limit: int = 8):
     }
 
 
+@app.post("/api/semantic/search")
+def semantic_search_endpoint(data: SemanticSearchInput, request: Request):
+    enforce_request_guard(request)
+    return semantic_index.search(
+        session_id=safe_session_id(data.session_id), query=data.query,
+        project_name=data.project_name.strip(), source_types=data.source_types or None, limit=data.limit,
+    )
+
+
+@app.post("/api/semantic/reindex")
+def semantic_reindex(session_id: str, request: Request):
+    enforce_request_guard(request)
+    sid = safe_session_id(session_id)
+    indexed = 0
+    sources = 0
+    with db_connection() as conn:
+        memories = conn.execute("SELECT * FROM memories WHERE session_id = ?", (sid,)).fetchall()
+        documents = conn.execute("SELECT * FROM documents WHERE session_id = ?", (sid,)).fetchall()
+    for row in memories:
+        result = semantic_index.index_source(
+            session_id=sid, project_name="General", source_type="memory", source_id=row["id"],
+            title=f"Memoria: {row['category']}", content=row["content"],
+            metadata={"category": row["category"], "importance": row["importance"]},
+        )
+        sources += 1
+        indexed += int(result.get("chunks", 0))
+    for row in documents:
+        result = semantic_index.index_source(
+            session_id=sid, project_name="General", source_type="document", source_id=row["id"],
+            title=row["file_name"], content=row["extracted_text"], metadata={"file_type": row["file_type"]},
+        )
+        sources += 1
+        indexed += int(result.get("chunks", 0))
+    return {"status": "completed", "sources": sources, "chunks": indexed}
+
+
+@app.get("/api/semantic/status")
+def semantic_status(session_id: str = ""):
+    return semantic_index.status(safe_session_id(session_id) if session_id else "")
+
+
+@app.post("/api/research/deep")
+def deep_research(data: ResearchInput, request: Request):
+    enforce_request_guard(request)
+    sid = safe_session_id(data.session_id)
+    return research_collector.collect(
+        data.query, lambda query, limit: web_search(sid, query, max_results=limit),
+        max_sources=data.max_sources,
+    )
+
+
+@app.post("/api/autonomy/workflows")
+def create_autonomy_workflow(data: WorkflowInput, request: Request):
+    enforce_request_guard(request)
+    sid = safe_session_id(data.session_id)
+    intent = classify_intent(data.objective).get("intent", "general")
+    plan = autonomy_planner.build(
+        data.objective, intent=intent, mode=data.mode, project_name=data.project_name,
+    )
+    workflow = autonomy_store.create_workflow(sid, plan)
+    if data.start:
+        autonomy_store.update_workflow(workflow["id"], status="queued")
+        _submit_workflow(workflow["id"])
+        workflow = autonomy_store.get_workflow(workflow["id"], sid) or workflow
+    log_activity(sid, "autonomy", "Workflow autónomo creado", workflow["id"], workflow["status"])
+    return {"workflow": workflow}
+
+
+@app.get("/api/autonomy/workflows")
+def list_autonomy_workflows(session_id: str, limit: int = 30):
+    return {"workflows": autonomy_store.list_workflows(safe_session_id(session_id), limit)}
+
+
+@app.get("/api/autonomy/workflows/{workflow_id}")
+def get_autonomy_workflow(workflow_id: str, session_id: str):
+    workflow = autonomy_store.get_workflow(workflow_id, safe_session_id(session_id))
+    if not workflow:
+        raise HTTPException(status_code=404, detail="Workflow no encontrado")
+    return {"workflow": workflow}
+
+
+@app.post("/api/autonomy/workflows/{workflow_id}/start")
+def start_autonomy_workflow(workflow_id: str, session_id: str, request: Request):
+    enforce_request_guard(request)
+    workflow = autonomy_store.get_workflow(workflow_id, safe_session_id(session_id))
+    if not workflow:
+        raise HTTPException(status_code=404, detail="Workflow no encontrado")
+    if workflow["status"] in {"completed", "cancelled", "rejected"}:
+        return {"status": workflow["status"], "started": False}
+    if workflow["status"] == "failed":
+        autonomy_store.prepare_retry(workflow_id)
+    autonomy_store.update_workflow(workflow_id, status="queued", control="")
+    return {"status": "queued", "started": _submit_workflow(workflow_id)}
+
+
+@app.post("/api/autonomy/workflows/{workflow_id}/pause")
+def pause_autonomy_workflow(workflow_id: str, session_id: str, request: Request):
+    enforce_request_guard(request)
+    workflow = autonomy_store.get_workflow(workflow_id, safe_session_id(session_id))
+    if not workflow:
+        raise HTTPException(status_code=404, detail="Workflow no encontrado")
+    if workflow["status"] in {"completed", "failed", "cancelled", "rejected", "paused"}:
+        return {"status": workflow["status"], "changed": False}
+    future = _workflow_futures.get(workflow_id)
+    if future is None or future.done():
+        autonomy_store.update_workflow(workflow_id, control="", status="paused")
+        return {"status": "paused", "changed": True}
+    autonomy_store.update_workflow(workflow_id, control="pause", status="pausing")
+    return {"status": "pausing", "changed": True}
+
+
+@app.post("/api/autonomy/workflows/{workflow_id}/cancel")
+def cancel_autonomy_workflow(workflow_id: str, session_id: str, request: Request):
+    enforce_request_guard(request)
+    workflow = autonomy_store.get_workflow(workflow_id, safe_session_id(session_id))
+    if not workflow:
+        raise HTTPException(status_code=404, detail="Workflow no encontrado")
+    if workflow["status"] in {"completed", "failed", "cancelled", "rejected"}:
+        return {"status": workflow["status"], "changed": False}
+    future = _workflow_futures.get(workflow_id)
+    if future is None or future.done():
+        autonomy_store.update_workflow(
+            workflow_id, control="", status="cancelled", completed_at=time.time()
+        )
+        return {"status": "cancelled", "changed": True}
+    autonomy_store.update_workflow(workflow_id, control="cancel", status="cancelling")
+    return {"status": "cancelling", "changed": True}
+
+
+@app.get("/api/autonomy/approvals")
+def list_autonomy_approvals(session_id: str):
+    return {"approvals": autonomy_store.pending_approvals(safe_session_id(session_id))}
+
+
+@app.post("/api/autonomy/approvals/{approval_id}")
+def decide_autonomy_approval(approval_id: str, data: ApprovalDecisionInput, request: Request):
+    enforce_request_guard(request)
+    sid = safe_session_id(data.session_id)
+    pending = {item["id"]: item for item in autonomy_store.pending_approvals(sid, 100)}
+    if approval_id not in pending:
+        raise HTTPException(status_code=404, detail="Aprobación pendiente no encontrada")
+    decision = autonomy_store.decide_approval(approval_id, data.decision, data.note)
+    if data.decision == "approved":
+        _submit_workflow(decision["workflow_id"])
+    return {"approval": decision}
+
+
+@app.get("/api/autonomy/status")
+def autonomy_status(session_id: str = ""):
+    sid = safe_session_id(session_id) if session_id else ""
+    return {
+        "status": "ok", "version": APP_VERSION, "counts": autonomy_store.counts(sid),
+        "semantic": semantic_index.status(sid), "automations": automation_store.counts(),
+        "mcp": mcp_manager.status(False), "code_lab": code_lab.status(),
+    }
+
+
+@app.post("/api/automations")
+def create_automation(data: AutomationInput, request: Request):
+    enforce_request_guard(request)
+    item = automation_store.create(
+        safe_session_id(data.session_id), data.title, data.prompt, data.schedule_type, data.schedule_value,
+    )
+    return {"automation": item}
+
+
+@app.get("/api/automations")
+def list_automations(session_id: str, limit: int = 50):
+    return {"automations": automation_store.list(safe_session_id(session_id), limit)}
+
+
+@app.post("/api/automations/{automation_id}/status")
+def update_automation_status(automation_id: str, data: AutomationStatusInput, request: Request):
+    enforce_request_guard(request)
+    item = automation_store.set_status(automation_id, safe_session_id(data.session_id), data.status)
+    if not item:
+        raise HTTPException(status_code=404, detail="Automatización no encontrada")
+    return {"automation": item}
+
+
+@app.delete("/api/automations/{automation_id}")
+def delete_automation(automation_id: str, session_id: str, request: Request):
+    enforce_request_guard(request)
+    return {"deleted": automation_store.delete(automation_id, safe_session_id(session_id))}
+
+
+@app.get("/api/mcp/status")
+def mcp_status(discover: bool = False):
+    return mcp_manager.status(discover)
+
+
+@app.post("/api/mcp/call")
+def mcp_call(data: MCPCallInput, request: Request):
+    enforce_request_guard(request)
+    try:
+        result = mcp_manager.call(data.server, data.tool, data.arguments, confirmed=data.confirmed)
+        log_activity(safe_session_id(data.session_id), "mcp", "Herramienta MCP ejecutada", f"{data.server}:{data.tool}", "completed")
+        return result
+    except PermissionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=safe_error_text(exc)) from exc
+
+
+@app.get("/api/code-lab/status")
+def code_lab_status():
+    return code_lab.status()
+
+
+@app.post("/api/code-lab/run")
+def code_lab_run(data: CodeLabInput, request: Request):
+    enforce_request_guard(request)
+    try:
+        result = code_lab.run(data.language, data.code, confirmed=data.confirmed)
+        log_activity(safe_session_id(data.session_id), "code_lab", "Código aislado ejecutado", data.language, result["status"])
+        return result
+    except PermissionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=safe_error_text(exc)) from exc
+
+
+@app.post("/api/evaluations")
+def record_evaluation(data: EvaluationInput, request: Request):
+    enforce_request_guard(request)
+    return evaluation_store.record(
+        safe_session_id(data.session_id), data.target_type, data.target_id, data.checks,
+    )
+
+
+@app.get("/api/evaluations/report")
+def evaluation_report(days: int = 7):
+    return evaluation_store.report(days)
+
+
 @app.get("/api/resilience/status")
 def resilience_status(session_id: str = "default_session", limit: int = 12):
     sid = safe_session_id(session_id)
@@ -3973,7 +4604,7 @@ def resilience_status(session_id: str = "default_session", limit: int = 12):
         ).fetchone()
     return {
         "status": "ok",
-        "version": "30.0.0",
+        "version": APP_VERSION,
         "providers": resilience_provider_status(),
         "limits": {
             "max_resolution_attempts": MAX_RESOLUTION_ATTEMPTS,
@@ -4002,20 +4633,22 @@ def dashboard(session_id: str):
             "jobs": conn.execute("SELECT COUNT(*) FROM jobs WHERE session_id = ?", (sid,)).fetchone()[0],
             "errors_24h": conn.execute("SELECT COUNT(*) FROM activity_log WHERE session_id = ? AND status = 'failed' AND created_at >= ?", (sid, since)).fetchone()[0],
             "cached_responses": conn.execute("SELECT COUNT(*) FROM response_cache WHERE session_id = ? AND expires_at >= ?", (sid, time.time())).fetchone()[0],
+            "workflows": conn.execute("SELECT COUNT(*) FROM autonomy_workflows WHERE session_id = ?", (sid,)).fetchone()[0],
+            "automations": conn.execute("SELECT COUNT(*) FROM automations WHERE session_id = ?", (sid,)).fetchone()[0],
         }
         usage = conn.execute(
             "SELECT COALESCE(SUM(total_tokens),0) AS total_tokens, COUNT(*) AS requests FROM usage_log WHERE session_id = ? AND created_at >= ?",
             (sid, since),
         ).fetchone()
     return {
-        "version": "30.0.0",
+        "version": APP_VERSION,
         "status": "online" if provider_gateway.configured_names() else "local_only",
         "counts": counts,
         "usage_24h": dict(usage),
         "models": provider_status(),
         "providers": resilience_provider_status(),
         "database": {"ok": True, "path": DB_FILE},
-        "features": ["execution_planner", "resolution_trace", "local_verifier", "autonomous_agent", "smart_intent_router", "multi_provider_router", "anthropic_messages_api", "provider_capability_matrix", "optional_quality_council", "structured_tool_registry", "professional_mission_orchestrator", "specialist_team_selection", "quality_gates", "professional_execution_prompt", "agent_execution_core", "agent_plan_preview", "agent_checkpoints", "human_approval_signals", "tool_calling", "persistent_background_jobs", "pause_resume_cancel", "multi_level_cache", "singleflight_deduplication", "circuit_breakers", "context_compaction", "performance_telemetry", "deep_health_checks", "project_workspaces", "memory", "documents", "reminders", "knowledge_search", "self_check"],
+        "features": ["executable_workflows", "persistent_workflow_steps", "approval_inbox", "evidence_ledger", "hybrid_semantic_memory", "deep_research_pipeline", "persistent_automations", "optional_mcp_client", "isolated_code_lab", "evaluation_core", "execution_planner", "resolution_trace", "local_verifier", "autonomous_agent", "smart_intent_router", "multi_provider_router", "anthropic_messages_api", "provider_capability_matrix", "optional_quality_council", "structured_tool_registry", "professional_mission_orchestrator", "specialist_team_selection", "quality_gates", "tool_calling", "persistent_background_jobs", "pause_resume_cancel", "multi_level_cache", "singleflight_deduplication", "circuit_breakers", "context_compaction", "performance_telemetry", "deep_health_checks", "project_workspaces", "memory", "documents", "reminders", "knowledge_search", "self_check"],
         "runtime": runtime.snapshot(),
         "jobs_health": _job_health(),
     }
@@ -4046,17 +4679,26 @@ def self_check():
     checks["l1_cache"] = {"ok": True, **runtime.cache.stats()}
     checks["redis"] = {**runtime.redis.ping(), "optional": True}
     checks["job_engine"] = _job_health()
+    try:
+        checks["semantic_memory"] = {"ok": True, **semantic_index.status("self_check")}
+        checks["autonomy_store"] = {"ok": True, "counts": autonomy_store.counts("self_check")}
+        checks["automation_store"] = {"ok": True, "counts": automation_store.counts()}
+        checks["evaluation_store"] = {"ok": True, "runs": evaluation_store.report(1).get("runs", 0)}
+    except Exception as exc:
+        checks["v38_data_core"] = {"ok": False, "detail": safe_error_text(exc)}
+    checks["mcp"] = {"ok": True, "optional": True, **mcp_manager.status(False)}
+    checks["code_lab"] = {"ok": True, "optional": True, **code_lab.status()}
     checks["disk"] = disk_status(str(BASE_DIR))
     checks["context_compaction"] = {"ok": len(compact_messages([{"role":"system","content":"a"*1000},{"role":"user","content":"b"*20000}], 5000, 4)) >= 1}
     overall = all(item.get("ok") for key, item in checks.items() if key not in {"groq_key", "secondary_provider", "redis"})
-    return {"status": "ok" if overall else "degraded", "checks": checks, "version": "30.0.0"}
+    return {"status": "ok" if overall else "degraded", "checks": checks, "version": APP_VERSION}
 
 
 @app.get("/api/capabilities")
 def capabilities():
     return {
         "autonomous_core": True,
-        "version": "30.0.0",
+        "version": APP_VERSION,
         "groq_configured": bool(GROQ_API_KEY),
         "model": GROQ_MODEL,
         "model_chain": MODEL_CHAIN,
@@ -4128,6 +4770,16 @@ def capabilities():
             "runtime_metrics",
             "deep_health_checks",
             "gzip_responses",
+            "executable_workflows",
+            "persistent_workflow_steps",
+            "approval_inbox",
+            "evidence_ledger",
+            "hybrid_semantic_memory",
+            "deep_research_pipeline",
+            "persistent_automations",
+            "optional_mcp_client",
+            "isolated_code_lab",
+            "evaluation_core",
         ],
         "stability": {
             "request_timeout_seconds": REQUEST_TIMEOUT_SECONDS,
@@ -4172,7 +4824,7 @@ def _job_health() -> Dict[str, Any]:
 
 @app.get("/api/tools/registry")
 def tools_registry_status():
-    return {"status": "ok", "version": "30.0.0", **TOOL_REGISTRY.snapshot()}
+    return {"status": "ok", "version": APP_VERSION, **TOOL_REGISTRY.snapshot()}
 
 
 @app.get("/api/providers")
@@ -4180,7 +4832,7 @@ def providers_status():
     snapshot = provider_gateway.snapshot()
     return {
         "status": "ok",
-        "version": "30.0.0",
+        "version": APP_VERSION,
         "gateway": snapshot,
         "configured_count": len(snapshot.get("configured", [])),
         "local_routes_available": True,
@@ -4191,7 +4843,7 @@ def providers_status():
 def providers_capabilities():
     return {
         "status": "ok",
-        "version": "30.0.0",
+        "version": APP_VERSION,
         "matrix": provider_gateway.capability_matrix(),
         "quality_council": {
             "enabled": CONSENSUS_ENABLED,
@@ -4233,7 +4885,7 @@ def providers_route_preview(data: ProviderRouteInput):
 def health_live():
     return {
         "status": "ok",
-        "version": "30.0.0",
+        "version": APP_VERSION,
         "uptime_seconds": runtime.metrics.summary().get("uptime_seconds", 0),
         "timestamp": time.time(),
     }
@@ -4248,7 +4900,7 @@ def health_ready():
         status_code=200 if ready else 503,
         content={
             "status": "ready" if ready else "not_ready",
-            "version": "30.0.0",
+        "version": APP_VERSION,
             "database": database,
             "static_ui": {"ok": static_ok},
             "generative_route_configured": bool(
@@ -4278,7 +4930,7 @@ def health_deep():
     status = "ok" if required_ok and not open_circuits else ("degraded" if required_ok else "failed")
     payload = {
         "status": status,
-        "version": "30.0.0",
+        "version": APP_VERSION,
         "database": database,
         "redis": redis,
         "disk": disk,
@@ -4287,6 +4939,11 @@ def health_deep():
         "providers": resilience_provider_status(),
         "circuits": circuits,
         "open_circuits": open_circuits,
+        "autonomy": {"counts": autonomy_store.counts("")},
+        "semantic_memory": semantic_index.status(""),
+        "automations": automation_store.counts(),
+        "mcp": mcp_manager.status(),
+        "code_lab": code_lab.status(),
         "runtime": runtime.snapshot(),
     }
     return JSONResponse(status_code=200 if required_ok else 503, content=payload)
@@ -4325,7 +4982,7 @@ def performance(session_id: str = "default_session", hours: int = 24):
         ).fetchall()
     return {
         "status": "ok",
-        "version": "30.0.0",
+        "version": APP_VERSION,
         "hours": hours,
         "runtime": runtime.snapshot(),
         "jobs": _job_health(),
@@ -4369,7 +5026,7 @@ def health():
         "models": provider_status(),
         "providers": resilience_provider_status(),
         "public_mode": PUBLIC_MODE,
-        "version": "30.0.0",
+        "version": APP_VERSION,
         "runtime": {
             "cache": runtime.snapshot().get("cache", {}),
             "singleflight": runtime.singleflight.stats(),
@@ -4383,7 +5040,7 @@ def health():
 def system_info():
     return {
         "status": "JARVIS Core Interface Active",
-        "version": "30.0.0",
+        "version": APP_VERSION,
         "groq_configured": bool(GROQ_API_KEY),
         "model": GROQ_MODEL,
         "model_chain": MODEL_CHAIN,

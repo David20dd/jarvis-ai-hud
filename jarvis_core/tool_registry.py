@@ -28,6 +28,8 @@ DEFAULT_TOOL_DEFINITIONS: Dict[str, ToolDefinition] = {
     "reminder_cancel": ToolDefinition("reminder_cancel", "Cancelar recordatorio", "automation", "Cancela un recordatorio existente.", risk="medium", requires_approval=True),
     "current_datetime": ToolDefinition("current_datetime", "Fecha y hora", "utility", "Obtiene fecha y hora local del servidor."),
     "document_search": ToolDefinition("document_search", "Buscar documentos", "documents", "Recupera contenido de documentos indexados."),
+    "semantic_search": ToolDefinition("semantic_search", "Búsqueda semántica", "memory", "Recupera memoria y documentos por significado con una ruta local."),
+    "deep_research": ToolDefinition("deep_research", "Investigación profunda", "research", "Ejecuta varias consultas, deduplica y conserva evidencia trazable.", local=False, timeout_seconds=45),
 }
 
 

@@ -58,8 +58,8 @@ def test_http_health_and_headers():
     with TestClient(main.app) as client:
         live = client.get("/api/health/live")
         assert live.status_code == 200
-        assert live.json()["version"] == "30.0.0"
-        assert live.headers["x-jarvis-version"] == "30.0.0"
+        assert live.json()["version"] == "38.0.0"
+        assert live.headers["x-jarvis-version"] == "38.0.0"
         assert live.headers.get("x-request-id")
 
         ready = client.get("/api/health/ready")
@@ -76,7 +76,7 @@ def test_http_health_and_headers():
 def test_capabilities_include_stability_features():
     with TestClient(main.app) as client:
         data = client.get("/api/capabilities").json()
-        assert data["version"] == "30.0.0"
+        assert data["version"] == "38.0.0"
         features = set(data["features"])
         assert "singleflight_deduplication" in features
         assert "persistent_job_recovery" in features
@@ -148,7 +148,7 @@ def test_static_assets_exist_and_root_loads():
         Path("static/styles.css"),
         Path("static/app.js"),
         Path("static/config.js"),
-        Path("static/jarvis-reactor-v10.png"),
+        Path("static/jarvis-reactor-v38.svg"),
         Path("static/favicon-32.png"),
         Path("service-worker.js"),
     ]
@@ -183,7 +183,7 @@ def test_provider_gateway_endpoints_and_route_preview():
         status = client.get("/api/providers")
         assert status.status_code == 200
         payload = status.json()
-        assert payload["version"] == "30.0.0"
+        assert payload["version"] == "38.0.0"
         assert "gateway" in payload
         assert "providers" in payload["gateway"]
 
@@ -322,7 +322,7 @@ def test_agent_plan_and_execute_endpoints():
 
         status = client.get('/api/agents/status', params={'session_id': 'agent-test'})
         assert status.status_code == 200
-        assert status.json()['version'] == '30.0.0'
+        assert status.json()['version'] == '38.0.0'
 
 
 
@@ -382,7 +382,7 @@ def test_provider_capability_matrix_and_tool_registry_endpoints():
         capabilities = client.get('/api/providers/capabilities')
         assert capabilities.status_code == 200
         payload = capabilities.json()
-        assert payload['version'] == '30.0.0'
+        assert payload['version'] == '38.0.0'
         assert 'anthropic' in payload['matrix']['providers']
         assert 'coding' in payload['matrix']['task_preferences']
         assert payload['quality_council']['max_providers'] >= 2
@@ -390,7 +390,7 @@ def test_provider_capability_matrix_and_tool_registry_endpoints():
         registry = client.get('/api/tools/registry')
         assert registry.status_code == 200
         tools = registry.json()
-        assert tools['version'] == '30.0.0'
+        assert tools['version'] == '38.0.0'
         assert tools['available_count'] >= 10
         names = {item['name'] for item in tools['tools'] if item['available']}
         assert {'web_search', 'calculator', 'document_search'}.issubset(names)
@@ -450,7 +450,7 @@ def test_professional_endpoints_expose_profiles_and_plan():
         profiles = client.get("/api/professional/profiles")
         assert profiles.status_code == 200
         payload = profiles.json()
-        assert payload["version"] == "30.0.0"
+        assert payload["version"] == "38.0.0"
         assert len(payload["profiles"]) >= 6
 
         planned = client.post(
@@ -472,7 +472,7 @@ def test_professional_endpoints_expose_profiles_and_plan():
 
         status = client.get("/api/professional/status?session_id=professional-test")
         assert status.status_code == 200
-        assert status.json()["version"] == "30.0.0"
+        assert status.json()["version"] == "38.0.0"
 
 
 def test_responsive_frontend_contract():
@@ -482,13 +482,13 @@ def test_responsive_frontend_contract():
     manifest = json.loads(Path("static/manifest.webmanifest").read_text(encoding="utf-8"))
 
     assert "viewport-fit=cover" in html
-    assert "?v=30" in html
-    assert "jarvis-reactor-v30.svg" in html
+    assert "?v=38" in html
+    assert "jarvis-reactor-v38.svg" in html
     assert "focusModeBtn" in html
     assert "mobileDock" in html
     assert "chatFilterBar" in html
     assert "thinking-stage-rail" in html
-    assert "jarvis_chat_filter_v30" in js
+    assert "jarvis_chat_filter_v38" in js
     assert "--app-height" in css
     assert "@media (max-width: 680px)" in css
     assert "@media (max-height: 540px)" in css
@@ -511,4 +511,137 @@ def test_frontend_response_recovery_contract():
 def test_stream_has_emergency_final_fallback():
     source = Path("main.py").read_text(encoding="utf-8")
     assert "stream_emergency_fallback" in source
-    assert '"version": "30.0.0"' in source
+    assert '"version": APP_VERSION' in source
+
+
+def test_v38_semantic_memory_finds_related_content():
+    memory = main.memory_save("semantic-test", "Prefiero recibir siempre el código completo", "preference", 4)
+    result = main.semantic_search("semantic-test", "programación completa", limit=5)
+    assert result["model"] == "local-hybrid-v1"
+    assert any(item["source_id"] == memory["id"] for item in result["matches"])
+
+
+def test_v38_autonomy_workflow_executes_real_steps():
+    with TestClient(main.app) as client:
+        created = client.post(
+            "/api/autonomy/workflows",
+            json={
+                "session_id": "workflow-test",
+                "objective": "Calcula 2+2 y explica el resultado de forma breve.",
+                "mode": "math",
+                "project_name": "Pruebas",
+                "start": True,
+            },
+        )
+        assert created.status_code == 200
+        workflow_id = created.json()["workflow"]["id"]
+        final = None
+        for _ in range(120):
+            response = client.get(f"/api/autonomy/workflows/{workflow_id}?session_id=workflow-test")
+            assert response.status_code == 200
+            final = response.json()["workflow"]
+            if final["status"] in {"completed", "failed", "cancelled", "awaiting_approval"}:
+                break
+            time.sleep(0.05)
+        assert final is not None
+        assert final["status"] == "completed"
+        assert all(step["status"] == "completed" for step in final["steps"])
+        assert "4" in final["result"]
+        assert final["verification"]
+
+
+def test_v38_sensitive_workflow_requires_explicit_approval():
+    plan = main.autonomy_planner.build(
+        "Redacta y enviar un correo al equipo con el informe.",
+        intent="writing",
+        mode="auto",
+        project_name="Seguridad",
+    )
+    assert plan.requires_approval is True
+    workflow = main.autonomy_store.create_workflow("approval-test", plan)
+    approval_step = next(step for step in workflow["steps"] if step["requires_approval"])
+    approval = main.autonomy_store.create_approval(workflow["id"], approval_step)
+    assert approval["status"] == "pending"
+    decided = main.autonomy_store.decide_approval(approval["id"], "rejected", "No autorizado")
+    assert decided["status"] == "rejected"
+
+
+def test_v38_automation_and_optional_integrations_status():
+    with TestClient(main.app) as client:
+        created = client.post(
+            "/api/automations",
+            json={
+                "session_id": "automation-test",
+                "title": "Prueba futura",
+                "prompt": "Calcula 3+3",
+                "schedule_type": "once",
+                "schedule_value": "2099-01-01T00:00:00+00:00",
+            },
+        )
+        assert created.status_code == 200
+        assert created.json()["automation"]["status"] == "active"
+        status = client.get("/api/autonomy/status?session_id=automation-test")
+        assert status.status_code == 200
+        payload = status.json()
+        assert payload["version"] == "38.0.0"
+        assert "mcp" in payload and "code_lab" in payload and "semantic" in payload
+
+
+def test_v38_frontend_exposes_clean_autonomy_center():
+    html = Path("index.html").read_text(encoding="utf-8")
+    js = Path("static/app.js").read_text(encoding="utf-8")
+    css = Path("static/styles.css").read_text(encoding="utf-8")
+    assert 'data-panel="autonomy"' in html
+    assert "function renderAutonomy" in js
+    assert "/api/autonomy/workflows" in js
+    assert ".autonomy-workflow-card" in css
+
+
+def test_v38_failed_workflow_retries_from_failed_checkpoint():
+    plan = main.autonomy_planner.build(
+        "Calcula 8+8 y presenta el resultado.", intent="math", mode="math", project_name="Retry"
+    )
+    workflow = main.autonomy_store.create_workflow("retry-test", plan)
+    failed_step = workflow["steps"][0]
+    main.autonomy_store.update_step(failed_step["id"], status="failed", error="fallo simulado")
+    main.autonomy_store.update_workflow(workflow["id"], status="failed", error="fallo simulado")
+    assert main.autonomy_store.prepare_retry(workflow["id"]) is True
+    refreshed = main.autonomy_store.get_workflow(workflow["id"])
+    assert refreshed["status"] == "planned"
+    assert refreshed["steps"][0]["status"] == "pending"
+    assert refreshed["steps"][0]["error"] == ""
+
+
+def test_v38_idle_workflow_pause_and_cancel_finish_immediately():
+    with TestClient(main.app) as client:
+        paused = client.post(
+            "/api/autonomy/workflows",
+            json={
+                "session_id": "control-test",
+                "objective": "Prepara un plan local sencillo.",
+                "mode": "auto",
+                "project_name": "Controles",
+                "start": False,
+            },
+        ).json()["workflow"]
+        response = client.post(
+            f"/api/autonomy/workflows/{paused['id']}/pause?session_id=control-test"
+        )
+        assert response.status_code == 200
+        assert response.json()["status"] == "paused"
+
+        cancelled = client.post(
+            "/api/autonomy/workflows",
+            json={
+                "session_id": "control-test",
+                "objective": "Prepara otra misión local.",
+                "mode": "auto",
+                "project_name": "Controles",
+                "start": False,
+            },
+        ).json()["workflow"]
+        response = client.post(
+            f"/api/autonomy/workflows/{cancelled['id']}/cancel?session_id=control-test"
+        )
+        assert response.status_code == 200
+        assert response.json()["status"] == "cancelled"

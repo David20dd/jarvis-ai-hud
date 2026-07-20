@@ -16,6 +16,8 @@ services:
         value: llama-3.1-8b-instant
       - key: JARVIS_PUBLIC_MODE
         value: "true"
+      - key: JARVIS_ACCESS_KEY
+        sync: false
       - key: JARVIS_ALLOWED_ORIGINS
         value: "*"
       - key: JARVIS_REQUESTS_PER_MINUTE
@@ -108,3 +110,9 @@ services:
         sync: false
       - key: JARVIS_OLLAMA_MODELS
         value: llama3.1:8b
+      - key: JARVIS_CODE_LAB_ENABLED
+        value: "false"
+      - key: JARVIS_CODE_LAB_TIMEOUT_SECONDS
+        value: "12"
+      - key: JARVIS_MCP_SERVERS_JSON
+        sync: false
