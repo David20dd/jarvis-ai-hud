@@ -4,13 +4,14 @@
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
-  function createSafeStorage() {
+  function createSafeStorage(target = 'localStorage') {
     const memory = new Map();
     try {
       const testKey = '__jarvis_storage_test__';
-      window.storage.setItem(testKey, '1');
-      window.storage.removeItem(testKey);
-      return window.localStorage;
+      const targetStorage = window[target];
+      targetStorage.setItem(testKey, '1');
+      targetStorage.removeItem(testKey);
+      return targetStorage;
     } catch {
       return {
         getItem(key) { return memory.has(String(key)) ? memory.get(String(key)) : null; },
@@ -24,6 +25,7 @@
   }
 
   const storage = createSafeStorage();
+  const sessionStore = createSafeStorage('sessionStorage');
 
   const els = {
     ambient: $('#ambientGlow'),
@@ -90,9 +92,11 @@
     mode: 'jarvis_nexus_mode',
     projects: 'jarvis_nexus_projects_v11',
     activeProject: 'jarvis_nexus_active_project_v11',
-    moreToolsOpen: 'jarvis_clean_more_tools_v38',
-    focusMode: 'jarvis_focus_mode_v38',
-    chatFilter: 'jarvis_chat_filter_v38'
+    moreToolsOpen: 'jarvis_clean_more_tools_v46',
+    focusMode: 'jarvis_focus_mode_v46',
+    chatFilter: 'jarvis_chat_filter_v46',
+    authToken: 'jarvis_auth_token_v46',
+    authUser: 'jarvis_auth_user_v46'
   };
 
   const MODES = [
@@ -124,6 +128,8 @@
     followOutput: true,
     mode: storage.getItem(STORE.mode) || 'auto',
     apiBase: normalizeBase(storage.getItem(STORE.apiBase) || DEFAULT_API_BASE),
+    authToken: sessionStore.getItem(STORE.authToken) || '',
+    authUser: loadSessionJSON(STORE.authUser, null),
     lastPrompt: '',
     wakeRetrying: false,
     commandIndex: 0,
@@ -156,7 +162,7 @@
   }
 
   function init() {
-    document.title = window.JARVIS_CONFIG?.APP_NAME || 'J.A.R.V.I.S. — Autonomous Professional Intelligence v38';
+    document.title = window.JARVIS_CONFIG?.APP_NAME || 'J.A.R.V.I.S. — Unified Personal Intelligence v46';
     ensureProjects();
     migrateChatsToProjects();
     if (!state.activeChatId || !state.chats[state.activeChatId] || currentChat()?.projectId !== state.activeProjectId) {
@@ -398,6 +404,11 @@
     catch { return fallback; }
   }
 
+  function loadSessionJSON(key, fallback) {
+    try { return JSON.parse(sessionStore.getItem(key) || '') || fallback; }
+    catch { return fallback; }
+  }
+
   function saveProjects() {
     storage.setItem(STORE.projects, JSON.stringify(state.projects));
     storage.setItem(STORE.activeProject, state.activeProjectId);
@@ -550,7 +561,8 @@
 
   function backendConversationId(chatId = state.activeChatId) {
     const projectId = currentChat()?.projectId || state.activeProjectId || 'project_general';
-    return `public_${state.clientId}_${projectId}_${chatId}`.replace(/[^a-zA-Z0-9_.:@-]/g, '_').slice(0, 150);
+    const workspace = state.authUser?.workspace_session_id || `public_${state.clientId}`;
+    return `${workspace}_${projectId}_${chatId}`.replace(/[^a-zA-Z0-9_.:@-]/g, '_').slice(0, 150);
   }
 
   function createChat(showToast = true) {
@@ -1095,7 +1107,7 @@ Revisa que Render esté en estado **Live**, que \`static/config.js\` apunte a la
     const avatarWrap = document.createElement('div');
     avatarWrap.className = 'assistant-avatar';
     const avatar = document.createElement('img');
-    const reactorRef = document.querySelector('.brand-reactor')?.getAttribute('src') || './static/jarvis-reactor-v38.svg';
+    const reactorRef = document.querySelector('.brand-reactor')?.getAttribute('src') || './static/jarvis-reactor-v46.svg';
     avatar.src = resolveAssetUrl(reactorRef);
     avatar.alt = 'JARVIS';
     avatarWrap.appendChild(avatar);
@@ -1444,6 +1456,8 @@ Revisa que Render esté en estado **Live**, que \`static/config.js\` apunte a la
     els.sheetBody.innerHTML = '<div class="empty-note">Cargando...</div>';
     try {
       if (panel === 'overview') await renderOverview();
+      else if (panel === 'channels') await renderChannels();
+      else if (panel === 'account') await renderAccount();
       else if (panel === 'autonomy') await renderAutonomy();
       else if (panel === 'professional') await renderProfessionalCenter();
       else if (panel === 'agent') await renderAgentCenter();
@@ -1464,22 +1478,130 @@ Revisa que Render esté en estado **Live**, que \`static/config.js\` apunte a la
   }
 
   function panelTitle(panel) {
-    return ({ overview: 'Centro JARVIS', autonomy: 'Núcleo autónomo v38', professional: 'Centro profesional', agent: 'Agente de trabajo', projects: 'Proyectos', library: 'Biblioteca', memory: 'Memoria', reminders: 'Recordatorios', jobs: 'Trabajos autónomos', search: 'Buscar conocimiento', export: 'Exportar conversación', providers: 'Proveedores IA', resilience: 'Resiliencia y rutas', performance: 'Rendimiento y estabilidad', system: 'Estado y ajustes' })[panel] || 'JARVIS';
+    return ({ overview: 'Centro JARVIS', channels: 'WhatsApp y Telegram', account: 'Cuenta y privacidad', autonomy: 'Núcleo autónomo v46', professional: 'Centro profesional', agent: 'Agente de trabajo', projects: 'Proyectos', library: 'Biblioteca', memory: 'Memoria', reminders: 'Recordatorios', jobs: 'Trabajos autónomos', search: 'Buscar conocimiento', export: 'Exportar conversación', providers: 'Proveedores IA', resilience: 'Resiliencia y rutas', performance: 'Rendimiento y estabilidad', system: 'Estado y ajustes' })[panel] || 'JARVIS';
   }
 
   async function renderOverview() {
-    const data = await apiFetch(`/api/dashboard?session_id=${encodeURIComponent(backendConversationId())}`);
-    const c = data.counts || {};
+    const data = await apiFetch(`/api/operations/overview?session_id=${encodeURIComponent(backendConversationId())}`);
+    const workflows = data.autonomy || {};
+    const semantic = data.semantic || {};
+    const channels = data.channels || {};
+    const configuredChannels = ['telegram', 'whatsapp'].filter(name => channels[name]?.configured).length;
     els.sheetBody.innerHTML = `
-      <div class="panel-grid">
-        ${panelCard('Núcleo autónomo', 'Workflows reales, evidencia y aprobaciones', 'autonomy')}
-        ${panelCard('Proyecto activo', escapeHtml(currentProject()?.name || 'General'), 'projects')}
-        ${panelCard('Biblioteca', `${c.documents || 0} documentos`, 'library')}
-        ${panelCard('Trabajos', `${c.jobs || 0} registrados`, 'jobs')}
+      <section class="operations-hero">
+        <div><span class="eyebrow">JARVIS ${escapeHtml(data.version || '46')}</span><h3>Todo el núcleo, sin ruido.</h3><p>Conversa normalmente o abre una herramienta únicamente cuando la necesites.</p></div>
+        <span class="operations-health">● Operativo</span>
+      </section>
+      <div class="operations-metrics">
+        <button data-open-panel="providers"><strong>${Number(data.providers?.configured?.length || 0)}</strong><span>modelos conectados</span></button>
+        <button data-open-panel="autonomy"><strong>${Number(workflows.running || 0) + Number(workflows.queued || 0)}</strong><span>misiones activas</span></button>
+        <button data-open-panel="memory"><strong>${Number(semantic.chunks || semantic.total_chunks || 0)}</strong><span>fragmentos semánticos</span></button>
+        <button data-open-panel="channels"><strong>${configuredChannels}/2</strong><span>canales conectados</span></button>
       </div>
-      <div style="height:14px"></div>
-      <div class="panel-card"><h3>Estado del núcleo</h3><p>Versión ${escapeHtml(data.version || '38.0.0')} · ${escapeHtml(data.status || 'operativo')} · ${Number(data.usage_24h?.total_tokens || 0).toLocaleString()} tokens en 24 horas.</p></div>`;
+      <div class="panel-grid operations-actions">
+        ${panelCard('Crear una misión', 'Planificación, herramientas, checkpoints y verificación.', 'autonomy')}
+        ${panelCard('Conectar canales', 'Usa JARVIS desde Telegram y WhatsApp.', 'channels')}
+        ${panelCard('Abrir biblioteca', 'Documentos, memoria y recuperación semántica.', 'library')}
+        ${panelCard('Cuenta y privacidad', data.identity?.required ? 'Acceso privado activado.' : 'Acceso privado opcional.', 'account')}
+      </div>
+      <div class="operations-safety"><span>✓ Aprobación humana</span><span>✓ Webhooks firmados</span><span>✓ Recuperación automática</span><span>✓ Sin autodespliegue inseguro</span></div>`;
     $$('[data-open-panel]', els.sheetBody).forEach(btn => btn.addEventListener('click', () => openPanel(btn.dataset.openPanel)));
+  }
+
+  async function renderChannels() {
+    const data = await apiFetch('/api/channels/status');
+    const telegram = data.channels?.telegram || {};
+    const whatsapp = data.channels?.whatsapp || {};
+    const telegramUrl = `${normalizeBase(state.apiBase)}/api/channels/telegram/webhook`;
+    const whatsappUrl = `${normalizeBase(state.apiBase)}/api/channels/whatsapp/webhook`;
+    const badge = configured => `<span class="connection-badge ${configured ? 'ready' : 'pending'}">${configured ? 'Conectado' : 'Por configurar'}</span>`;
+    els.sheetBody.innerHTML = `
+      <div class="channel-intro"><h3>JARVIS donde ya conversas</h3><p>Los mensajes entrantes pasan por el mismo router, memoria, herramientas y recuperación que la interfaz web.</p></div>
+      <div class="channel-grid">
+        <article class="channel-card">
+          <div class="channel-card-head"><span class="channel-logo telegram">T</span><div><h3>Telegram</h3><p>Bot privado con comandos y misiones.</p></div>${badge(telegram.configured)}</div>
+          <ol><li>Crea el bot con <strong>@BotFather</strong>.</li><li>Configura token, secreto y chats permitidos en Render.</li><li>Registra este webhook HTTPS.</li></ol>
+          <div class="copy-field"><code>${escapeHtml(telegramUrl)}</code><button data-copy-value="${escapeHtml(telegramUrl)}">Copiar</button></div>
+          <button class="soft-btn channel-action" id="registerTelegramWebhook" ${telegram.configured ? '' : 'disabled'}>Registrar webhook</button>
+        </article>
+        <article class="channel-card">
+          <div class="channel-card-head"><span class="channel-logo whatsapp">W</span><div><h3>WhatsApp</h3><p>Cloud API oficial de Meta.</p></div>${badge(whatsapp.configured)}</div>
+          <ol><li>Crea una app Business en Meta.</li><li>Configura el número, token, secreto y lista permitida.</li><li>Usa esta URL como callback del webhook.</li></ol>
+          <div class="copy-field"><code>${escapeHtml(whatsappUrl)}</code><button data-copy-value="${escapeHtml(whatsappUrl)}">Copiar</button></div>
+          <p class="channel-note">Suscribe el campo <strong>messages</strong>. El token de verificación es el valor privado configurado en Render.</p>
+        </article>
+      </div>
+      <article class="panel-card channel-test">
+        <h3>Enviar una prueba confirmada</h3><p>La interfaz nunca envía mensajes externos sin confirmación explícita.</p>
+        <div class="form-row channel-test-row"><select class="text-input" id="channelTestType"><option value="telegram">Telegram</option><option value="whatsapp">WhatsApp</option></select><input class="text-input" id="channelTestRecipient" placeholder="Chat ID o número internacional"/></div>
+        <textarea class="text-area" id="channelTestMessage" placeholder="Mensaje de prueba"></textarea>
+        <button class="primary-btn" id="channelTestSend">Revisar y enviar</button>
+      </article>`;
+    $$('[data-copy-value]', els.sheetBody).forEach(button => button.addEventListener('click', async () => {
+      await navigator.clipboard.writeText(button.dataset.copyValue || '').catch(() => {});
+      toast('Dirección copiada');
+    }));
+    $('#registerTelegramWebhook', els.sheetBody)?.addEventListener('click', async () => {
+      if (!confirm(`Registrar ${telegramUrl} como webhook de Telegram?`)) return;
+      try {
+        await apiFetch('/api/channels/telegram/register-webhook', { method:'POST', body:JSON.stringify({ webhook_url:telegramUrl, drop_pending_updates:false }) });
+        toast('Webhook de Telegram registrado');
+        renderChannels();
+      } catch (error) { toast(error.message || 'No se pudo registrar el webhook.'); }
+    });
+    $('#channelTestSend', els.sheetBody)?.addEventListener('click', async () => {
+      const channel = $('#channelTestType', els.sheetBody)?.value || 'telegram';
+      const recipient = $('#channelTestRecipient', els.sheetBody)?.value.trim();
+      const message = $('#channelTestMessage', els.sheetBody)?.value.trim();
+      if (!recipient || !message) return toast('Completa destinatario y mensaje.');
+      if (!confirm(`¿Enviar este mensaje por ${channel}?`)) return;
+      try {
+        await apiFetch('/api/channels/send', { method:'POST', body:JSON.stringify({ channel, recipient, message, confirmed:true }) });
+        toast('Mensaje enviado');
+      } catch (error) { toast(error.message || 'No se pudo enviar el mensaje.'); }
+    });
+  }
+
+  async function renderAccount() {
+    const data = await apiFetch('/api/auth/status');
+    state.authUser = data.user || null;
+    if (!data.authenticated && state.authToken) {
+      state.authToken = '';
+      sessionStore.removeItem(STORE.authToken);
+      sessionStore.removeItem(STORE.authUser);
+    }
+    if (data.authenticated && data.user) {
+      sessionStore.setItem(STORE.authUser, JSON.stringify(data.user));
+      els.sheetBody.innerHTML = `
+        <section class="account-card"><span class="account-avatar">${escapeHtml((data.user.display_name || 'J').slice(0,1).toUpperCase())}</span><div><h3>${escapeHtml(data.user.display_name)}</h3><p>${escapeHtml(data.user.email)} · ${escapeHtml(data.user.role)}</p></div><span class="connection-badge ready">Sesión protegida</span></section>
+        <div class="panel-grid"><div class="panel-card"><h3>Privacidad</h3><p>El token permanece solo durante esta sesión del navegador. Las claves de proveedores nunca llegan al frontend.</p></div><div class="panel-card"><h3>Espacio personal</h3><p>${escapeHtml(data.user.workspace_session_id || '')}</p></div></div>
+        <button class="danger-btn account-logout" id="accountLogout">Cerrar sesión</button>`;
+      $('#accountLogout', els.sheetBody)?.addEventListener('click', async () => {
+        await apiFetch('/api/auth/logout', { method:'POST' }).catch(() => ({}));
+        state.authToken = ''; state.authUser = null;
+        sessionStore.removeItem(STORE.authToken); sessionStore.removeItem(STORE.authUser);
+        toast('Sesión cerrada'); renderAccount();
+      });
+      return;
+    }
+    const registration = data.registration_enabled ? `
+      <details class="auth-register"><summary>Crear la cuenta propietaria</summary><div class="auth-fields"><input class="text-input" id="registerName" autocomplete="name" placeholder="Nombre"/><input class="text-input" id="registerEmail" type="email" autocomplete="email" placeholder="Correo"/><input class="text-input" id="registerPassword" type="password" autocomplete="new-password" placeholder="Contraseña segura (12+ caracteres)"/><button class="soft-btn" id="registerAccount">Crear cuenta</button></div></details>` : '';
+    els.sheetBody.innerHTML = `
+      <div class="account-login"><span class="account-lock">◇</span><h3>Protege tu núcleo personal</h3><p>El inicio de sesión es opcional hasta que actives <code>JARVIS_AUTH_REQUIRED=true</code> en Render.</p><div class="auth-fields"><input class="text-input" id="loginEmail" type="email" autocomplete="username" placeholder="Correo"/><input class="text-input" id="loginPassword" type="password" autocomplete="current-password" placeholder="Contraseña"/><button class="primary-btn" id="loginAccount">Iniciar sesión</button></div>${registration}</div>`;
+    const finishAuth = result => {
+      state.authToken = result.token || ''; state.authUser = result.user || null;
+      sessionStore.setItem(STORE.authToken, state.authToken);
+      sessionStore.setItem(STORE.authUser, JSON.stringify(state.authUser));
+      toast('Núcleo privado conectado'); renderAccount();
+    };
+    $('#loginAccount', els.sheetBody)?.addEventListener('click', async () => {
+      try { finishAuth(await apiFetch('/api/auth/login', { method:'POST', body:JSON.stringify({ email:$('#loginEmail', els.sheetBody).value, password:$('#loginPassword', els.sheetBody).value }) })); }
+      catch (error) { toast(error.message || 'No fue posible iniciar sesión.'); }
+    });
+    $('#registerAccount', els.sheetBody)?.addEventListener('click', async () => {
+      try { finishAuth(await apiFetch('/api/auth/register', { method:'POST', body:JSON.stringify({ display_name:$('#registerName', els.sheetBody).value, email:$('#registerEmail', els.sheetBody).value, password:$('#registerPassword', els.sheetBody).value }) })); }
+      catch (error) { toast(error.message || 'No fue posible crear la cuenta.'); }
+    });
   }
 
   async function renderAutonomy() {
@@ -1522,7 +1644,7 @@ Revisa que Render esté en estado **Live**, que \`static/config.js\` apunte a la
 
     els.sheetBody.innerHTML = `
       <section class="autonomy-hero">
-        <div class="autonomy-hero-copy"><span>JARVIS v38</span><h2>Objetivos que avanzan por etapas reales</h2><p>Planifica, recupera contexto, reúne evidencia, ejecuta, verifica y se detiene antes de cualquier acción sensible.</p></div>
+        <div class="autonomy-hero-copy"><span>JARVIS v46</span><h2>Objetivos que avanzan por etapas reales</h2><p>Planifica, recupera contexto, reúne evidencia, ejecuta, verifica y se detiene antes de cualquier acción sensible.</p></div>
         <div class="autonomy-signal" aria-hidden="true"><i></i><i></i><i></i></div>
       </section>
       <section class="autonomy-create">
@@ -1563,7 +1685,7 @@ Revisa que Render esté en estado **Live**, que \`static/config.js\` apunte a la
       const approved = button.dataset.approval === 'approved';
       const confirmed = !approved || window.confirm('¿Autoriza explícitamente esta acción sensible? JARVIS registrará la decisión antes de continuar.');
       if (!confirmed) return;
-      await apiFetch(`/api/autonomy/approvals/${encodeURIComponent(button.dataset.approvalId)}`, { method:'POST', body:JSON.stringify({ session_id:backendConversationId(), decision:button.dataset.approval, note:'Decisión tomada desde la interfaz v38' }) }).catch(error => toast(error.message));
+      await apiFetch(`/api/autonomy/approvals/${encodeURIComponent(button.dataset.approvalId)}`, { method:'POST', body:JSON.stringify({ session_id:backendConversationId(), decision:button.dataset.approval, note:'Decisión tomada desde la interfaz v46' }) }).catch(error => toast(error.message));
       renderAutonomy();
     }));
     $('#createAutomationBtn', els.sheetBody)?.addEventListener('click', async () => {
@@ -1645,7 +1767,7 @@ Revisa que Render esté en estado **Live**, que \`static/config.js\` apunte a la
         <div class="professional-hero-glow" aria-hidden="true"></div>
         <div class="professional-hero-mark">✦</div>
         <div class="professional-hero-copy">
-          <span class="professional-kicker">Autonomous Professional Intelligence v38</span>
+          <span class="professional-kicker">Unified Personal Intelligence v46</span>
           <h3>Convierta objetivos en misiones verificables</h3>
           <p>JARVIS forma un equipo de especialistas, define hitos, utiliza varios proveedores y audita el resultado antes de entregarlo.</p>
         </div>
@@ -2207,9 +2329,10 @@ Revisa que Render esté en estado **Live**, que \`static/config.js\` apunte a la
   }
 
   async function apiFetch(path, options = {}) {
+    const authHeaders = state.authToken ? { Authorization: `Bearer ${state.authToken}` } : {};
     const response = await resilientFetch(apiUrl(path), {
-      headers: { 'Content-Type':'application/json', ...(options.headers || {}) },
-      ...options
+      ...options,
+      headers: { 'Content-Type':'application/json', ...authHeaders, ...(options.headers || {}) }
     }, { attempts: options.method && options.method !== 'GET' ? 2 : 3, retryStatuses: [429, 502, 503, 504] });
     const raw = await response.text();
     let data = {};
@@ -2220,9 +2343,10 @@ Revisa que Render esté en estado **Live**, que \`static/config.js\` apunte a la
   }
 
   async function requestJarvis(payload, signal) {
+    const authHeaders = state.authToken ? { Authorization: `Bearer ${state.authToken}` } : {};
     const requestOptions = {
       method: 'POST',
-      headers: { 'Content-Type':'application/json', 'Accept':'application/x-ndjson, application/json' },
+      headers: { 'Content-Type':'application/json', 'Accept':'application/x-ndjson, application/json', ...authHeaders },
       body: JSON.stringify(payload),
       signal
     };

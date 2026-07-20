@@ -32,6 +32,12 @@ services:
         value: "3600"
       - key: JARVIS_DB_FILE
         value: jarvis_memory.db
+      - key: JARVIS_AUTH_REQUIRED
+        value: "false"
+      - key: JARVIS_REGISTRATION_ENABLED
+        value: "false"
+      - key: JARVIS_AUTH_SESSION_DAYS
+        value: "30"
       - key: JARVIS_MAX_RESOLUTION_ATTEMPTS
         value: "5"
       - key: JARVIS_WEB_SEARCH_ATTEMPTS
@@ -115,4 +121,22 @@ services:
       - key: JARVIS_CODE_LAB_TIMEOUT_SECONDS
         value: "12"
       - key: JARVIS_MCP_SERVERS_JSON
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_WEBHOOK_SECRET
+        sync: false
+      - key: TELEGRAM_ALLOWED_CHAT_IDS
+        sync: false
+      - key: WHATSAPP_ACCESS_TOKEN
+        sync: false
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        sync: false
+      - key: WHATSAPP_VERIFY_TOKEN
+        sync: false
+      - key: WHATSAPP_APP_SECRET
+        sync: false
+      - key: WHATSAPP_GRAPH_API_VERSION
+        sync: false
+      - key: WHATSAPP_ALLOWED_NUMBERS
         sync: false

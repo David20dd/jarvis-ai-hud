@@ -78,7 +78,7 @@ class MCPHttpServer:
                 {
                     "protocolVersion": "2025-06-18",
                     "capabilities": {},
-                    "clientInfo": {"name": "jarvis-v38", "version": "38.0.0"},
+                    "clientInfo": {"name": "jarvis-v46", "version": "46.0.0"},
                 },
             )
             self._request("notifications/initialized", notification=True)

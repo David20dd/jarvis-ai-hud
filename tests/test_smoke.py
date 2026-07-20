@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import hashlib
+import hmac
 import os
 import tempfile
 import time
@@ -15,7 +17,7 @@ os.environ.setdefault("JARVIS_JOB_RETRY_BASE_SECONDS", "1")
 from fastapi.testclient import TestClient
 
 import main
-from jarvis_core import compact_messages
+from jarvis_core import ChannelStore, IdentityStore, TelegramChannel, WhatsAppChannel, compact_messages
 
 
 def test_runtime_cache_round_trip():
@@ -58,8 +60,8 @@ def test_http_health_and_headers():
     with TestClient(main.app) as client:
         live = client.get("/api/health/live")
         assert live.status_code == 200
-        assert live.json()["version"] == "38.0.0"
-        assert live.headers["x-jarvis-version"] == "38.0.0"
+        assert live.json()["version"] == "46.0.0"
+        assert live.headers["x-jarvis-version"] == "46.0.0"
         assert live.headers.get("x-request-id")
 
         ready = client.get("/api/health/ready")
@@ -76,7 +78,7 @@ def test_http_health_and_headers():
 def test_capabilities_include_stability_features():
     with TestClient(main.app) as client:
         data = client.get("/api/capabilities").json()
-        assert data["version"] == "38.0.0"
+        assert data["version"] == "46.0.0"
         features = set(data["features"])
         assert "singleflight_deduplication" in features
         assert "persistent_job_recovery" in features
@@ -148,7 +150,7 @@ def test_static_assets_exist_and_root_loads():
         Path("static/styles.css"),
         Path("static/app.js"),
         Path("static/config.js"),
-        Path("static/jarvis-reactor-v38.svg"),
+        Path("static/jarvis-reactor-v46.svg"),
         Path("static/favicon-32.png"),
         Path("service-worker.js"),
     ]
@@ -183,7 +185,7 @@ def test_provider_gateway_endpoints_and_route_preview():
         status = client.get("/api/providers")
         assert status.status_code == 200
         payload = status.json()
-        assert payload["version"] == "38.0.0"
+        assert payload["version"] == "46.0.0"
         assert "gateway" in payload
         assert "providers" in payload["gateway"]
 
@@ -322,7 +324,7 @@ def test_agent_plan_and_execute_endpoints():
 
         status = client.get('/api/agents/status', params={'session_id': 'agent-test'})
         assert status.status_code == 200
-        assert status.json()['version'] == '38.0.0'
+        assert status.json()['version'] == '46.0.0'
 
 
 
@@ -382,7 +384,7 @@ def test_provider_capability_matrix_and_tool_registry_endpoints():
         capabilities = client.get('/api/providers/capabilities')
         assert capabilities.status_code == 200
         payload = capabilities.json()
-        assert payload['version'] == '38.0.0'
+        assert payload['version'] == '46.0.0'
         assert 'anthropic' in payload['matrix']['providers']
         assert 'coding' in payload['matrix']['task_preferences']
         assert payload['quality_council']['max_providers'] >= 2
@@ -390,7 +392,7 @@ def test_provider_capability_matrix_and_tool_registry_endpoints():
         registry = client.get('/api/tools/registry')
         assert registry.status_code == 200
         tools = registry.json()
-        assert tools['version'] == '38.0.0'
+        assert tools['version'] == '46.0.0'
         assert tools['available_count'] >= 10
         names = {item['name'] for item in tools['tools'] if item['available']}
         assert {'web_search', 'calculator', 'document_search'}.issubset(names)
@@ -450,7 +452,7 @@ def test_professional_endpoints_expose_profiles_and_plan():
         profiles = client.get("/api/professional/profiles")
         assert profiles.status_code == 200
         payload = profiles.json()
-        assert payload["version"] == "38.0.0"
+        assert payload["version"] == "46.0.0"
         assert len(payload["profiles"]) >= 6
 
         planned = client.post(
@@ -472,7 +474,7 @@ def test_professional_endpoints_expose_profiles_and_plan():
 
         status = client.get("/api/professional/status?session_id=professional-test")
         assert status.status_code == 200
-        assert status.json()["version"] == "38.0.0"
+        assert status.json()["version"] == "46.0.0"
 
 
 def test_responsive_frontend_contract():
@@ -482,13 +484,13 @@ def test_responsive_frontend_contract():
     manifest = json.loads(Path("static/manifest.webmanifest").read_text(encoding="utf-8"))
 
     assert "viewport-fit=cover" in html
-    assert "?v=38" in html
-    assert "jarvis-reactor-v38.svg" in html
+    assert "?v=46" in html
+    assert "jarvis-reactor-v46.svg" in html
     assert "focusModeBtn" in html
     assert "mobileDock" in html
     assert "chatFilterBar" in html
     assert "thinking-stage-rail" in html
-    assert "jarvis_chat_filter_v38" in js
+    assert "jarvis_chat_filter_v46" in js
     assert "--app-height" in css
     assert "@media (max-width: 680px)" in css
     assert "@media (max-height: 540px)" in css
@@ -583,7 +585,7 @@ def test_v38_automation_and_optional_integrations_status():
         status = client.get("/api/autonomy/status?session_id=automation-test")
         assert status.status_code == 200
         payload = status.json()
-        assert payload["version"] == "38.0.0"
+        assert payload["version"] == "46.0.0"
         assert "mcp" in payload and "code_lab" in payload and "semantic" in payload
 
 
@@ -645,3 +647,84 @@ def test_v38_idle_workflow_pause_and_cancel_finish_immediately():
         )
         assert response.status_code == 200
         assert response.json()["status"] == "cancelled"
+
+
+def test_v46_identity_register_login_and_logout():
+    db_file = str(Path(tempfile.mkdtemp()) / "identity.db")
+    store = IdentityStore(db_file, session_days=7)
+    store.init_schema()
+    user = store.register("owner@example.com", "SecurePassword123", "Owner", role="admin")
+    assert user["role"] == "admin"
+    session = store.login("owner@example.com", "SecurePassword123")
+    assert session["token"]
+    assert store.authenticate(session["token"])["email"] == "owner@example.com"
+    assert store.logout(session["token"]) is True
+    assert store.authenticate(session["token"]) is None
+
+
+def test_v46_channel_store_is_idempotent_and_persistent():
+    db_file = str(Path(tempfile.mkdtemp()) / "channels.db")
+    store = ChannelStore(db_file)
+    store.init_schema()
+    assert store.claim_event("telegram:1", "telegram", "123") is True
+    assert store.claim_event("telegram:1", "telegram", "123") is False
+    first = store.session_for("telegram", "123", "Cristian")
+    assert store.session_for("telegram", "123", "Cristian") == first
+    store.finish_event("telegram:1", "completed", "ok")
+    assert store.status()["events_24h"][0]["status"] == "completed"
+
+
+def test_v46_telegram_secret_allowlist_and_parser():
+    channel = TelegramChannel("token", "super-secret", "123")
+    assert channel.configured is True
+    assert channel.verify("super-secret") is True
+    assert channel.verify("wrong") is False
+    assert channel.allowed_sender("123") is True
+    assert channel.allowed_sender("999") is False
+    event = channel.parse({"update_id": 8, "message": {"message_id": 4, "chat": {"id": 123}, "from": {"id": 5, "first_name": "C"}, "text": "Hola"}})
+    assert event["event_id"] == "telegram:8"
+    assert event["text"] == "Hola"
+
+
+def test_v46_whatsapp_signature_allowlist_and_parser():
+    channel = WhatsAppChannel("token", "phone", "verify", "app-secret", "v23.0", "50499999999")
+    raw = b'{"object":"whatsapp_business_account"}'
+    signature = "sha256=" + hmac.new(b"app-secret", raw, hashlib.sha256).hexdigest()
+    assert channel.configured is True
+    assert channel.verify_signature(raw, signature) is True
+    assert channel.verify_signature(raw, "sha256=bad") is False
+    assert channel.verify_subscription("subscribe", "verify") is True
+    payload = {"entry": [{"changes": [{"value": {"contacts": [{"wa_id": "50499999999", "profile": {"name": "Cristian"}}], "messages": [{"id": "wamid.1", "from": "50499999999", "type": "text", "text": {"body": "Hola JARVIS"}}]}}]}]}
+    event = channel.parse(payload)[0]
+    assert event["event_id"] == "whatsapp:wamid.1"
+    assert event["text"] == "Hola JARVIS"
+    assert channel.allowed_sender("50499999999") is True
+
+
+def test_v46_operations_and_channel_status_endpoints():
+    with TestClient(main.app) as client:
+        worker = client.get("/service-worker.js")
+        assert worker.status_code == 200
+        assert worker.headers["service-worker-allowed"] == "/"
+        assert client.get("/index.html").status_code == 200
+        assert client.get("/404.html").status_code == 200
+        operations = client.get("/api/operations/overview", params={"session_id": "test-v46"})
+        assert operations.status_code == 200
+        assert operations.json()["version"] == "46.0.0"
+        assert operations.json()["safety"]["human_approval"] is True
+        channels = client.get("/api/channels/status")
+        assert channels.status_code == 200
+        assert set(channels.json()["channels"]) == {"telegram", "whatsapp", "activity"}
+
+
+def test_v46_frontend_is_clean_connected_and_boot_safe():
+    html = Path("index.html").read_text(encoding="utf-8")
+    js = Path("static/app.js").read_text(encoding="utf-8")
+    css = Path("static/styles.css").read_text(encoding="utf-8")
+    assert "Centro JARVIS" in html
+    assert "WhatsApp y Telegram" in html
+    assert 'data-panel="account"' in html
+    assert "window.storage" not in js
+    assert "Authorization: `Bearer ${state.authToken}`" in js
+    assert "renderChannels" in js and "renderAccount" in js
+    assert "v46 — Clean, connected and calm" in css

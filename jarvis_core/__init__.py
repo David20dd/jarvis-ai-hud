@@ -7,9 +7,12 @@ from .evaluation import EvaluationStore
 from .mcp_client import MCPManager
 from .research import ResearchCollector
 from .semantic import SemanticIndex
+from .identity import IdentityStore
+from .channels import ChannelHub, ChannelStore, TelegramChannel, WhatsAppChannel
 
 __all__ = [
     "RuntimeSupport", "compact_messages", "disk_status", "ToolDefinition", "ToolRegistry",
     "AutonomyPlanner", "AutonomyStore", "ResultVerifier", "AutomationStore", "CodeLab",
     "EvaluationStore", "MCPManager", "ResearchCollector", "SemanticIndex",
+    "IdentityStore", "ChannelHub", "ChannelStore", "TelegramChannel", "WhatsAppChannel",
 ]

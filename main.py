@@ -26,7 +26,7 @@ import sympy as sp
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 try:
     from groq import Groq
@@ -45,6 +45,11 @@ from jarvis_core import (
     ResultVerifier,
     RuntimeSupport,
     SemanticIndex,
+    IdentityStore,
+    ChannelHub,
+    ChannelStore,
+    TelegramChannel,
+    WhatsAppChannel,
     ToolRegistry,
     compact_messages,
     disk_status,
@@ -86,8 +91,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger("jarvis")
 
-APP_VERSION = "38.0.0"
-APP_EDITION = "Autonomous Professional Intelligence"
+APP_VERSION = "46.0.0"
+APP_EDITION = "Unified Personal Intelligence"
 
 DB_FILE = os.getenv("JARVIS_DB_FILE", "jarvis_memory.db").strip() or "jarvis_memory.db"
 BASE_DIR = Path(__file__).resolve().parent
@@ -155,6 +160,18 @@ MAINTENANCE_INTERVAL_SECONDS = max(30, min(int(os.getenv("JARVIS_MAINTENANCE_INT
 CODE_LAB_ENABLED = os.getenv("JARVIS_CODE_LAB_ENABLED", "false").strip().lower() not in {"0", "false", "no", "off"}
 CODE_LAB_TIMEOUT_SECONDS = max(2, min(int(os.getenv("JARVIS_CODE_LAB_TIMEOUT_SECONDS", "12")), 60))
 MCP_SERVERS_JSON = os.getenv("JARVIS_MCP_SERVERS_JSON", "").strip()
+AUTH_REQUIRED = os.getenv("JARVIS_AUTH_REQUIRED", "false").strip().lower() not in {"0", "false", "no", "off"}
+REGISTRATION_ENABLED = os.getenv("JARVIS_REGISTRATION_ENABLED", "false").strip().lower() not in {"0", "false", "no", "off"}
+AUTH_SESSION_DAYS = max(1, min(int(os.getenv("JARVIS_AUTH_SESSION_DAYS", "30")), 90))
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+TELEGRAM_WEBHOOK_SECRET = os.getenv("TELEGRAM_WEBHOOK_SECRET", "").strip()
+TELEGRAM_ALLOWED_CHAT_IDS = os.getenv("TELEGRAM_ALLOWED_CHAT_IDS", "").strip()
+WHATSAPP_ACCESS_TOKEN = os.getenv("WHATSAPP_ACCESS_TOKEN", "").strip()
+WHATSAPP_PHONE_NUMBER_ID = os.getenv("WHATSAPP_PHONE_NUMBER_ID", "").strip()
+WHATSAPP_VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN", "").strip()
+WHATSAPP_APP_SECRET = os.getenv("WHATSAPP_APP_SECRET", "").strip()
+WHATSAPP_GRAPH_API_VERSION = os.getenv("WHATSAPP_GRAPH_API_VERSION", "").strip()
+WHATSAPP_ALLOWED_NUMBERS = os.getenv("WHATSAPP_ALLOWED_NUMBERS", "").strip()
 
 runtime = RuntimeSupport(
     redis_url=REDIS_URL,
@@ -172,6 +189,18 @@ automation_store = AutomationStore(DB_FILE)
 evaluation_store = EvaluationStore(DB_FILE)
 code_lab = CodeLab(CODE_LAB_ENABLED, CODE_LAB_TIMEOUT_SECONDS)
 mcp_manager = MCPManager(MCP_SERVERS_JSON)
+identity_store = IdentityStore(DB_FILE, AUTH_SESSION_DAYS)
+channel_store = ChannelStore(DB_FILE)
+telegram_channel = TelegramChannel(
+    TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET, TELEGRAM_ALLOWED_CHAT_IDS,
+    timeout=PROVIDER_TIMEOUT_SECONDS,
+)
+whatsapp_channel = WhatsAppChannel(
+    WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_VERIFY_TOKEN,
+    WHATSAPP_APP_SECRET, WHATSAPP_GRAPH_API_VERSION, WHATSAPP_ALLOWED_NUMBERS,
+    timeout=PROVIDER_TIMEOUT_SECONDS,
+)
+channel_hub = ChannelHub(channel_store, telegram_channel, whatsapp_channel)
 
 
 def _provider_models(names: List[str], provider: str) -> List[ProviderModel]:
@@ -447,6 +476,8 @@ def init_db() -> None:
     semantic_index.init_schema()
     automation_store.init_schema()
     evaluation_store.init_schema()
+    identity_store.init_schema()
+    channel_store.init_schema()
 
 
 def _maintenance_cycle() -> Dict[str, Any]:
@@ -525,22 +556,24 @@ async def lifespan(_: FastAPI):
     _start_maintenance()
     recovered = _recover_interrupted_jobs()
     recovered_workflows = _recover_interrupted_workflows()
+    recovered_channels = _recover_channel_events()
     logger.info(
-        "J.A.R.V.I.S. v38 iniciado | public_mode=%s | redis=%s | jobs_recuperados=%s | workflows_recuperados=%s",
+        "J.A.R.V.I.S. v46 iniciado | public_mode=%s | redis=%s | jobs_recuperados=%s | workflows_recuperados=%s | canales_recuperados=%s",
         PUBLIC_MODE,
         bool(REDIS_URL),
         recovered,
         recovered_workflows,
+        recovered_channels,
     )
     yield
     _stop_maintenance()
     JOB_EXECUTOR.shutdown(wait=False, cancel_futures=True)
     provider_gateway.close()
-    logger.info("J.A.R.V.I.S. v38 detenido")
+    logger.info("J.A.R.V.I.S. v46 detenido")
 
 
 app = FastAPI(
-    title=f"J.A.R.V.I.S. {APP_EDITION} v38",
+    title=f"J.A.R.V.I.S. {APP_EDITION} v46",
     version=APP_VERSION,
     lifespan=lifespan,
 )
@@ -596,6 +629,37 @@ def record_telemetry(
         logger.debug("No se pudo persistir telemetría", exc_info=True)
 
 
+AUTH_PUBLIC_PATHS = {
+    "/api/auth/status",
+    "/api/auth/register",
+    "/api/auth/login",
+    "/api/channels/telegram/webhook",
+    "/api/channels/whatsapp/webhook",
+}
+
+
+def _bearer_token(request: Request) -> str:
+    value = request.headers.get("authorization", "").strip()
+    return value[7:].strip() if value.lower().startswith("bearer ") else ""
+
+
+def _request_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for", "")
+    return (forwarded.split(",", 1)[0].strip() if forwarded else "") or (
+        request.client.host if request.client else "unknown"
+    )
+
+
+def _identity_for_request(request: Request) -> Optional[Dict[str, Any]]:
+    cached = getattr(request.state, "identity", None)
+    if cached:
+        return cached
+    user = identity_store.authenticate(_bearer_token(request))
+    if user:
+        request.state.identity = user
+    return user
+
+
 @app.middleware("http")
 async def request_observability(request: Request, call_next):
     started = time.perf_counter()
@@ -604,6 +668,22 @@ async def request_observability(request: Request, call_next):
     status = "success"
     detail = ""
     try:
+        path = request.url.path.rstrip("/") or "/"
+        is_public_api = (
+            path in AUTH_PUBLIC_PATHS
+            or path.startswith("/api/health/")
+            or path in {"/api/health", "/api/health/live", "/api/health/ready"}
+        )
+        token = _bearer_token(request)
+        if token:
+            request.state.identity = identity_store.authenticate(token)
+        if AUTH_REQUIRED and path.startswith("/api/") and not is_public_api and not getattr(request.state, "identity", None):
+            status = "error"
+            response = JSONResponse(status_code=401, content={"detail": "Inicia sesión para utilizar este núcleo privado."})
+            response.headers["X-Request-ID"] = request_id
+            response.headers["X-JARVIS-Version"] = APP_VERSION
+            response.headers["Cache-Control"] = "no-store"
+            return response
         response = await call_next(request)
         if response.status_code >= 500:
             status = "error"
@@ -611,6 +691,10 @@ async def request_observability(request: Request, call_next):
             status = "cancelled" if response.status_code == 499 else "error"
         response.headers["X-Request-ID"] = request_id
         response.headers["X-JARVIS-Version"] = APP_VERSION
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        response.headers.setdefault("Permissions-Policy", "camera=(), geolocation=(), microphone=(self)")
         if request.url.path.startswith("/api/"):
             response.headers.setdefault("Cache-Control", "no-store")
         return response
@@ -783,6 +867,29 @@ class EvaluationInput(BaseModel):
     checks: List[Dict[str, Any]] = Field(default_factory=list)
 
 
+class RegisterInput(BaseModel):
+    email: str = Field(min_length=5, max_length=320)
+    password: str = Field(min_length=12, max_length=256)
+    display_name: str = Field(min_length=2, max_length=120)
+
+
+class LoginInput(BaseModel):
+    email: str = Field(min_length=5, max_length=320)
+    password: str = Field(min_length=1, max_length=256)
+
+
+class TelegramWebhookSetupInput(BaseModel):
+    webhook_url: str = Field(min_length=12, max_length=2000)
+    drop_pending_updates: bool = False
+
+
+class ChannelSendInput(BaseModel):
+    channel: str = Field(pattern="^(telegram|whatsapp)$")
+    recipient: str = Field(min_length=1, max_length=180)
+    message: str = Field(min_length=1, max_length=30000)
+    confirmed: bool = False
+
+
 # -----------------------------------------------------------------------------
 # UTILIDADES
 # -----------------------------------------------------------------------------
@@ -794,7 +901,12 @@ def safe_session_id(value: str) -> str:
 
 def safe_error_text(exc: Exception, limit: int = 700) -> str:
     text = f"{type(exc).__name__}: {exc}".strip()
-    for secret in (GROQ_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, ANTHROPIC_API_KEY, OPENAI_COMPAT_API_KEY, OLLAMA_API_KEY):
+    for secret in (
+        GROQ_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, ANTHROPIC_API_KEY,
+        OPENAI_COMPAT_API_KEY, OLLAMA_API_KEY, TELEGRAM_BOT_TOKEN,
+        TELEGRAM_WEBHOOK_SECRET, WHATSAPP_ACCESS_TOKEN, WHATSAPP_VERIFY_TOKEN,
+        WHATSAPP_APP_SECRET,
+    ):
         if secret:
             text = text.replace(secret, "[CLAVE_OCULTA]")
     text = re.sub(r"org_[a-zA-Z0-9]+", "[ORGANIZACION_OCULTA]", text)
@@ -1091,21 +1203,8 @@ def record_usage_dict(session_id: str, model: str, usage: Dict[str, Any], cached
         )
 
 
-def enforce_request_guard(request: Request) -> None:
-    # En modo público cualquier persona puede usar J.A.R.V.I.S. sin claves visibles.
-    # La protección se mantiene mediante el límite por IP. Para volver a modo privado,
-    # configura JARVIS_PUBLIC_MODE=false y define JARVIS_ACCESS_KEY en Render.
-    if not PUBLIC_MODE and JARVIS_ACCESS_KEY:
-        supplied = request.headers.get("X-Jarvis-Access-Key", "")
-        if supplied != JARVIS_ACCESS_KEY:
-            raise HTTPException(status_code=401, detail="Se requiere una clave de acceso válida para J.A.R.V.I.S.")
-
-    forwarded = request.headers.get("x-forwarded-for", "")
-    client_ip = forwarded.split(",", 1)[0].strip() if forwarded else ""
-    if not client_ip and request.client:
-        client_ip = request.client.host
-    client_ip = client_ip or "unknown"
-
+def _enforce_rate_limit(request: Request) -> None:
+    client_ip = _request_ip(request)
     now = time.time()
     cutoff = now - 60
     with _rate_lock:
@@ -1119,6 +1218,20 @@ def enforce_request_guard(request: Request) -> None:
             )
         entries.append(now)
         _rate_windows[client_ip] = entries
+
+
+def enforce_request_guard(request: Request) -> None:
+    # En modo público cualquier persona puede usar J.A.R.V.I.S. sin claves visibles.
+    # La protección se mantiene mediante el límite por IP. Para volver a modo privado,
+    # configura JARVIS_PUBLIC_MODE=false y define JARVIS_ACCESS_KEY en Render.
+    identity = _identity_for_request(request)
+    if AUTH_REQUIRED and not identity:
+        raise HTTPException(status_code=401, detail="Inicia sesión para continuar.")
+    if not PUBLIC_MODE and JARVIS_ACCESS_KEY and not identity:
+        supplied = request.headers.get("X-Jarvis-Access-Key", "")
+        if supplied != JARVIS_ACCESS_KEY:
+            raise HTTPException(status_code=401, detail="Se requiere una clave de acceso válida para J.A.R.V.I.S.")
+    _enforce_rate_limit(request)
 
 
 def provider_status() -> List[Dict[str, Any]]:
@@ -2164,9 +2277,14 @@ def _direct_calculation(prompt: str, session_id: str) -> Optional[Dict[str, Any]
         cleaned,
     )
     candidates = re.findall(r"(?<![a-z])[-+*/().0-9\s]{3,120}(?![a-z])", cleaned)
-    for candidate in sorted(candidates, key=len, reverse=True):
+    # Respeta el orden del texto: en prompts de agentes el objetivo aparece antes
+    # que IDs, fechas y evidencia interna. Elegir la cadena más larga podía
+    # interpretar accidentalmente fragmentos de UUID como una resta.
+    for candidate in candidates:
         expression = re.sub(r"\s+", "", candidate).strip(".")
         if not expression or not re.search(r"[+*/-]", expression) or not re.search(r"\d", expression):
+            continue
+        if expression.count("-") > 1 and not re.search(r"[+*/()]", expression):
             continue
         if not re.fullmatch(r"[0-9+*/().-]+", expression):
             continue
@@ -3228,9 +3346,392 @@ def save_document(session_id: str, file_name: str, file_b64: str) -> Dict[str, A
     }
 
 
+def _require_identity(request: Request, role: str = "") -> Dict[str, Any]:
+    identity = _identity_for_request(request)
+    if not identity:
+        raise HTTPException(status_code=401, detail="Inicia sesión para continuar.")
+    if role and identity.get("role") != role:
+        raise HTTPException(status_code=403, detail="No tienes permiso para realizar esta acción.")
+    return identity
+
+
+def _channel_help(channel: str) -> str:
+    label = "Telegram" if channel == "telegram" else "WhatsApp"
+    return (
+        f"JARVIS está conectado a {label}.\n\n"
+        "Puedes escribir una pregunta normal o utilizar:\n"
+        "• /help — ver esta ayuda\n"
+        "• /status — revisar el núcleo\n"
+        "• /new — iniciar una conversación limpia\n"
+        "• /mission objetivo — crear y ejecutar una misión autónoma\n\n"
+        "Las acciones externas o sensibles siguen requiriendo confirmación."
+    )
+
+
+def _channel_local_command(channel: str, session_id: str, text: str) -> Optional[str]:
+    command = (text or "").strip()
+    lowered = command.lower()
+    if lowered in {"/start", "/help", "help", "ayuda"}:
+        return _channel_help(channel)
+    if lowered == "/status":
+        configured = channel_hub.status().get(channel, {}).get("configured", False)
+        providers = len(provider_gateway.configured_names())
+        return (
+            "Estado del núcleo JARVIS\n"
+            f"• Versión: {APP_VERSION}\n"
+            f"• Canal: {'operativo' if configured else 'incompleto'}\n"
+            f"• Proveedores configurados: {providers}\n"
+            "• Rutas locales, caché y recuperación: activas"
+        )
+    if lowered == "/new":
+        with db_connection() as conn:
+            conn.execute("DELETE FROM historial WHERE session_id = ?", (safe_session_id(session_id),))
+            conn.execute("DELETE FROM response_cache WHERE session_id = ?", (safe_session_id(session_id),))
+        return "Conversación reiniciada. El conocimiento permanente y la biblioteca se conservaron."
+    return None
+
+
+def _run_channel_mission(session_id: str, objective: str, channel: str) -> str:
+    objective = re.sub(r"\s+", " ", objective or "").strip()
+    if len(objective) < 8:
+        return "Escribe el objetivo después de /mission. Ejemplo: /mission investiga tres opciones y compáralas."
+    intent = classify_intent(objective).get("intent", "planning")
+    plan = autonomy_planner.build(objective, intent=intent, mode="professional", project_name=channel.title())
+    workflow = autonomy_store.create_workflow(safe_session_id(session_id), plan)
+    autonomy_store.update_workflow(workflow["id"], status="queued")
+    _submit_workflow(workflow["id"])
+    return (
+        "Misión autónoma creada y puesta en cola.\n"
+        f"ID: {workflow['id']}\n"
+        f"Objetivo: {objective}\n\n"
+        "Puedes consultar su progreso desde el Centro JARVIS en la web."
+    )
+
+
+def _resolve_channel_text(channel: str, session_id: str, text: str) -> str:
+    local = _channel_local_command(channel, session_id, text)
+    if local is not None:
+        return local
+    if text.lower().startswith("/mission"):
+        return _run_channel_mission(session_id, text[len("/mission"):], channel)
+    guardar_mensaje_db(session_id, "user", text)
+    result = resilient_resolve(
+        session_id,
+        text,
+        project_name=channel.title(),
+        mode="auto",
+        intent_info=classify_intent(text),
+    )
+    reply = str(result.get("reply") or "JARVIS completó el proceso sin producir texto.").strip()
+    guardar_mensaje_db(session_id, "assistant", reply)
+    return reply
+
+
+def _process_telegram_event(event: Dict[str, Any]) -> None:
+    event_id = str(event.get("event_id", ""))
+    chat_id = str(event.get("chat_id", ""))
+    try:
+        if not telegram_channel.allowed_sender(chat_id):
+            channel_store.finish_event(event_id, "forbidden", "Chat no incluido en la lista permitida")
+            return
+        session_id = channel_store.session_for("telegram", chat_id, str(event.get("display_name", "")))
+        if event.get("unsupported"):
+            reply = "Por ahora envíame texto o una imagen/documento con comentario. El procesamiento multimedia directo se habilita desde la Biblioteca web."
+        else:
+            reply = _resolve_channel_text("telegram", session_id, str(event.get("text", "")))
+        telegram_channel.send_text(chat_id, reply, event.get("message_id"))
+        channel_store.finish_event(event_id, "completed", reply[:500])
+        log_activity(session_id, "channel.telegram", "Mensaje procesado", event_id, "completed")
+    except Exception as exc:
+        detail = safe_error_text(exc)
+        channel_store.finish_event(event_id, "failed", detail)
+        logger.exception("Falló el evento de Telegram %s", event_id)
+        try:
+            telegram_channel.send_text(chat_id, "No pude completar ese mensaje. La solicitud quedó registrada; inténtalo nuevamente en unos segundos.", event.get("message_id"))
+        except Exception:
+            logger.debug("No se pudo enviar la recuperación de Telegram", exc_info=True)
+
+
+def _process_whatsapp_event(event: Dict[str, Any]) -> None:
+    event_id = str(event.get("event_id", ""))
+    sender_id = str(event.get("sender_id", ""))
+    try:
+        if not whatsapp_channel.allowed_sender(sender_id):
+            channel_store.finish_event(event_id, "forbidden", "Número no incluido en la lista permitida")
+            return
+        session_id = channel_store.session_for("whatsapp", sender_id, str(event.get("display_name", "")))
+        if event.get("unsupported"):
+            reply = "Recibí el archivo, pero este canal procesa directamente texto y comentarios de archivos. Usa la Biblioteca web para analizar el contenido completo."
+        else:
+            reply = _resolve_channel_text("whatsapp", session_id, str(event.get("text", "")))
+        whatsapp_channel.send_text(sender_id, reply, str(event.get("message_id", "")))
+        channel_store.finish_event(event_id, "completed", reply[:500])
+        log_activity(session_id, "channel.whatsapp", "Mensaje procesado", event_id, "completed")
+    except Exception as exc:
+        detail = safe_error_text(exc)
+        channel_store.finish_event(event_id, "failed", detail)
+        logger.exception("Falló el evento de WhatsApp %s", event_id)
+        try:
+            whatsapp_channel.send_text(sender_id, "No pude completar ese mensaje. La solicitud quedó registrada; inténtalo nuevamente en unos segundos.")
+        except Exception:
+            logger.debug("No se pudo enviar la recuperación de WhatsApp", exc_info=True)
+
+
+def _recover_channel_events() -> int:
+    recovered = 0
+    for row in channel_store.pending_events(100):
+        try:
+            event = json.loads(row.get("detail") or "{}")
+            if not isinstance(event, dict):
+                raise ValueError("evento persistido no válido")
+            if row.get("channel") == "telegram":
+                _ensure_job_executor().submit(_process_telegram_event, event)
+            elif row.get("channel") == "whatsapp":
+                _ensure_job_executor().submit(_process_whatsapp_event, event)
+            else:
+                channel_store.finish_event(row["id"], "failed", "Canal desconocido")
+                continue
+            recovered += 1
+        except Exception as exc:
+            channel_store.finish_event(row["id"], "failed", safe_error_text(exc))
+    return recovered
+
+
 # -----------------------------------------------------------------------------
 # ENDPOINTS
 # -----------------------------------------------------------------------------
+
+@app.get("/api/auth/status")
+def auth_status(request: Request):
+    identity = _identity_for_request(request)
+    count = identity_store.user_count()
+    return {
+        "status": "ok",
+        "auth_required": AUTH_REQUIRED,
+        "registration_enabled": REGISTRATION_ENABLED or count == 0,
+        "first_user_pending": count == 0,
+        "authenticated": bool(identity),
+        "user": identity,
+        "identity": identity_store.status(),
+    }
+
+
+@app.post("/api/auth/register")
+def auth_register(data: RegisterInput, request: Request):
+    _enforce_rate_limit(request)
+    count = identity_store.user_count()
+    if count > 0 and not REGISTRATION_ENABLED:
+        raise HTTPException(status_code=403, detail="El registro público está desactivado.")
+    try:
+        user = identity_store.register(
+            data.email,
+            data.password,
+            data.display_name,
+            role="admin" if count == 0 else "user",
+        )
+        session = identity_store.login(
+            data.email,
+            data.password,
+            user_agent=request.headers.get("user-agent", ""),
+            ip_hint=_request_ip(request),
+        )
+        return {"status": "success", **session, "created_user": user}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/auth/login")
+def auth_login(data: LoginInput, request: Request):
+    _enforce_rate_limit(request)
+    try:
+        session = identity_store.login(
+            data.email,
+            data.password,
+            user_agent=request.headers.get("user-agent", ""),
+            ip_hint=_request_ip(request),
+        )
+        return {"status": "success", **session}
+    except PermissionError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+
+@app.get("/api/auth/me")
+def auth_me(request: Request):
+    return {"user": _require_identity(request)}
+
+
+@app.post("/api/auth/logout")
+def auth_logout(request: Request):
+    token = _bearer_token(request)
+    identity = _require_identity(request)
+    logged_out = identity_store.logout(token)
+    identity_store.audit(identity["id"], "identity.logout", "session", "success")
+    return {"status": "success", "logged_out": logged_out}
+
+
+@app.get("/api/auth/audit")
+def auth_audit(request: Request, limit: int = 100):
+    _require_identity(request, "admin")
+    return {"events": identity_store.audit_events(limit)}
+
+
+@app.get("/api/channels/status")
+def channels_status(request: Request):
+    enforce_request_guard(request)
+    return {
+        "status": "ok",
+        "version": APP_VERSION,
+        "channels": channel_hub.status(),
+        "webhooks": {
+            "telegram": "/api/channels/telegram/webhook",
+            "whatsapp": "/api/channels/whatsapp/webhook",
+        },
+        "commands": ["/help", "/status", "/new", "/mission objetivo"],
+    }
+
+
+@app.post("/api/channels/telegram/register-webhook")
+def telegram_register_webhook(data: TelegramWebhookSetupInput, request: Request):
+    enforce_request_guard(request)
+    try:
+        result = telegram_channel.set_webhook(data.webhook_url, data.drop_pending_updates)
+        identity = _identity_for_request(request)
+        identity_store.audit((identity or {}).get("id", ""), "channel.telegram.webhook", data.webhook_url, "success")
+        return {"status": "success", "result": result}
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=safe_error_text(exc)) from exc
+
+
+@app.post("/api/channels/telegram/webhook")
+async def telegram_webhook(request: Request):
+    supplied = request.headers.get("x-telegram-bot-api-secret-token", "")
+    if not telegram_channel.verify(supplied):
+        raise HTTPException(status_code=403, detail="Firma de Telegram no válida.")
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Carga JSON no válida.") from exc
+    event = telegram_channel.parse(payload if isinstance(payload, dict) else {})
+    if not event:
+        return {"status": "ignored"}
+    if not channel_store.claim_event(
+        event["event_id"], "telegram", event["chat_id"], detail=json.dumps(event, ensure_ascii=False)
+    ):
+        return {"status": "duplicate"}
+    _ensure_job_executor().submit(_process_telegram_event, event)
+    return {"status": "accepted"}
+
+
+@app.get("/api/channels/whatsapp/webhook")
+def whatsapp_webhook_verify(request: Request):
+    mode = request.query_params.get("hub.mode", "")
+    token = request.query_params.get("hub.verify_token", "")
+    challenge = request.query_params.get("hub.challenge", "")
+    if whatsapp_channel.verify_subscription(mode, token):
+        return PlainTextResponse(challenge, status_code=200)
+    raise HTTPException(status_code=403, detail="Verificación de WhatsApp no válida.")
+
+
+@app.post("/api/channels/whatsapp/webhook")
+async def whatsapp_webhook(request: Request):
+    raw = await request.body()
+    signature = request.headers.get("x-hub-signature-256", "")
+    if not whatsapp_channel.verify_signature(raw, signature):
+        raise HTTPException(status_code=403, detail="Firma de WhatsApp no válida.")
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Carga JSON no válida.") from exc
+    accepted = 0
+    for event in whatsapp_channel.parse(payload if isinstance(payload, dict) else {}):
+        if channel_store.claim_event(
+            event["event_id"], "whatsapp", event["sender_id"], detail=json.dumps(event, ensure_ascii=False)
+        ):
+            _ensure_job_executor().submit(_process_whatsapp_event, event)
+            accepted += 1
+    return {"status": "accepted", "events": accepted}
+
+
+@app.post("/api/channels/send")
+def channel_send(data: ChannelSendInput, request: Request):
+    enforce_request_guard(request)
+    if not data.confirmed:
+        raise HTTPException(status_code=409, detail="Confirma el envío externo antes de continuar.")
+    try:
+        if data.channel == "telegram":
+            if not telegram_channel.allowed_sender(data.recipient):
+                raise PermissionError("El chat no está incluido en TELEGRAM_ALLOWED_CHAT_IDS.")
+            result = telegram_channel.send_text(data.recipient, data.message)
+        else:
+            if not whatsapp_channel.allowed_sender(data.recipient):
+                raise PermissionError("El número no está incluido en WHATSAPP_ALLOWED_NUMBERS.")
+            result = whatsapp_channel.send_text(data.recipient, data.message)
+        identity = _identity_for_request(request)
+        identity_store.audit((identity or {}).get("id", ""), f"channel.{data.channel}.send", data.recipient, "success")
+        return {"status": "sent", "channel": data.channel, "messages": len(result)}
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=safe_error_text(exc)) from exc
+
+
+@app.get("/api/operations/overview")
+def operations_overview(request: Request, session_id: str = ""):
+    enforce_request_guard(request)
+    sid = safe_session_id(session_id) if session_id else ""
+    gateway_snapshot = provider_gateway.snapshot()
+    return {
+        "status": "ok",
+        "version": APP_VERSION,
+        "edition": APP_EDITION,
+        "providers": {
+            "configured": gateway_snapshot.get("configured", []),
+            "total": len(gateway_snapshot.get("providers", {})),
+        },
+        "autonomy": autonomy_store.counts(sid),
+        "semantic": semantic_index.status(sid),
+        "automations": automation_store.counts(),
+        "channels": channel_hub.status(),
+        "identity": {**identity_store.status(), "required": AUTH_REQUIRED},
+        "quality": evaluation_store.report(7),
+        "code_lab": code_lab.status(),
+        "mcp": mcp_manager.status(False),
+        "safety": {
+            "human_approval": True,
+            "automatic_production_code_changes": False,
+            "channel_signatures": True,
+        },
+    }
+
+
+@app.get("/api/data/export")
+def export_personal_data(request: Request, session_id: str):
+    enforce_request_guard(request)
+    sid = safe_session_id(session_id)
+    with db_connection() as conn:
+        history = [dict(row) for row in conn.execute(
+            "SELECT role,content,timestamp FROM historial WHERE session_id = ? ORDER BY id", (sid,)
+        ).fetchall()]
+        memories = [dict(row) for row in conn.execute(
+            "SELECT id,content,category,importance,created_at FROM memories WHERE session_id = ? ORDER BY created_at", (sid,)
+        ).fetchall()]
+        documents = [dict(row) for row in conn.execute(
+            "SELECT id,file_name,file_type,length(extracted_text) characters,created_at FROM documents WHERE session_id = ? ORDER BY created_at", (sid,)
+        ).fetchall()]
+        reminders = [dict(row) for row in conn.execute(
+            "SELECT id,title,due_at,recurrence,status,created_at FROM reminders WHERE session_id = ? ORDER BY created_at", (sid,)
+        ).fetchall()]
+    return {
+        "exported_at": time.time(),
+        "version": APP_VERSION,
+        "session_id": sid,
+        "history": history,
+        "memories": memories,
+        "documents": documents,
+        "reminders": reminders,
+        "workflows": autonomy_store.list_workflows(sid, 200),
+        "automations": automation_store.list(sid, 200),
+    }
 
 @app.post("/api/jarvis")
 async def consultar_jarvis(data: ChatInput, request: Request):
@@ -4685,7 +5186,7 @@ def self_check():
         checks["automation_store"] = {"ok": True, "counts": automation_store.counts()}
         checks["evaluation_store"] = {"ok": True, "runs": evaluation_store.report(1).get("runs", 0)}
     except Exception as exc:
-        checks["v38_data_core"] = {"ok": False, "detail": safe_error_text(exc)}
+        checks["v46_data_core"] = {"ok": False, "detail": safe_error_text(exc)}
     checks["mcp"] = {"ok": True, "optional": True, **mcp_manager.status(False)}
     checks["code_lab"] = {"ok": True, "optional": True, **code_lab.status()}
     checks["disk"] = disk_status(str(BASE_DIR))
@@ -5059,6 +5560,31 @@ def system_info():
         "job_workers": JOB_WORKERS,
         "request_timeout_seconds": REQUEST_TIMEOUT_SECONDS,
     }
+
+
+@app.get("/service-worker.js", include_in_schema=False)
+def root_service_worker():
+    worker = BASE_DIR / "service-worker.js"
+    if not worker.exists():
+        raise HTTPException(status_code=404, detail="Service worker no disponible")
+    return FileResponse(
+        worker,
+        media_type="application/javascript",
+        headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache"},
+    )
+
+
+@app.get("/index.html", include_in_schema=False)
+def root_index_file():
+    if INDEX_FILE.exists():
+        return FileResponse(INDEX_FILE)
+    raise HTTPException(status_code=404, detail="Interfaz no disponible")
+
+
+@app.get("/404.html", include_in_schema=False)
+def root_404_file():
+    fallback = BASE_DIR / "404.html"
+    return FileResponse(fallback if fallback.exists() else INDEX_FILE)
 
 
 @app.get("/", response_class=HTMLResponse)

@@ -59,7 +59,7 @@ class WorkflowPlan:
 
     def as_dict(self) -> Dict[str, Any]:
         data = asdict(self)
-        data["edition"] = "autonomous-runtime-v38"
+        data["edition"] = "autonomous-runtime-v46"
         return data
 
 

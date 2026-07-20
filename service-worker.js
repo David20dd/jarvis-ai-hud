@@ -1,9 +1,9 @@
-const CACHE_NAME = 'jarvis-autonomous-professional-v38';
+const CACHE_NAME = 'jarvis-unified-personal-v46';
 const CORE = [
   './', './index.html', './404.html',
-  './static/styles.css?v=38', './static/app.js?v=38', './static/config.js?v=38',
-  './static/manifest.webmanifest?v=38', './static/favicon-v38.svg?v=38',
-  './static/jarvis-reactor-v38.svg'
+  './static/styles.css?v=46', './static/app.js?v=46', './static/config.js?v=46',
+  './static/manifest.webmanifest?v=46', './static/favicon-v46.svg?v=46',
+  './static/jarvis-reactor-v46.svg'
 ];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(CORE)).then(() => self.skipWaiting()));
