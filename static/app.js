@@ -36,6 +36,7 @@
     app: $('#app'), sidebar: $('#sidebar'), scrim: $('#scrim'), sidebarClose: $('#sidebarClose'),
     menuBtn: $('#menuBtn'), brandBtn: $('#brandBtn'), newChatBtn: $('#newChatBtn'), mobileNewBtn: $('#mobileNewBtn'),
     mobileCompose: $('#mobileCompose'), chatList: $('#chatList'), chatSearch: $('#chatSearch'), searchChatsBtn: $('#searchChatsBtn'), historyCount: $('#historyCount'),
+    chatContextMenu: $('#chatContextMenu'), chatPinLabel: $('#chatPinLabel'),
     modeSelect: $('#modeSelect'), statusButton: $('#statusButton'), statusText: $('#statusText'), diagnosticsBtn: $('#diagnosticsBtn'),
     contextTitle: $('#contextTitle'), contextSubtitle: $('#contextSubtitle'), coreBanner: $('#coreBanner'), coreBannerText: $('#coreBannerText'), coreRetryBtn: $('#coreRetryBtn'),
     chatView: $('#chatView'), panelView: $('#panelView'), conversation: $('#conversation'), welcome: $('#welcome'), messages: $('#messages'),
@@ -69,7 +70,9 @@
     currentView: 'chat',
     authMode: 'login',
     toastTimer: null,
-    phaseTimer: null
+    phaseTimer: null,
+    chatMenuTarget: '',
+    chatMenuTrigger: null
   };
   local.setItem(KEYS.client, state.clientId);
 
@@ -132,6 +135,14 @@
     els.attachBtn.addEventListener('click', () => els.fileInput.click());
     els.fileInput.addEventListener('change', handleFiles);
     els.voiceBtn.addEventListener('click', startVoiceInput);
+    els.chatContextMenu.addEventListener('click', event => {
+      const actionButton = event.target.closest('[data-chat-action]');
+      if (!actionButton || !state.chatMenuTarget) return;
+      const target = state.chatMenuTarget;
+      closeChatMenu();
+      handleChatAction(actionButton.dataset.chatAction, target);
+    });
+    els.chatList.addEventListener('scroll', () => closeChatMenu(), { passive:true });
     els.messages.addEventListener('click', handleMessageAction);
     els.coreRetryBtn.addEventListener('click', async () => {
       els.coreRetryBtn.disabled = true;
@@ -160,8 +171,10 @@
 
     window.addEventListener('online', bootCore);
     window.addEventListener('offline', () => setStatus('Sin conexión a internet', 'offline'));
+    window.addEventListener('resize', () => closeChatMenu());
+    document.addEventListener('keydown', event => { if (event.key === 'Escape') closeChatMenu(true); });
     document.addEventListener('click', event => {
-      if (!event.target.closest('.chat-item')) $$('.chat-item.menu-open').forEach(item => item.classList.remove('menu-open'));
+      if (!event.target.closest('[data-chat-menu],#chatContextMenu')) closeChatMenu();
     });
   }
 
@@ -310,6 +323,7 @@
   }
 
   function renderChatList() {
+    closeChatMenu();
     const query = els.chatSearch.value.trim().toLowerCase();
     const chats = Object.values(state.chats)
       .sort((a,b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || b.updatedAt - a.updatedAt)
@@ -332,13 +346,7 @@
           const last = [...(chat.messages || [])].reverse().find(item => item.content)?.content || 'Sin mensajes todavía';
           return `<article class="chat-item ${chat.id === state.activeChatId ? 'active' : ''}" data-chat-id="${escapeHTML(chat.id)}" tabindex="0" aria-label="Abrir ${escapeHTML(chat.title)}">
             <div><strong>${chat.pinned ? '<span class="pin-mark">•</span>' : ''}${escapeHTML(chat.title)}</strong><span class="chat-preview">${escapeHTML(String(last).replace(/\s+/g,' ').slice(0,72))}</span><small>${relativeTime(chat.updatedAt)} · ${(chat.messages || []).length} mensajes</small></div>
-            <button class="chat-more" data-chat-menu="${escapeHTML(chat.id)}" aria-label="Opciones de conversación" aria-expanded="false">${icon('more')}</button>
-            <div class="chat-actions" role="menu">
-              <button data-chat-action="pin" data-chat-target="${escapeHTML(chat.id)}" role="menuitem">${chat.pinned ? 'Desfijar' : 'Fijar'}</button>
-              <button data-chat-action="rename" data-chat-target="${escapeHTML(chat.id)}" role="menuitem">Renombrar</button>
-              <button data-chat-action="export" data-chat-target="${escapeHTML(chat.id)}" role="menuitem">Exportar</button>
-              <button class="danger" data-chat-action="delete" data-chat-target="${escapeHTML(chat.id)}" role="menuitem">Eliminar</button>
-            </div>
+            <button class="chat-more" data-chat-menu="${escapeHTML(chat.id)}" aria-label="Opciones de conversación" aria-haspopup="menu" aria-expanded="false">${icon('more')}</button>
           </article>`;
         }).join('')}
       </section>`).join('') : '<div class="empty-history">No encontramos conversaciones.</div>';
@@ -355,16 +363,60 @@
     });
     $$('[data-chat-menu]', els.chatList).forEach(button => button.addEventListener('click', event => {
       event.stopPropagation();
-      const item = button.closest('.chat-item');
-      const opening = !item.classList.contains('menu-open');
-      $$('.chat-item.menu-open', els.chatList).forEach(other => other.classList.remove('menu-open'));
-      item.classList.toggle('menu-open', opening);
-      button.setAttribute('aria-expanded', String(opening));
+      toggleChatMenu(button, button.dataset.chatMenu);
     }));
-    $$('[data-chat-action]', els.chatList).forEach(button => button.addEventListener('click', event => {
-      event.stopPropagation();
-      handleChatAction(button.dataset.chatAction, button.dataset.chatTarget);
-    }));
+  }
+
+  function toggleChatMenu(trigger, chatId) {
+    if (!trigger || !chatId) return;
+    const isSameOpen = !els.chatContextMenu.hidden && state.chatMenuTarget === chatId;
+    closeChatMenu();
+    if (isSameOpen) return;
+
+    const chat = state.chats[chatId];
+    if (!chat) return;
+    state.chatMenuTarget = chatId;
+    state.chatMenuTrigger = trigger;
+    els.chatPinLabel.textContent = chat.pinned ? 'Desfijar' : 'Fijar';
+    trigger.setAttribute('aria-expanded', 'true');
+
+    const menu = els.chatContextMenu;
+    menu.hidden = false;
+    menu.style.visibility = 'hidden';
+    menu.classList.remove('is-open');
+
+    const triggerRect = trigger.getBoundingClientRect();
+    const sidebarRect = els.sidebar.getBoundingClientRect();
+    const safe = 8;
+    const menuWidth = menu.offsetWidth;
+    const menuHeight = menu.offsetHeight;
+    const minLeft = Math.max(safe, sidebarRect.left + safe);
+    const maxLeft = Math.max(minLeft, Math.min(window.innerWidth - menuWidth - safe, sidebarRect.right - menuWidth - safe));
+    const left = Math.min(Math.max(triggerRect.right - menuWidth, minLeft), maxLeft);
+    let top = triggerRect.bottom + 7;
+    if (top + menuHeight > window.innerHeight - safe) top = triggerRect.top - menuHeight - 7;
+    top = Math.max(safe, Math.min(top, window.innerHeight - menuHeight - safe));
+
+    menu.style.left = `${Math.round(left)}px`;
+    menu.style.top = `${Math.round(top)}px`;
+    menu.style.visibility = '';
+    requestAnimationFrame(() => menu.classList.add('is-open'));
+    menu.querySelector('[role="menuitem"]')?.focus({ preventScroll:true });
+  }
+
+  function closeChatMenu(restoreFocus = false) {
+    const menu = els.chatContextMenu;
+    if (!menu) return;
+    const trigger = state.chatMenuTrigger;
+    trigger?.setAttribute('aria-expanded', 'false');
+    menu.classList.remove('is-open');
+    menu.hidden = true;
+    menu.style.removeProperty('left');
+    menu.style.removeProperty('top');
+    menu.style.removeProperty('visibility');
+    state.chatMenuTarget = '';
+    state.chatMenuTrigger = null;
+    if (restoreFocus && trigger?.isConnected) trigger.focus({ preventScroll:true });
   }
 
   function chatDateGroup(timestamp) {
@@ -682,7 +734,7 @@
 
   const PANEL_INFO = {
     knowledge:['CONOCIMIENTO','Biblioteca y memoria'], missions:['AUTONOMÍA','Misiones'],
-    nexus:['CONTROL','Nexus v57'], channels:['TELEGRAM','Asistente móvil'],
+    nexus:['CONTROL','Nexus v58'], channels:['TELEGRAM','Asistente móvil'],
     library:['CONOCIMIENTO','Biblioteca'], memory:['CONTEXTO','Memoria'], system:['ESTADO','Diagnóstico del núcleo']
   };
 
@@ -825,7 +877,7 @@
   async function renderNexus() {
     const sid=encodeURIComponent(backendSessionId());
     const results=await Promise.allSettled([
-      request(`/api/v57/status?session_id=${sid}`), request('/api/integrations'),
+      request(`/api/v58/status?session_id=${sid}`), request('/api/integrations'),
       request(`/api/artifacts?session_id=${sid}&limit=12`), request(`/api/automations?session_id=${sid}&limit=12`),
       request(`/api/intelligence/decisions?session_id=${sid}&limit=8`)
     ]);
@@ -833,7 +885,7 @@
     const automations=valueOf(results[3]).automations||[], decisions=valueOf(results[4]).decisions||[];
     const providers=core.providers?.configured||[], intelligence=core.intelligence||{};
     els.panelContent.innerHTML=`
-      <div class="nexus-hero panel-card"><div><span class="card-kicker">REFINED INTELLIGENCE · v57</span><h3>Un núcleo, rutas claras y control humano</h3><p>Planifica con presupuesto, ejecuta con checkpoints y conserva evidencia sin exponer tus claves.</p></div><button class="soft-btn" id="nexusDiagnostics">Diagnóstico</button></div>
+      <div class="nexus-hero panel-card"><div><span class="card-kicker">POLISHED INTELLIGENCE · v58</span><h3>Un núcleo, rutas claras y control humano</h3><p>Planifica con presupuesto, ejecuta con checkpoints y conserva evidencia sin exponer tus claves.</p></div><button class="soft-btn" id="nexusDiagnostics">Diagnóstico</button></div>
       <div class="panel-grid nexus-metrics">
         <article class="panel-card metric-card"><span class="card-kicker">PROVEEDORES</span><strong class="metric">${providers.length}</strong><p>${providers.length?providers.map(escapeHTML).join(' · '):'Modo local disponible'}</p></article>
         <article class="panel-card metric-card"><span class="card-kicker">DECISIONES</span><strong class="metric">${Object.values(intelligence.decisions||{}).reduce((a,b)=>a+Number(b||0),0)}</strong><p>Rutas registradas por el planificador.</p></article>
@@ -1041,8 +1093,10 @@
     const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
     if (!Recognition) return toast('El dictado no está disponible en este navegador.');
     const recognition=new Recognition(); recognition.lang='es-HN'; recognition.interimResults=false;
+    recognition.onstart=()=>{ els.voiceBtn.classList.add('listening'); els.voiceBtn.setAttribute('aria-label','Escuchando; pulsa para detener'); };
     recognition.onresult=event=>{ els.messageInput.value=`${els.messageInput.value} ${event.results[0][0].transcript}`.trim(); autoResize(); };
     recognition.onerror=()=>toast('No fue posible utilizar el micrófono.');
+    recognition.onend=()=>{ els.voiceBtn.classList.remove('listening'); els.voiceBtn.setAttribute('aria-label','Dictar mensaje'); };
     recognition.start();
   }
 
@@ -1053,6 +1107,6 @@
 
   function registerServiceWorker() {
     if (!('serviceWorker' in navigator) || location.protocol === 'file:') return;
-    navigator.serviceWorker.register('./service-worker.js?v=57.2').catch(()=>{});
+    navigator.serviceWorker.register('./service-worker.js?v=58.1').catch(()=>{});
   }
 })();

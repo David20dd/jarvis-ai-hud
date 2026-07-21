@@ -1,12 +1,12 @@
-const CACHE_NAME = 'jarvis-refined-intelligence-v57-2';
+const CACHE_NAME = 'jarvis-polished-intelligence-v58-1';
 const APP_SHELL = [
   './',
   './index.html',
   './404.html',
-  './static/styles.css?v=57.2',
-  './static/app.js?v=57.2',
-  './static/config.js?v=57.2',
-  './static/manifest.webmanifest?v=57.2',
+  './static/styles.css?v=58.1',
+  './static/app.js?v=58.1',
+  './static/config.js?v=58.1',
+  './static/manifest.webmanifest?v=58.1',
   './static/favicon-v46.svg',
   './static/jarvis-reactor-v46.svg'
 ];

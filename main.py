@@ -95,8 +95,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger("jarvis")
 
-APP_VERSION = "57.0.0"
-APP_EDITION = "Refined Intelligence"
+APP_VERSION = "58.0.0"
+APP_EDITION = "Polished Intelligence"
 
 DB_FILE = os.getenv("JARVIS_DB_FILE", "jarvis_memory.db").strip() or "jarvis_memory.db"
 BASE_DIR = Path(__file__).resolve().parent
@@ -623,7 +623,7 @@ async def lifespan(_: FastAPI):
     recovered_workflows = _recover_interrupted_workflows()
     recovered_channels = _recover_channel_events()
     logger.info(
-        "J.A.R.V.I.S. v57 iniciado | public_mode=%s | redis=%s | jobs_recuperados=%s | workflows_recuperados=%s | canales_recuperados=%s",
+        "J.A.R.V.I.S. v58 iniciado | public_mode=%s | redis=%s | jobs_recuperados=%s | workflows_recuperados=%s | canales_recuperados=%s",
         PUBLIC_MODE,
         bool(REDIS_URL),
         recovered,
@@ -634,11 +634,11 @@ async def lifespan(_: FastAPI):
     _stop_maintenance()
     JOB_EXECUTOR.shutdown(wait=False, cancel_futures=True)
     provider_gateway.close()
-    logger.info("J.A.R.V.I.S. v57 detenido")
+    logger.info("J.A.R.V.I.S. v58 detenido")
 
 
 app = FastAPI(
-    title=f"J.A.R.V.I.S. {APP_EDITION} v57",
+    title=f"J.A.R.V.I.S. {APP_EDITION} v58",
     version=APP_VERSION,
     lifespan=lifespan,
 )
@@ -4855,7 +4855,8 @@ def _unified_plan(objective: str, mode: str = "auto") -> Dict[str, Any]:
 
 @app.get("/api/v55/status", include_in_schema=False)
 @app.get("/api/v56/status", include_in_schema=False)
-@app.get("/api/v57/status")
+@app.get("/api/v57/status", include_in_schema=False)
+@app.get("/api/v58/status")
 def unified_status(session_id: str = ""):
     sid = safe_session_id(session_id) if session_id else ""
     provider_snapshot = provider_gateway.snapshot()
@@ -4882,7 +4883,7 @@ def intelligence_plan(data: IntelligencePlanInput, request: Request):
     sid = safe_session_id(data.session_id)
     plan = _unified_plan(data.objective, data.mode)
     decision = unified_store.save_decision(sid, data.objective, plan)
-    log_activity(sid, "intelligence", "Plan v57 creado", decision.get("id", ""), "planned")
+    log_activity(sid, "intelligence", "Plan v58 creado", decision.get("id", ""), "planned")
     return {"status": "planned", "decision": decision, "plan": plan}
 
 
@@ -4900,7 +4901,7 @@ def intelligence_execute(data: IntelligencePlanInput, request: Request):
     unified_store.link_workflow(decision["id"], workflow["id"])
     autonomy_store.update_workflow(workflow["id"], status="queued")
     submitted = _submit_workflow(workflow["id"])
-    log_activity(sid, "intelligence", "Misión v57 iniciada", workflow["id"], "queued")
+    log_activity(sid, "intelligence", "Misión v58 iniciada", workflow["id"], "queued")
     return {
         "status": "queued", "submitted": submitted,
         "decision": unified_store.get_decision(decision["id"]), "plan": plan,
