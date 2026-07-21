@@ -52,6 +52,9 @@ from jarvis_core import (
     TelegramMediaAI,
     TelegramPreferenceStore,
     ToolRegistry,
+    IntelligencePlanner,
+    IntegrationRegistry,
+    UnifiedIntelligenceStore,
     compact_messages,
     disk_status,
 )
@@ -92,8 +95,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger("jarvis")
 
-APP_VERSION = "49.0.0"
-APP_EDITION = "Telegram Pro"
+APP_VERSION = "55.0.0"
+APP_EDITION = "Unified Intelligence"
 
 DB_FILE = os.getenv("JARVIS_DB_FILE", "jarvis_memory.db").strip() or "jarvis_memory.db"
 BASE_DIR = Path(__file__).resolve().parent
@@ -208,6 +211,9 @@ telegram_media_ai = TelegramMediaAI(
     transcription_model=TELEGRAM_TRANSCRIBE_MODEL,
     timeout_seconds=max(PROVIDER_TIMEOUT_SECONDS, 60),
 )
+unified_store = UnifiedIntelligenceStore(DB_FILE)
+intelligence_planner = IntelligencePlanner()
+integration_registry = IntegrationRegistry(dict(os.environ))
 
 
 def _provider_models(names: List[str], provider: str) -> List[ProviderModel]:
@@ -478,6 +484,7 @@ def init_db() -> None:
     identity_store.init_schema()
     channel_store.init_schema()
     telegram_preferences.init_schema()
+    unified_store.init_schema()
 
 
 def _maintenance_cycle() -> Dict[str, Any]:
@@ -586,7 +593,7 @@ async def lifespan(_: FastAPI):
     recovered_workflows = _recover_interrupted_workflows()
     recovered_channels = _recover_channel_events()
     logger.info(
-        "J.A.R.V.I.S. v49 iniciado | public_mode=%s | redis=%s | jobs_recuperados=%s | workflows_recuperados=%s | canales_recuperados=%s",
+        "J.A.R.V.I.S. v55 iniciado | public_mode=%s | redis=%s | jobs_recuperados=%s | workflows_recuperados=%s | canales_recuperados=%s",
         PUBLIC_MODE,
         bool(REDIS_URL),
         recovered,
@@ -597,11 +604,11 @@ async def lifespan(_: FastAPI):
     _stop_maintenance()
     JOB_EXECUTOR.shutdown(wait=False, cancel_futures=True)
     provider_gateway.close()
-    logger.info("J.A.R.V.I.S. v49 detenido")
+    logger.info("J.A.R.V.I.S. v55 detenido")
 
 
 app = FastAPI(
-    title=f"J.A.R.V.I.S. {APP_EDITION} v49",
+    title=f"J.A.R.V.I.S. {APP_EDITION} v55",
     version=APP_VERSION,
     lifespan=lifespan,
 )
@@ -926,6 +933,43 @@ class ChannelSendInput(BaseModel):
     confirmed: bool = False
 
 
+class IntelligencePlanInput(BaseModel):
+    session_id: str = "default_session"
+    objective: str = Field(min_length=1, max_length=30000)
+    mode: str = "auto"
+    project_name: str = "General"
+    title: str = "Misión JARVIS"
+
+
+class KnowledgeFactInput(BaseModel):
+    session_id: str = "default_session"
+    project_name: str = "General"
+    subject: str = Field(min_length=1, max_length=500)
+    predicate: str = Field(default="relacionado con", min_length=1, max_length=240)
+    object_text: str = Field(min_length=1, max_length=12000)
+    source_type: str = Field(default="user", max_length=80)
+    source_ref: str = Field(default="", max_length=1000)
+    confidence: float = Field(default=0.7, ge=0, le=1)
+    expires_at: float = Field(default=0, ge=0)
+    verified: bool = False
+
+
+class InteractiveArtifactInput(BaseModel):
+    session_id: str = "default_session"
+    title: str = Field(min_length=1, max_length=300)
+    artifact_type: str = Field(pattern="^(table|chart|checklist|timeline|comparison)$")
+    spec: Dict[str, Any] = Field(default_factory=dict)
+
+
+class IntegrationPrepareInput(BaseModel):
+    action: str = Field(min_length=1, max_length=120)
+    arguments: Dict[str, Any] = Field(default_factory=dict)
+
+
+class VoiceSpeechInput(BaseModel):
+    text: str = Field(min_length=1, max_length=4000)
+
+
 # -----------------------------------------------------------------------------
 # UTILIDADES
 # -----------------------------------------------------------------------------
@@ -941,7 +985,6 @@ def safe_error_text(exc: Exception, limit: int = 700) -> str:
         GROQ_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, ANTHROPIC_API_KEY,
         OPENAI_COMPAT_API_KEY, OLLAMA_API_KEY, TELEGRAM_BOT_TOKEN,
         TELEGRAM_WEBHOOK_SECRET,
-        WHATSAPP_APP_SECRET,
     ):
         if secret:
             text = text.replace(secret, "[CLAVE_OCULTA]")
@@ -3954,6 +3997,14 @@ async def consultar_jarvis(data: ChatInput, request: Request):
     if requested_mode not in {"auto", "fast", "research", "math", "writing", "professional"}:
         requested_mode = "auto"
     intent_info = classify_intent(prompt)
+    intelligence_decision_id = ""
+    intelligence_summary: Dict[str, Any] = {}
+    try:
+        intelligence_summary = _unified_plan(prompt, requested_mode)
+        decision = unified_store.save_decision(sid, prompt, intelligence_summary)
+        intelligence_decision_id = str(decision.get("id") or "")
+    except Exception:
+        logger.debug("No se pudo persistir la decisión inteligente", exc_info=True)
     if len(prompt) > MAX_MESSAGE_CHARS:
         raise HTTPException(status_code=413, detail=f"El mensaje supera el límite de {MAX_MESSAGE_CHARS} caracteres.")
     log_activity(sid, "request", "Solicitud recibida", prompt, "running")
@@ -4015,6 +4066,21 @@ async def consultar_jarvis(data: ChatInput, request: Request):
             "request_timeout_seconds": REQUEST_TIMEOUT_SECONDS,
             "context_limit_chars": CONTEXT_MAX_CHARS,
         }
+        if intelligence_decision_id:
+            quality = 0.92 if result.get("verified") else (0.78 if not result.get("degraded") else 0.55)
+            await asyncio.to_thread(
+                unified_store.record_outcome,
+                intelligence_decision_id,
+                "completed" if not result.get("degraded") else "degraded",
+                quality,
+                result["latency_ms"],
+            )
+        result["intelligence"] = {
+            "decision_id": intelligence_decision_id,
+            "complexity": intelligence_summary.get("complexity", "low"),
+            "budget": intelligence_summary.get("budget", {}),
+            "recovery": intelligence_summary.get("recovery", []),
+        }
         response_payload = {"status": "degraded" if result.get("degraded") else "success", **result}
         await asyncio.to_thread(request_result_set, request_id, sid, response_payload)
         record_telemetry("chat:request", "success", (time.perf_counter() - started_at) * 1000, request_id=request_id, session_id=sid, detail=result.get("route", ""))
@@ -4037,7 +4103,17 @@ async def consultar_jarvis(data: ChatInput, request: Request):
             "latency_ms": round((time.perf_counter() - started_at) * 1000),
             "recovered": True,
             "technical_error_hidden": True,
+            "intelligence": {
+                "decision_id": intelligence_decision_id,
+                "complexity": intelligence_summary.get("complexity", "low"),
+                "recovery": intelligence_summary.get("recovery", ["local_tools"]),
+            },
         }
+        if intelligence_decision_id:
+            await asyncio.to_thread(
+                unified_store.record_outcome, intelligence_decision_id, "recovered", 0.45,
+                (time.perf_counter() - started_at) * 1000,
+            )
         await asyncio.to_thread(request_result_set, request_id, sid, content)
         record_telemetry(
             "chat:request",
@@ -4664,6 +4740,9 @@ def execute_autonomy_workflow(workflow_id: str) -> None:
                         {"name": "completion", "score": 1.0, "weight": 1},
                     ],
                 )
+                unified_store.record_workflow_outcome(
+                    workflow_id, "completed", float(verification.get("score", 0.7) or 0.7),
+                )
                 log_activity(refreshed["session_id"], "autonomy", "Workflow completado", workflow_id, "completed")
                 return
             autonomy_store.update_workflow(workflow_id, status="running", current_step=int(step["step_index"]))
@@ -4680,11 +4759,13 @@ def execute_autonomy_workflow(workflow_id: str) -> None:
                 detail = safe_error_text(exc)
                 autonomy_store.update_step(step["id"], status="failed", error=detail, completed_at=time.time())
                 autonomy_store.update_workflow(workflow_id, status="failed", error=detail, completed_at=time.time())
+                unified_store.record_workflow_outcome(workflow_id, "failed", 0.0)
                 log_activity(workflow["session_id"], "autonomy", "Workflow falló", detail, "failed")
                 return
     except Exception as exc:
         detail = safe_error_text(exc)
         autonomy_store.update_workflow(workflow_id, status="failed", error=detail, completed_at=time.time())
+        unified_store.record_workflow_outcome(workflow_id, "failed", 0.0)
         logger.exception("Falló workflow %s", workflow_id)
 
 
@@ -4718,6 +4799,158 @@ def _recover_interrupted_workflows() -> int:
         logger.exception("No se pudieron recuperar workflows autónomos")
         return 0
 
+
+
+def _unified_plan(objective: str, mode: str = "auto") -> Dict[str, Any]:
+    intent_info = classify_intent(objective)
+    normalized_mode = (mode or "auto").strip().lower()
+    if normalized_mode not in {"auto", "fast", "research", "math", "writing", "professional", "private"}:
+        normalized_mode = "auto"
+    provider_request = ProviderRequest(
+        messages=[{"role": "user", "content": objective}],
+        intent=str(intent_info.get("intent") or "general"),
+        mode=normalized_mode,
+        max_tokens=MAX_COMPLETION_TOKENS,
+    )
+    plan = intelligence_planner.build(
+        objective,
+        intent=str(intent_info.get("intent") or "general"),
+        mode=normalized_mode,
+        provider_routes=provider_gateway.route_preview(provider_request),
+    )
+    plan["intent_confidence"] = float(intent_info.get("confidence") or 0.5)
+    plan["recommended_mode"] = str(intent_info.get("recommended_mode") or normalized_mode)
+    return plan
+
+
+@app.get("/api/v55/status")
+def unified_status(session_id: str = ""):
+    sid = safe_session_id(session_id) if session_id else ""
+    provider_snapshot = provider_gateway.snapshot()
+    channel_snapshot = channel_hub.status()
+    integrations = integration_registry.status()
+    return {
+        "status": "ok", "version": APP_VERSION, "edition": APP_EDITION,
+        "intelligence": unified_store.status(sid),
+        "semantic": semantic_index.status(sid),
+        "autonomy": autonomy_store.counts(sid) if sid else {},
+        "providers": {"configured": provider_gateway.configured_names(), "last_routes": provider_snapshot.get("last_routes", [])},
+        "channels": channel_snapshot,
+        "integrations": {"configured": sum(1 for item in integrations if item["configured"]), "total": len(integrations)},
+        "guarantees": [
+            "respuesta visible o recuperación local", "presupuesto finito por tarea",
+            "confirmación para acciones externas sensibles", "checkpoints en misiones persistentes",
+        ],
+    }
+
+
+@app.post("/api/intelligence/plan")
+def intelligence_plan(data: IntelligencePlanInput, request: Request):
+    enforce_request_guard(request)
+    sid = safe_session_id(data.session_id)
+    plan = _unified_plan(data.objective, data.mode)
+    decision = unified_store.save_decision(sid, data.objective, plan)
+    log_activity(sid, "intelligence", "Plan v55 creado", decision.get("id", ""), "planned")
+    return {"status": "planned", "decision": decision, "plan": plan}
+
+
+@app.post("/api/intelligence/execute")
+def intelligence_execute(data: IntelligencePlanInput, request: Request):
+    enforce_request_guard(request)
+    sid = safe_session_id(data.session_id)
+    plan = _unified_plan(data.objective, data.mode)
+    decision = unified_store.save_decision(sid, data.objective, plan)
+    workflow_plan = autonomy_planner.build(
+        data.objective, intent=str(plan.get("intent") or "general"),
+        mode=str(plan.get("mode") or "auto"), project_name=(data.project_name or "General")[:120],
+    )
+    workflow = autonomy_store.create_workflow(sid, workflow_plan)
+    unified_store.link_workflow(decision["id"], workflow["id"])
+    autonomy_store.update_workflow(workflow["id"], status="queued")
+    submitted = _submit_workflow(workflow["id"])
+    log_activity(sid, "intelligence", "Misión v55 iniciada", workflow["id"], "queued")
+    return {
+        "status": "queued", "submitted": submitted,
+        "decision": unified_store.get_decision(decision["id"]), "plan": plan,
+        "workflow": autonomy_store.get_workflow(workflow["id"], sid) or workflow,
+    }
+
+
+@app.get("/api/intelligence/decisions")
+def intelligence_decisions(session_id: str, limit: int = 30):
+    return {"decisions": unified_store.list_decisions(safe_session_id(session_id), limit)}
+
+
+@app.get("/api/knowledge/facts")
+def knowledge_facts(session_id: str, query: str = "", project_name: str = "", limit: int = 30):
+    return {"facts": unified_store.search_facts(safe_session_id(session_id), query.strip(), project_name.strip(), limit)}
+
+
+@app.post("/api/knowledge/facts")
+def create_knowledge_fact(data: KnowledgeFactInput, request: Request):
+    enforce_request_guard(request)
+    fact = unified_store.add_fact(
+        session_id=safe_session_id(data.session_id), project_name=data.project_name,
+        subject=data.subject, predicate=data.predicate, object_text=data.object_text,
+        source_type=data.source_type, source_ref=data.source_ref, confidence=data.confidence,
+        expires_at=data.expires_at, verified=data.verified,
+    )
+    return {"status": "created", "fact": fact}
+
+
+@app.delete("/api/knowledge/facts/{fact_id}")
+def delete_knowledge_fact(fact_id: str, session_id: str, request: Request):
+    enforce_request_guard(request)
+    if not unified_store.delete_fact(fact_id, safe_session_id(session_id)):
+        raise HTTPException(status_code=404, detail="Hecho no encontrado")
+    return {"status": "deleted", "id": fact_id}
+
+
+@app.get("/api/artifacts")
+def list_interactive_artifacts(session_id: str, limit: int = 30):
+    return {"artifacts": unified_store.list_artifacts(safe_session_id(session_id), limit)}
+
+
+@app.post("/api/artifacts")
+def create_interactive_artifact(data: InteractiveArtifactInput, request: Request):
+    enforce_request_guard(request)
+    try:
+        artifact = unified_store.create_artifact(safe_session_id(data.session_id), data.title, data.artifact_type, data.spec)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"status": "created", "artifact": artifact}
+
+
+@app.get("/api/integrations")
+def integrations_status():
+    return {"status": "ok", "integrations": integration_registry.status()}
+
+
+@app.post("/api/integrations/{integration_name}/prepare")
+def prepare_integration(integration_name: str, data: IntegrationPrepareInput, request: Request):
+    enforce_request_guard(request)
+    try:
+        return integration_registry.prepare(integration_name.strip().lower(), data.action, data.arguments)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/api/voice/speech")
+async def voice_speech(data: VoiceSpeechInput, request: Request):
+    enforce_request_guard(request)
+    if not telegram_media_ai.status().get("speech"):
+        raise HTTPException(status_code=503, detail="Configura OPENAI_API_KEY para habilitar la voz.")
+    try:
+        audio = await asyncio.to_thread(telegram_media_ai.synthesize, data.text)
+    except Exception as exc:
+        logger.warning("No fue posible sintetizar voz", exc_info=True)
+        raise HTTPException(status_code=503, detail="La voz no está disponible temporalmente.") from exc
+    return StreamingResponse(
+        io.BytesIO(audio), media_type="audio/ogg",
+        headers={"Content-Disposition": "inline; filename=jarvis-response.ogg", "Cache-Control": "no-store"},
+    )
 
 
 @app.post("/api/agents/plan")
@@ -5371,6 +5604,7 @@ def self_check():
         checks["autonomy_store"] = {"ok": True, "counts": autonomy_store.counts("self_check")}
         checks["automation_store"] = {"ok": True, "counts": automation_store.counts()}
         checks["evaluation_store"] = {"ok": True, "runs": evaluation_store.report(1).get("runs", 0)}
+        checks["unified_intelligence"] = {"ok": True, **unified_store.status("self_check")}
     except Exception as exc:
         checks["v47_data_core"] = {"ok": False, "detail": safe_error_text(exc)}
     checks["mcp"] = {"ok": True, "optional": True, **mcp_manager.status(False)}
@@ -5471,6 +5705,15 @@ def capabilities():
             "telegram_interactive_menu",
             "telegram_mission_controls",
             "telegram_conversation_export",
+            "unified_intelligence_planner",
+            "per_request_budgets",
+            "persistent_routing_decisions",
+            "structured_verified_facts",
+            "safe_interactive_artifacts",
+            "integration_consent_registry",
+            "web_voice_output",
+            "unified_knowledge_workspace",
+            "nexus_control_center",
         ],
         "channels": {
             "telegram": telegram_channel.status(),

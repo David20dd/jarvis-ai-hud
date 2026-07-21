@@ -12,14 +12,25 @@
   const session = safeStorage(window.sessionStorage);
 
   const KEYS = {
-    client: 'jarvis_v47_client',
-    chats: 'jarvis_v47_chats',
-    active: 'jarvis_v47_active_chat',
-    api: 'jarvis_v47_api_base',
-    token: 'jarvis_v47_auth_token',
-    user: 'jarvis_v47_auth_user',
-    mode: 'jarvis_v47_mode'
+    client: 'jarvis_v55_client',
+    chats: 'jarvis_v55_chats',
+    active: 'jarvis_v55_active_chat',
+    api: 'jarvis_v55_api_base',
+    token: 'jarvis_v55_auth_token',
+    user: 'jarvis_v55_auth_user',
+    mode: 'jarvis_v55_mode'
   };
+  const LEGACY_KEYS = {
+    client:'jarvis_v47_client', chats:'jarvis_v47_chats', active:'jarvis_v47_active_chat',
+    api:'jarvis_v47_api_base', token:'jarvis_v47_auth_token', user:'jarvis_v47_auth_user', mode:'jarvis_v47_mode'
+  };
+  Object.keys(KEYS).forEach(name => {
+    const target = name === 'token' || name === 'user' ? session : local;
+    if (!target.getItem(KEYS[name])) {
+      const legacy = target.getItem(LEGACY_KEYS[name]);
+      if (legacy) target.setItem(KEYS[name], legacy);
+    }
+  });
 
   const els = {
     app: $('#app'), sidebar: $('#sidebar'), scrim: $('#scrim'), sidebarClose: $('#sidebarClose'),
@@ -113,6 +124,10 @@
     els.attachBtn.addEventListener('click', () => els.fileInput.click());
     els.fileInput.addEventListener('change', handleFiles);
     els.voiceBtn.addEventListener('click', startVoiceInput);
+    els.messages.addEventListener('click', event => {
+      const button=event.target.closest('[data-speak-message]');
+      if(button) speakMessage(Number(button.dataset.speakMessage), button);
+    });
     $$('[data-prompt]').forEach(button => button.addEventListener('click', () => {
       els.messageInput.value = button.dataset.prompt || '';
       autoResize();
@@ -312,10 +327,10 @@
     scrollBottom(false);
   }
 
-  function renderMessageHTML(message) {
+  function renderMessageHTML(message, index) {
     const role = message.role === 'user' ? 'user' : 'assistant';
     const meta = message.meta || {};
-    const metaHTML = role === 'assistant' && (meta.model || meta.route || meta.cached) ? `<div class="message-meta">${meta.model ? `<span>${escapeHTML(meta.model)}</span>` : ''}${meta.route ? `<span>${escapeHTML(meta.route)}</span>` : ''}${meta.cached ? '<span>caché</span>' : ''}</div>` : '';
+    const metaHTML = role === 'assistant' ? `<div class="message-meta">${meta.model ? `<span>${escapeHTML(meta.model)}</span>` : ''}${meta.route ? `<span>${escapeHTML(meta.route)}</span>` : ''}${meta.complexity ? `<span>${escapeHTML(meta.complexity)}</span>` : ''}${meta.cached ? '<span>caché</span>' : ''}<button class="message-tool" data-speak-message="${index}" aria-label="Escuchar respuesta">Escuchar</button></div>` : '';
     if (role === 'user') return `<article class="message user"><div class="message-body">${formatContent(message.content)}</div></article>`;
     return `<article class="message assistant"><span class="message-avatar">J</span><div class="message-body ${meta.error ? 'message-error' : ''}">${formatContent(message.content)}${metaHTML}</div></article>`;
   }
@@ -368,7 +383,8 @@
       const reply = String(data.reply || data.response || '').trim();
       if (!reply) throw new ApiError('El núcleo respondió sin contenido.');
       addMessage('assistant', reply, {
-        model:data.model || '', route:data.route || data.mode || '', cached:Boolean(data.cached)
+        model:data.model || '', route:data.route || data.mode || '', cached:Boolean(data.cached),
+        complexity:data.intelligence?.complexity || ''
       });
       setStatus('Núcleo operativo', 'online');
     } catch (error) {
@@ -400,6 +416,21 @@
   }
 
   function stopGeneration() { state.abortController?.abort(); }
+
+  async function speakMessage(index, button) {
+    const message=currentChat().messages[index];
+    if(!message || message.role!=='assistant')return;
+    button.disabled=true;button.textContent='Preparando…';
+    try{
+      const headers=new Headers({'Content-Type':'application/json'});
+      if(state.token)headers.set('Authorization',`Bearer ${state.token}`);
+      const response=await fetch(apiUrl('/api/voice/speech'),{method:'POST',headers,body:JSON.stringify({text:String(message.content||'').slice(0,4000)})});
+      if(!response.ok){let detail='Voz no disponible';try{detail=(await response.json()).detail||detail;}catch{}throw new Error(detail);}
+      const url=URL.createObjectURL(await response.blob()),audio=new Audio(url);
+      audio.onended=()=>URL.revokeObjectURL(url);await audio.play();button.textContent='Reproduciendo';
+    }catch(error){toast(error.message||'No fue posible generar voz.');}
+    finally{setTimeout(()=>{button.disabled=false;button.textContent='Escuchar';},900);}
+  }
 
   function setBusy(busy, detail = '') {
     state.core.busy = busy;
@@ -470,8 +501,9 @@
   }
 
   const PANEL_INFO = {
-    library:['CONOCIMIENTO','Biblioteca'], memory:['CONTEXTO','Memoria'], missions:['AUTONOMÍA','Misiones'],
-    channels:['TELEGRAM PRO','Asistente móvil'], system:['ESTADO','Diagnóstico del núcleo']
+    knowledge:['CONOCIMIENTO','Biblioteca y memoria'], missions:['AUTONOMÍA','Misiones'],
+    nexus:['CONTROL','Nexus v55'], channels:['TELEGRAM','Asistente móvil'],
+    library:['CONOCIMIENTO','Biblioteca'], memory:['CONTEXTO','Memoria'], system:['ESTADO','Diagnóstico del núcleo']
   };
 
   async function renderPanel(view) {
@@ -480,7 +512,9 @@
     els.panelTitle.textContent = title;
     els.panelContent.innerHTML = '<div class="empty-state">Cargando…</div>';
     try {
-      if (view === 'library') await renderLibrary();
+      if (view === 'knowledge') await renderKnowledge();
+      else if (view === 'nexus') await renderNexus();
+      else if (view === 'library') await renderLibrary();
       else if (view === 'memory') await renderMemory();
       else if (view === 'missions') await renderMissions();
       else if (view === 'channels') await renderChannels();
@@ -531,20 +565,147 @@
     }));
   }
 
+  async function renderKnowledge() {
+    const sid = encodeURIComponent(backendSessionId());
+    const results = await Promise.allSettled([
+      request(`/api/library?session_id=${sid}`),
+      request(`/api/memory?session_id=${sid}`),
+      request(`/api/knowledge/facts?session_id=${sid}&limit=30`)
+    ]);
+    const docs = valueOf(results[0]).documents || [];
+    const memories = valueOf(results[1]).memories || [];
+    const facts = valueOf(results[2]).facts || [];
+    els.panelContent.innerHTML = `
+      <div class="panel-grid knowledge-metrics">
+        <article class="panel-card metric-card"><span class="card-kicker">ARCHIVOS</span><strong class="metric">${docs.length}</strong><p>Documentos del espacio actual.</p></article>
+        <article class="panel-card metric-card"><span class="card-kicker">MEMORIA</span><strong class="metric">${memories.length}</strong><p>Preferencias y contexto personal.</p></article>
+        <article class="panel-card metric-card"><span class="card-kicker">HECHOS</span><strong class="metric">${facts.length}</strong><p>Conocimiento estructurado y trazable.</p></article>
+      </div>
+      <section class="panel-section knowledge-actions">
+        <article class="panel-card">
+          <div class="panel-section-head"><div><span class="card-kicker">CAPTURAR</span><h3>Agregar conocimiento</h3></div></div>
+          <div class="form-grid knowledge-form"><input class="text-input" id="factSubject" placeholder="Tema o entidad"/><input class="text-input" id="factObject" placeholder="Información que JARVIS debe conservar"/><button class="primary-btn" id="saveFact">Guardar hecho</button></div>
+          <div class="button-row compact-row"><button class="soft-btn" id="saveQuickMemory">Guardar como preferencia</button><button class="soft-btn" id="knowledgeUploadBtn">Subir documento</button><input id="knowledgeFileInput" type="file" hidden /></div>
+        </article>
+      </section>
+      <section class="panel-section"><div class="panel-section-head"><h3>Conocimiento reciente</h3><span class="status-tag">${docs.length + memories.length + facts.length}</span></div>
+        <div class="knowledge-columns">
+          <div><span class="column-label">HECHOS VERIFICABLES</span><div class="list-stack">${facts.length ? facts.map(item => `<article class="list-row"><div><strong>${escapeHTML(item.subject)} · ${escapeHTML(item.predicate)}</strong><small>${escapeHTML(item.object_text)} · confianza ${Math.round(Number(item.confidence||0)*100)}%</small></div><button class="danger-btn" data-delete-fact="${escapeHTML(item.id)}">Eliminar</button></article>`).join('') : '<div class="empty-state">Añade el primer hecho útil.</div>'}</div></div>
+          <div><span class="column-label">MEMORIA Y ARCHIVOS</span><div class="list-stack">${[
+            ...memories.slice(0,8).map(item => `<article class="list-row"><div><strong>${escapeHTML(item.content)}</strong><small>Memoria · ${escapeHTML(item.category||'contexto')}</small></div></article>`),
+            ...docs.slice(0,8).map(item => `<article class="list-row"><div><strong>${escapeHTML(item.file_name||'Documento')}</strong><small>Archivo · ${escapeHTML(item.file_type||'')}</small></div></article>`)
+          ].join('') || '<div class="empty-state">Todavía no hay memoria ni archivos.</div>'}</div></div>
+        </div>
+      </section>`;
+    $('#saveFact')?.addEventListener('click', async () => {
+      const subject=$('#factSubject').value.trim(), object_text=$('#factObject').value.trim();
+      if (!subject || !object_text) return toast('Completa el tema y la información.');
+      await request('/api/knowledge/facts', { method:'POST', body:JSON.stringify({ session_id:backendSessionId(), project_name:'General', subject, predicate:'relacionado con', object_text, confidence:.75, verified:false }) });
+      toast('Conocimiento guardado'); renderKnowledge();
+    });
+    $('#saveQuickMemory')?.addEventListener('click', async () => {
+      const content=$('#factObject').value.trim(); if (!content) return toast('Escribe primero la información.');
+      await request('/api/memory', { method:'POST', body:JSON.stringify({ session_id:backendSessionId(), content, category:'preference', importance:3 }) });
+      toast('Preferencia guardada'); renderKnowledge();
+    });
+    $('#knowledgeUploadBtn')?.addEventListener('click', () => $('#knowledgeFileInput').click());
+    $('#knowledgeFileInput')?.addEventListener('change', async event => {
+      const file=event.target.files[0]; if (!file) return;
+      if (file.size > 12*1024*1024) return toast('El archivo supera 12 MB.');
+      const button=$('#knowledgeUploadBtn'); button.disabled=true; button.textContent='Subiendo…';
+      try {
+        await request('/api/library/upload', { method:'POST', body:JSON.stringify({ session_id:backendSessionId(), file_name:file.name, file_b64:await fileToBase64(file) }) }, { timeoutMs:65000 });
+        toast('Documento indexado'); renderKnowledge();
+      } catch(error) { toast(explainError(error)); button.disabled=false; button.textContent='Subir documento'; }
+    });
+    $$('[data-delete-fact]').forEach(button => button.addEventListener('click', async () => {
+      if (!confirm('¿Eliminar este hecho de JARVIS?')) return;
+      await request(`/api/knowledge/facts/${encodeURIComponent(button.dataset.deleteFact)}?session_id=${sid}`, { method:'DELETE' });
+      renderKnowledge();
+    }));
+  }
+
+  function renderArtifactCard(item) {
+    const spec=item.spec||{}, kind=String(item.artifact_type||'');
+    let body='';
+    if (kind==='chart') {
+      const values=(spec.values||[]).map(Number), max=Math.max(1,...values.map(Math.abs));
+      body=`<div class="mini-chart">${values.map((value,index)=>`<div><span>${escapeHTML((spec.labels||[])[index]||`Dato ${index+1}`)}</span><i style="width:${Math.max(2,Math.abs(value)/max*100)}%"></i><b>${escapeHTML(value)}${escapeHTML(spec.unit||'')}</b></div>`).join('')}</div>`;
+    } else if (kind==='table' || kind==='comparison') {
+      const columns=spec.columns||[], rows=spec.rows||[];
+      body=`<div class="artifact-table"><table><thead><tr>${columns.map(value=>`<th>${escapeHTML(value)}</th>`).join('')}</tr></thead><tbody>${rows.map(row=>`<tr>${(Array.isArray(row)?row:columns.map(key=>row[key])).map(value=>`<td>${escapeHTML(value)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+    } else {
+      body=`<ol class="artifact-list">${(spec.items||[]).map(value=>`<li>${escapeHTML(value)}</li>`).join('')}</ol>`;
+    }
+    return `<article class="panel-card artifact-card"><div class="panel-section-head"><div><span class="card-kicker">${escapeHTML(kind.toUpperCase())}</span><h3>${escapeHTML(item.title)}</h3></div></div>${body||'<p>Sin datos todavía.</p>'}</article>`;
+  }
+
+  async function renderNexus() {
+    const sid=encodeURIComponent(backendSessionId());
+    const results=await Promise.allSettled([
+      request(`/api/v55/status?session_id=${sid}`), request('/api/integrations'),
+      request(`/api/artifacts?session_id=${sid}&limit=12`), request(`/api/automations?session_id=${sid}&limit=12`),
+      request(`/api/intelligence/decisions?session_id=${sid}&limit=8`)
+    ]);
+    const core=valueOf(results[0]), integrations=valueOf(results[1]).integrations||[], artifacts=valueOf(results[2]).artifacts||[];
+    const automations=valueOf(results[3]).automations||[], decisions=valueOf(results[4]).decisions||[];
+    const providers=core.providers?.configured||[], intelligence=core.intelligence||{};
+    els.panelContent.innerHTML=`
+      <div class="nexus-hero panel-card"><div><span class="card-kicker">UNIFIED INTELLIGENCE · v55</span><h3>Un núcleo, rutas claras y control humano</h3><p>Planifica con presupuesto, ejecuta con checkpoints y conserva evidencia sin exponer tus claves.</p></div><button class="soft-btn" id="nexusDiagnostics">Diagnóstico</button></div>
+      <div class="panel-grid nexus-metrics">
+        <article class="panel-card metric-card"><span class="card-kicker">PROVEEDORES</span><strong class="metric">${providers.length}</strong><p>${providers.length?providers.map(escapeHTML).join(' · '):'Modo local disponible'}</p></article>
+        <article class="panel-card metric-card"><span class="card-kicker">DECISIONES</span><strong class="metric">${Object.values(intelligence.decisions||{}).reduce((a,b)=>a+Number(b||0),0)}</strong><p>Rutas registradas por el planificador.</p></article>
+        <article class="panel-card metric-card"><span class="card-kicker">AUTOMATIZACIONES</span><strong class="metric">${automations.length}</strong><p>Rutinas persistentes del espacio.</p></article>
+        <article class="panel-card metric-card"><span class="card-kicker">INTEGRACIONES</span><strong class="metric">${integrations.filter(item=>item.configured).length}/${integrations.length}</strong><p>Conectores listos en el backend.</p></article>
+      </div>
+      <section class="panel-section"><article class="panel-card"><span class="card-kicker">PLANIFICADOR</span><h3>Diseña una ejecución antes de consumir recursos</h3><div class="form-grid nexus-planner"><input class="text-input" id="nexusObjective" placeholder="Objetivo concreto"/><select class="text-input" id="nexusMode"><option value="auto">Automático</option><option value="research">Investigación</option><option value="professional">Profesional</option><option value="private">Privado/local</option></select><button class="soft-btn" id="previewNexusPlan">Ver plan</button><button class="primary-btn" id="runNexusPlan">Ejecutar</button></div><div id="nexusPlanResult" class="plan-result" hidden></div></article></section>
+      <section class="panel-section"><div class="panel-section-head"><h3>Integraciones</h3><span class="status-tag">las escrituras exigen confirmación</span></div><div class="integration-grid">${integrations.map(item=>`<article class="integration-card"><span>${escapeHTML(item.label.slice(0,1))}</span><div><strong>${escapeHTML(item.label)}</strong><small>${escapeHTML((item.actions||[]).join(' · '))}</small></div><em class="status-tag ${item.configured?'ok':'warn'}">${item.configured?'Lista':'Configurar'}</em></article>`).join('')}</div></section>
+      <section class="panel-section"><div class="panel-section-head"><h3>Resultados interactivos</h3><button class="soft-btn" id="newArtifact">Crear lista</button></div><div class="artifact-grid">${artifacts.length?artifacts.map(renderArtifactCard).join(''):'<div class="empty-state">Crea tablas, gráficas, listas y cronogramas seguros.</div>'}</div></section>
+      <section class="panel-section"><div class="panel-section-head"><h3>Decisiones recientes</h3><span class="status-tag">${decisions.length}</span></div><div class="list-stack">${decisions.length?decisions.map(item=>`<article class="list-row"><div><strong>${escapeHTML(item.objective)}</strong><small>${escapeHTML(item.intent)} · ${escapeHTML(item.complexity)} · ${escapeHTML(item.status)}</small></div><span class="status-tag ${item.status==='completed'?'ok':'warn'}">${Math.round(Number(item.quality_score||0)*100)}%</span></article>`).join(''):'<div class="empty-state">Las decisiones aparecerán al conversar o ejecutar misiones.</div>'}</div></section>`;
+    $('#nexusDiagnostics')?.addEventListener('click',()=>openView('system'));
+    const runPlan=async execute=>{
+      const objective=$('#nexusObjective').value.trim(); if(!objective)return toast('Escribe un objetivo concreto.');
+      const button=execute?$('#runNexusPlan'):$('#previewNexusPlan'); button.disabled=true; button.textContent=execute?'Iniciando…':'Planificando…';
+      try{
+        const data=await request(execute?'/api/intelligence/execute':'/api/intelligence/plan',{method:'POST',body:JSON.stringify({session_id:backendSessionId(),objective,mode:$('#nexusMode').value,project_name:'General',title:'Misión JARVIS'})},{timeoutMs:30000});
+        const plan=data.plan||{}; $('#nexusPlanResult').hidden=false; $('#nexusPlanResult').innerHTML=`<strong>${escapeHTML(plan.complexity||'low')} · ${Number(plan.steps?.length||0)} etapas</strong><p>Tiempo objetivo: ${Number(plan.budget?.time_seconds||0)} s · rutas: ${(plan.route||[]).map(item=>escapeHTML(item.provider)).join(' → ')||'herramientas locales'}</p>`;
+        if(execute){toast('Misión iniciada con checkpoints');setTimeout(()=>openView('missions'),650);}
+      }catch(error){toast(explainError(error));}finally{button.disabled=false;button.textContent=execute?'Ejecutar':'Ver plan';}
+    };
+    $('#previewNexusPlan')?.addEventListener('click',()=>runPlan(false));
+    $('#runNexusPlan')?.addEventListener('click',()=>runPlan(true));
+    $('#newArtifact')?.addEventListener('click',async()=>{
+      const title=prompt('Nombre de la lista'); if(!title)return;
+      const raw=prompt('Elementos, uno por línea'); if(!raw)return;
+      await request('/api/artifacts',{method:'POST',body:JSON.stringify({session_id:backendSessionId(),title,artifact_type:'checklist',spec:{title,items:raw.split(/\n+/).filter(Boolean)}})});
+      toast('Resultado interactivo creado');renderNexus();
+    });
+  }
+
   async function renderMissions() {
     const data = await request(`/api/autonomy/workflows?session_id=${encodeURIComponent(backendSessionId())}&limit=20`);
     const workflows = data.workflows || [];
     els.panelContent.innerHTML = `
-      <div class="panel-card"><h3>Nueva misión</h3><p>JARVIS dividirá el objetivo en etapas, guardará checkpoints y se detendrá antes de acciones sensibles.</p><div class="form-grid" style="margin-top:13px"><input class="text-input" id="missionObjective" placeholder="Describe un resultado concreto"/><select class="text-input" id="missionMode"><option value="auto">Automático</option><option value="research">Investigación</option><option value="professional">Profesional</option></select><button class="primary-btn" id="createMission">Crear misión</button></div></div>
-      <section class="panel-section"><div class="panel-section-head"><h3>Misiones recientes</h3><span class="status-tag">${workflows.length}</span></div><div class="list-stack">${workflows.length ? workflows.map(item => { const steps=item.steps||[]; const done=steps.filter(step=>step.status==='completed').length; const progress=steps.length?Math.round(done/steps.length*100):0; return `<article class="list-row"><div><strong>${escapeHTML(item.objective || 'Misión')}</strong><small>${escapeHTML(item.status || 'planned')} · ${done}/${steps.length} etapas<div class="job-progress"><i style="width:${progress}%"></i></div></small></div><span class="status-tag ${item.status==='completed'?'ok':'warn'}">${progress}%</span></article>`; }).join('') : '<div class="empty-state">No hay misiones todavía.</div>'}</div></section>`;
+      <div class="mission-intro panel-card"><div><span class="card-kicker">EJECUCIÓN AUTÓNOMA CONTROLADA</span><h3>Nueva misión</h3><p>JARVIS define presupuesto, selecciona rutas, guarda checkpoints y solicita permiso antes de cualquier acción sensible.</p></div><div class="mission-legend"><span>01 Plan</span><span>02 Ejecuta</span><span>03 Verifica</span></div></div>
+      <section class="panel-section"><div class="panel-card"><div class="form-grid mission-form"><input class="text-input" id="missionObjective" placeholder="Describe el resultado que necesitas"/><select class="text-input" id="missionMode"><option value="auto">Automático</option><option value="research">Investigación</option><option value="professional">Profesional</option><option value="private">Privado/local</option></select><button class="primary-btn" id="createMission">Iniciar misión</button></div></div></section>
+      <section class="panel-section"><div class="panel-section-head"><h3>Misiones recientes</h3><span class="status-tag">${workflows.length}</span></div><div class="list-stack mission-list">${workflows.length ? workflows.map(item => { const steps=item.steps||[]; const done=steps.filter(step=>step.status==='completed').length; const progress=steps.length?Math.round(done/steps.length*100):0; const active=['queued','running','pausing'].includes(item.status); return `<article class="list-row mission-row"><div><strong>${escapeHTML(item.objective || 'Misión')}</strong><small>${escapeHTML(item.status || 'planned')} · ${done}/${steps.length} etapas<div class="job-progress"><i style="width:${progress}%"></i></div></small></div><div class="mission-actions"><span class="status-tag ${item.status==='completed'?'ok':'warn'}">${progress}%</span>${active?`<button class="soft-btn mini-btn" data-mission-action="pause" data-mission-id="${escapeHTML(item.id)}">Pausar</button>`:''}${['paused','failed','planned'].includes(item.status)?`<button class="soft-btn mini-btn" data-mission-action="start" data-mission-id="${escapeHTML(item.id)}">Continuar</button>`:''}${!['completed','cancelled','rejected'].includes(item.status)?`<button class="danger-btn mini-btn" data-mission-action="cancel" data-mission-id="${escapeHTML(item.id)}">Cancelar</button>`:''}</div></article>`; }).join('') : '<div class="empty-state">No hay misiones todavía.</div>'}</div></section>`;
     $('#createMission').addEventListener('click', async () => {
       const objective = $('#missionObjective').value.trim(); if (!objective) return;
       const button=$('#createMission'); button.disabled=true; button.textContent='Creando…';
       try {
-        await request('/api/autonomy/workflows', { method:'POST', body:JSON.stringify({ session_id:backendSessionId(), objective, mode:$('#missionMode').value, project_name:'General', start:true }) }, { timeoutMs:30000 });
-        toast('Misión iniciada'); renderMissions();
-      } catch(error) { toast(explainError(error)); button.disabled=false; button.textContent='Crear misión'; }
+        await request('/api/intelligence/execute', { method:'POST', body:JSON.stringify({ session_id:backendSessionId(), objective, mode:$('#missionMode').value, project_name:'General', title:'Misión JARVIS' }) }, { timeoutMs:30000 });
+        toast('Misión iniciada con presupuesto y checkpoints'); renderMissions();
+      } catch(error) { toast(explainError(error)); button.disabled=false; button.textContent='Iniciar misión'; }
     });
+    $$('[data-mission-action]').forEach(button=>button.addEventListener('click',async()=>{
+      const action=button.dataset.missionAction,id=button.dataset.missionId;
+      if(action==='cancel'&&!confirm('¿Cancelar esta misión?'))return;
+      button.disabled=true;
+      try{
+        await request(`/api/autonomy/workflows/${encodeURIComponent(id)}/${action}?session_id=${encodeURIComponent(backendSessionId())}`,{method:'POST'});
+        toast(action==='pause'?'Misión pausada':action==='cancel'?'Misión cancelada':'Misión reanudada');renderMissions();
+      }catch(error){toast(explainError(error));button.disabled=false;}
+    }));
   }
 
   async function renderChannels() {
@@ -581,7 +742,7 @@
       request('/api/health/live'), request('/api/health/ready'), request('/api/auth/status'), request('/api/providers')
     ]);
     const live = valueOf(checks[0]), ready=valueOf(checks[1]), auth=valueOf(checks[2]), providers=valueOf(checks[3]);
-    const configured = providers.providers?.filter?.(item=>item.configured)?.length || providers.configured?.length || 0;
+    const configured = Number(providers.configured_count || providers.gateway?.configured?.length || 0);
     els.panelContent.innerHTML = `
       <div class="panel-grid">
         <article class="panel-card"><h3>Proceso</h3><strong class="metric">${live.status==='ok'?'Operativo':'Revisar'}</strong><p>Versión ${escapeHTML(live.version || state.core.version || '—')}</p></article>
@@ -710,6 +871,6 @@
 
   function registerServiceWorker() {
     if (!('serviceWorker' in navigator) || location.protocol === 'file:') return;
-    navigator.serviceWorker.register('./service-worker.js?v=49').catch(()=>{});
+    navigator.serviceWorker.register('./service-worker.js?v=55').catch(()=>{});
   }
 })();

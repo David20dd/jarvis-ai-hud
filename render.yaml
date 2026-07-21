@@ -140,3 +140,13 @@ services:
         value: "12"
       - key: TELEGRAM_VOICE_REPLIES_DEFAULT
         value: "false"
+      - key: GOOGLE_CALENDAR_CREDENTIALS_JSON
+        sync: false
+      - key: GMAIL_CREDENTIALS_JSON
+        sync: false
+      - key: GOOGLE_DRIVE_CREDENTIALS_JSON
+        sync: false
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: NOTION_TOKEN
+        sync: false

@@ -11,6 +11,7 @@ os.environ.setdefault("JARVIS_PUBLIC_MODE", "true")
 os.environ.setdefault("GROQ_API_KEY", "")
 os.environ.setdefault("JARVIS_JOB_WORKERS", "1")
 os.environ.setdefault("JARVIS_JOB_RETRY_BASE_SECONDS", "1")
+os.environ.setdefault("JARVIS_REQUESTS_PER_MINUTE", "120")
 
 from fastapi.testclient import TestClient
 
@@ -65,8 +66,8 @@ def test_http_health_and_headers():
     with TestClient(main.app) as client:
         live = client.get("/api/health/live")
         assert live.status_code == 200
-        assert live.json()["version"] == "49.0.0"
-        assert live.headers["x-jarvis-version"] == "49.0.0"
+        assert live.json()["version"] == "55.0.0"
+        assert live.headers["x-jarvis-version"] == "55.0.0"
         assert live.headers.get("x-request-id")
 
         ready = client.get("/api/health/ready")
@@ -83,7 +84,7 @@ def test_http_health_and_headers():
 def test_capabilities_include_stability_features():
     with TestClient(main.app) as client:
         data = client.get("/api/capabilities").json()
-        assert data["version"] == "49.0.0"
+        assert data["version"] == "55.0.0"
         features = set(data["features"])
         assert "singleflight_deduplication" in features
         assert "persistent_job_recovery" in features
@@ -193,7 +194,7 @@ def test_provider_gateway_endpoints_and_route_preview():
         status = client.get("/api/providers")
         assert status.status_code == 200
         payload = status.json()
-        assert payload["version"] == "49.0.0"
+        assert payload["version"] == "55.0.0"
         assert "gateway" in payload
         assert "providers" in payload["gateway"]
 
@@ -332,7 +333,7 @@ def test_agent_plan_and_execute_endpoints():
 
         status = client.get('/api/agents/status', params={'session_id': 'agent-test'})
         assert status.status_code == 200
-        assert status.json()['version'] == '49.0.0'
+        assert status.json()['version'] == '55.0.0'
 
 
 
@@ -392,7 +393,7 @@ def test_provider_capability_matrix_and_tool_registry_endpoints():
         capabilities = client.get('/api/providers/capabilities')
         assert capabilities.status_code == 200
         payload = capabilities.json()
-        assert payload['version'] == '49.0.0'
+        assert payload['version'] == '55.0.0'
         assert 'anthropic' in payload['matrix']['providers']
         assert 'coding' in payload['matrix']['task_preferences']
         assert payload['quality_council']['max_providers'] >= 2
@@ -400,7 +401,7 @@ def test_provider_capability_matrix_and_tool_registry_endpoints():
         registry = client.get('/api/tools/registry')
         assert registry.status_code == 200
         tools = registry.json()
-        assert tools['version'] == '49.0.0'
+        assert tools['version'] == '55.0.0'
         assert tools['available_count'] >= 10
         names = {item['name'] for item in tools['tools'] if item['available']}
         assert {'web_search', 'calculator', 'document_search'}.issubset(names)
@@ -460,7 +461,7 @@ def test_professional_endpoints_expose_profiles_and_plan():
         profiles = client.get("/api/professional/profiles")
         assert profiles.status_code == 200
         payload = profiles.json()
-        assert payload["version"] == "49.0.0"
+        assert payload["version"] == "55.0.0"
         assert len(payload["profiles"]) >= 6
 
         planned = client.post(
@@ -482,7 +483,7 @@ def test_professional_endpoints_expose_profiles_and_plan():
 
         status = client.get("/api/professional/status?session_id=professional-test")
         assert status.status_code == 200
-        assert status.json()["version"] == "49.0.0"
+        assert status.json()["version"] == "55.0.0"
 
 
 def test_responsive_frontend_contract():
@@ -492,7 +493,7 @@ def test_responsive_frontend_contract():
     manifest = json.loads(Path("static/manifest.webmanifest").read_text(encoding="utf-8"))
 
     assert "viewport-fit=cover" in html
-    assert "?v=49" in html
+    assert "?v=55" in html
     assert "jarvis-reactor-v46.svg" in html
     assert 'class="mobile-nav"' in html
     assert 'id="composer"' in html
@@ -501,7 +502,7 @@ def test_responsive_frontend_contract():
     assert "@media (max-width: 640px)" in css
     assert "env(safe-area-inset-bottom)" in css
     assert ".welcome-reactor img" in css and "animation: none !important" in css
-    assert "jarvis_v47_chats" in js
+    assert "jarvis_v55_chats" in js
     assert manifest["display"] == "standalone"
 
 
@@ -592,7 +593,7 @@ def test_v38_automation_and_optional_integrations_status():
         status = client.get("/api/autonomy/status?session_id=automation-test")
         assert status.status_code == 200
         payload = status.json()
-        assert payload["version"] == "49.0.0"
+        assert payload["version"] == "55.0.0"
         assert "mcp" in payload and "code_lab" in payload and "semantic" in payload
 
 
@@ -749,7 +750,7 @@ def test_v46_operations_and_channel_status_endpoints():
         assert client.get("/404.html").status_code == 200
         operations = client.get("/api/operations/overview", params={"session_id": "test-v46"})
         assert operations.status_code == 200
-        assert operations.json()["version"] == "49.0.0"
+        assert operations.json()["version"] == "55.0.0"
         assert operations.json()["safety"]["human_approval"] is True
         channels = client.get("/api/channels/status")
         assert channels.status_code == 200
@@ -762,7 +763,7 @@ def test_v47_frontend_is_clean_connected_and_boot_safe():
     html = Path("index.html").read_text(encoding="utf-8")
     js = Path("static/app.js").read_text(encoding="utf-8")
     css = Path("static/styles.css").read_text(encoding="utf-8")
-    assert "¿En qué trabajamos hoy?" in html
+    assert "¿Qué quieres resolver?" in html
     assert "Telegram Pro" in js
     assert 'data-view="channels"' in html
     assert "window.storage" not in js
@@ -770,7 +771,7 @@ def test_v47_frontend_is_clean_connected_and_boot_safe():
     assert "renderChannels" in js and "openAccount" in js
     assert "auth_required" in js
     assert "error?.status === 401" in js
-    assert "jarvis-telegram-pro-v49" in Path("service-worker.js").read_text(encoding="utf-8")
+    assert "jarvis-unified-intelligence-v55" in Path("service-worker.js").read_text(encoding="utf-8")
     assert "url.pathname.includes('/api/')" in Path("service-worker.js").read_text(encoding="utf-8")
     assert "overflow-x: hidden" in css
 
@@ -803,3 +804,92 @@ def test_v47_auth_does_not_block_cors_preflight(monkeypatch):
         )
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == "*"
+
+
+def test_v55_planner_persists_budgeted_decision():
+    with TestClient(main.app) as client:
+        response = client.post(
+            "/api/intelligence/plan",
+            json={
+                "session_id": "v55-plan",
+                "objective": "Investiga tres fuentes, compara resultados y verifica las conclusiones.",
+                "mode": "research",
+                "project_name": "Pruebas",
+            },
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["status"] == "planned"
+        assert payload["plan"]["complexity"] in {"medium", "high"}
+        assert payload["plan"]["budget"]["max_steps"] >= 6
+        assert payload["decision"]["id"]
+        listed = client.get("/api/intelligence/decisions", params={"session_id": "v55-plan"}).json()
+        assert any(item["id"] == payload["decision"]["id"] for item in listed["decisions"])
+
+
+def test_v55_chat_exposes_recovery_budget():
+    with TestClient(main.app) as client:
+        response = client.post(
+            "/api/jarvis",
+            json={"message": "2+2", "session_id": "v55-chat", "request_id": "v55-chat-1"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["intelligence"]["decision_id"]
+        assert data["intelligence"]["recovery"]
+
+
+def test_v55_structured_knowledge_lifecycle():
+    with TestClient(main.app) as client:
+        created = client.post(
+            "/api/knowledge/facts",
+            json={
+                "session_id": "v55-facts", "project_name": "JARVIS",
+                "subject": "Interfaz", "predicate": "debe ser", "object_text": "simple y accesible",
+                "confidence": 0.9, "verified": True,
+            },
+        )
+        assert created.status_code == 200
+        fact = created.json()["fact"]
+        found = client.get(
+            "/api/knowledge/facts", params={"session_id": "v55-facts", "query": "interfaz accesible"},
+        ).json()["facts"]
+        assert any(item["id"] == fact["id"] for item in found)
+        deleted = client.delete(
+            f"/api/knowledge/facts/{fact['id']}", params={"session_id": "v55-facts"},
+        )
+        assert deleted.status_code == 200
+
+
+def test_v55_safe_interactive_artifacts():
+    with TestClient(main.app) as client:
+        created = client.post(
+            "/api/artifacts",
+            json={
+                "session_id": "v55-artifacts", "title": "Progreso", "artifact_type": "chart",
+                "spec": {"labels": ["Plan", "Ejecución"], "values": [30, 70], "unit": "%"},
+            },
+        )
+        assert created.status_code == 200
+        artifact = created.json()["artifact"]
+        assert artifact["spec"]["values"] == [30.0, 70.0]
+        listed = client.get("/api/artifacts", params={"session_id": "v55-artifacts"}).json()
+        assert listed["artifacts"][0]["id"] == artifact["id"]
+
+
+def test_v55_status_integrations_and_ui_contract():
+    with TestClient(main.app) as client:
+        status = client.get("/api/v55/status", params={"session_id": "v55-status"})
+        assert status.status_code == 200
+        assert status.json()["version"] == "55.0.0"
+        integrations = client.get("/api/integrations").json()["integrations"]
+        assert {"telegram", "google_calendar", "gmail", "google_drive", "github", "notion", "mcp"}.issubset(
+            {item["name"] for item in integrations}
+        )
+        voice = client.post("/api/voice/speech", json={"text": "Hola"})
+        assert voice.status_code == 503
+    html = Path("index.html").read_text(encoding="utf-8")
+    js = Path("static/app.js").read_text(encoding="utf-8")
+    assert 'data-view="knowledge"' in html and 'data-view="nexus"' in html
+    assert "renderKnowledge" in js and "renderNexus" in js and "speakMessage" in js
+    assert "jarvis_v55_chats" in js

@@ -10,6 +10,7 @@ from .semantic import SemanticIndex
 from .identity import IdentityStore
 from .channels import ChannelHub, ChannelStore, TelegramChannel
 from .telegram_pro import TelegramMediaAI, TelegramPreferenceStore
+from .unified import IntelligencePlanner, IntegrationRegistry, UnifiedIntelligenceStore
 
 __all__ = [
     "RuntimeSupport", "compact_messages", "disk_status", "ToolDefinition", "ToolRegistry",
@@ -17,4 +18,5 @@ __all__ = [
     "EvaluationStore", "MCPManager", "ResearchCollector", "SemanticIndex",
     "IdentityStore", "ChannelHub", "ChannelStore", "TelegramChannel",
     "TelegramMediaAI", "TelegramPreferenceStore",
+    "IntelligencePlanner", "IntegrationRegistry", "UnifiedIntelligenceStore",
 ]

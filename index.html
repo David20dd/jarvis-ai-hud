@@ -4,13 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#0b1017" />
-  <meta name="description" content="J.A.R.V.I.S. v49: inteligencia profesional con Telegram multimodal." />
-  <title>J.A.R.V.I.S. — Telegram Pro v49</title>
-  <link rel="icon" href="./static/favicon-v46.svg?v=49" type="image/svg+xml" />
-  <link rel="manifest" href="./static/manifest.webmanifest?v=49" />
-  <link rel="stylesheet" href="./static/styles.css?v=49" />
-  <script defer src="./static/config.js?v=49"></script>
-  <script defer src="./static/app.js?v=49"></script>
+  <meta name="description" content="J.A.R.V.I.S. v55: inteligencia unificada, misiones autónomas, conocimiento y Telegram." />
+  <title>J.A.R.V.I.S. — Unified Intelligence v55</title>
+  <link rel="icon" href="./static/favicon-v46.svg?v=55" type="image/svg+xml" />
+  <link rel="manifest" href="./static/manifest.webmanifest?v=55" />
+  <link rel="stylesheet" href="./static/styles.css?v=55" />
+  <script defer src="./static/config.js?v=55"></script>
+  <script defer src="./static/app.js?v=55"></script>
 </head>
 <body>
   <div class="app" id="app">
@@ -20,7 +20,7 @@
       <header class="sidebar-head">
         <button class="brand" id="brandBtn" aria-label="Ir al chat">
           <span class="brand-reactor"><img src="./static/jarvis-reactor-v46.svg" alt="" /></span>
-          <span><strong>J.A.R.V.I.S.</strong><small>Reliable Workspace</small></span>
+          <span><strong>J.A.R.V.I.S.</strong><small>Unified Intelligence · v55</small></span>
         </button>
         <button class="icon-btn sidebar-close" id="sidebarClose" aria-label="Cerrar menú">×</button>
       </header>
@@ -29,9 +29,9 @@
 
       <nav class="primary-nav" aria-label="Espacios de JARVIS">
         <button class="nav-btn active" data-view="chat"><span>◌</span>Chat</button>
-        <button class="nav-btn" data-view="library"><span>▤</span>Biblioteca</button>
-        <button class="nav-btn" data-view="memory"><span>◇</span>Memoria</button>
+        <button class="nav-btn" data-view="knowledge"><span>▤</span>Conocimiento</button>
         <button class="nav-btn" data-view="missions"><span>✦</span>Misiones</button>
+        <button class="nav-btn" data-view="nexus"><span>◎</span>Nexus</button>
         <button class="nav-btn" data-view="channels"><span>↗</span>Telegram</button>
       </nav>
 
@@ -73,14 +73,17 @@
               <span class="orbit orbit-a"></span><span class="orbit orbit-b"></span>
               <img src="./static/jarvis-reactor-v46.svg" alt="" />
             </div>
-            <p class="eyebrow">JARVIS · ESPACIO PERSONAL</p>
-            <h1>¿En qué trabajamos hoy?</h1>
-            <p class="welcome-copy">Pregunta, analiza un archivo o convierte una idea en una misión. El núcleo te dirá claramente si necesita iniciar sesión o revisar una conexión.</p>
+            <p class="eyebrow">JARVIS · INTELIGENCIA UNIFICADA v55</p>
+            <h1>¿Qué quieres resolver?</h1>
+            <p class="welcome-copy">Conversa, analiza información o delega una misión. JARVIS selecciona la ruta adecuada, conserva el progreso y siempre muestra un resultado o una recuperación clara.</p>
+            <div class="welcome-trust" aria-label="Garantías del núcleo">
+              <span><i></i>Ruta inteligente</span><span><i></i>Progreso persistente</span><span><i></i>Acciones con permiso</span>
+            </div>
             <div class="suggestions">
-              <button data-prompt="Ayúdame a organizar mis prioridades de hoy."><span>01</span><strong>Organizar mi día</strong><small>Prioridades y plan breve</small></button>
-              <button data-prompt="Investiga este tema y separa hechos, fuentes y conclusiones: "><span>02</span><strong>Investigar</strong><small>Evidencia y conclusiones</small></button>
-              <button data-prompt="Analiza el archivo que voy a adjuntar y dame los hallazgos principales."><span>03</span><strong>Analizar archivo</strong><small>PDF, Word, Excel y texto</small></button>
-              <button data-prompt="Crea una misión profesional para resolver este objetivo: "><span>04</span><strong>Crear una misión</strong><small>Plan, ejecución y verificación</small></button>
+              <button data-prompt="Ayúdame a resolver este objetivo y propón el mejor plan: "><span>01</span><strong>Resolver</strong><small>Respuesta directa y accionable</small></button>
+              <button data-prompt="Investiga este tema, contrasta fuentes y separa hechos de inferencias: "><span>02</span><strong>Investigar</strong><small>Evidencia y verificación</small></button>
+              <button data-prompt="Analiza el archivo que voy a adjuntar y muestra hallazgos, riesgos y próximos pasos."><span>03</span><strong>Analizar</strong><small>Documentos, datos y código</small></button>
+              <button data-prompt="Convierte este objetivo en una misión autónoma con checkpoints: "><span>04</span><strong>Delegar misión</strong><small>Plan, ejecución y control</small></button>
             </div>
           </section>
           <div class="messages" id="messages" aria-live="polite"></div>
@@ -108,10 +111,10 @@
 
     <nav class="mobile-nav" aria-label="Navegación móvil">
       <button class="active" data-view="chat"><span>◌</span><small>Chat</small></button>
-      <button data-view="library"><span>▤</span><small>Archivos</small></button>
+      <button data-view="knowledge"><span>▤</span><small>Saber</small></button>
       <button id="mobileCompose"><span class="mobile-plus">＋</span><small>Nuevo</small></button>
       <button data-view="missions"><span>✦</span><small>Misiones</small></button>
-      <button data-view="channels"><span>↗</span><small>Telegram</small></button>
+      <button data-view="nexus"><span>◎</span><small>Nexus</small></button>
     </nav>
   </div>
 

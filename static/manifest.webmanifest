@@ -1,7 +1,7 @@
 {
-  "name": "J.A.R.V.I.S. Telegram Pro v49",
+  "name": "J.A.R.V.I.S. Unified Intelligence v55",
   "short_name": "JARVIS",
-  "description": "Asistente multimodelo confiable con chat, archivos, memoria, misiones y canales en una interfaz sencilla.",
+  "description": "Asistente multimodelo con chat, conocimiento, misiones persistentes, integraciones y Telegram.",
   "start_url": "../",
   "scope": "../",
   "display": "standalone",
