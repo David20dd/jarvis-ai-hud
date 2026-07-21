@@ -1,0 +1,33 @@
+services:
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - jarvis_redis:/data
+
+  jarvis:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      JARVIS_REDIS_URL: redis://redis:6379/0
+      JARVIS_DB_FILE: /data/jarvis_memory.db
+      JARVIS_PUBLIC_MODE: "true"
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODELS: ${OPENAI_MODELS:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODELS: ${GEMINI_MODELS:-}
+      JARVIS_PROVIDER_ORDER: ${JARVIS_PROVIDER_ORDER:-groq,openai,gemini,compatible,ollama}
+    ports:
+      - "8000:8000"
+    volumes:
+      - jarvis_data:/data
+    depends_on:
+      - redis
+
+volumes:
+  jarvis_redis:
+  jarvis_data:

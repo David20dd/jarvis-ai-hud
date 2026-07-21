@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0b1017" />
+  <meta name="description" content="J.A.R.V.I.S. v48: inteligencia profesional con canales empresariales multimodales." />
+  <title>J.A.R.V.I.S. — Business Channels v48</title>
+  <link rel="icon" href="./static/favicon-v46.svg?v=48" type="image/svg+xml" />
+  <link rel="manifest" href="./static/manifest.webmanifest?v=48" />
+  <link rel="stylesheet" href="./static/styles.css?v=48" />
+  <script defer src="./static/config.js?v=48"></script>
+  <script defer src="./static/app.js?v=48"></script>
+</head>
+<body>
+  <div class="app" id="app">
+    <div class="scrim" id="scrim"></div>
+
+    <aside class="sidebar" id="sidebar" aria-label="Navegación principal">
+      <header class="sidebar-head">
+        <button class="brand" id="brandBtn" aria-label="Ir al chat">
+          <span class="brand-reactor"><img src="./static/jarvis-reactor-v46.svg" alt="" /></span>
+          <span><strong>J.A.R.V.I.S.</strong><small>Reliable Workspace</small></span>
+        </button>
+        <button class="icon-btn sidebar-close" id="sidebarClose" aria-label="Cerrar menú">×</button>
+      </header>
+
+      <button class="new-chat" id="newChatBtn"><span>＋</span>Nueva conversación</button>
+
+      <nav class="primary-nav" aria-label="Espacios de JARVIS">
+        <button class="nav-btn active" data-view="chat"><span>◌</span>Chat</button>
+        <button class="nav-btn" data-view="library"><span>▤</span>Biblioteca</button>
+        <button class="nav-btn" data-view="memory"><span>◇</span>Memoria</button>
+        <button class="nav-btn" data-view="missions"><span>✦</span>Misiones</button>
+        <button class="nav-btn" data-view="channels"><span>↗</span>Canales</button>
+      </nav>
+
+      <section class="history">
+        <div class="section-label"><span>Conversaciones</span><button id="searchChatsBtn" aria-label="Buscar conversaciones">⌕</button></div>
+        <input class="chat-search" id="chatSearch" placeholder="Buscar…" autocomplete="off" hidden />
+        <div class="chat-list" id="chatList"></div>
+      </section>
+
+      <footer class="sidebar-foot">
+        <button class="account-button" id="accountBtn"><span class="avatar" id="avatar">C</span><span><strong id="accountName">Cuenta personal</strong><small id="accountState">Comprobar acceso</small></span><em>›</em></button>
+      </footer>
+    </aside>
+
+    <main class="workspace">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="icon-btn menu-btn" id="menuBtn" aria-label="Abrir menú">☰</button>
+          <div class="mobile-brand"><img src="./static/jarvis-reactor-v46.svg" alt="" /><strong>JARVIS</strong></div>
+          <select id="modeSelect" class="mode-select" aria-label="Modo de respuesta">
+            <option value="auto">Automático</option>
+            <option value="fast">Rápido</option>
+            <option value="research">Investigación</option>
+            <option value="math">Matemática</option>
+            <option value="professional">Profesional</option>
+          </select>
+        </div>
+        <div class="topbar-actions">
+          <button class="status-button checking" id="statusButton"><i></i><span id="statusText">Comprobando núcleo</span></button>
+          <button class="icon-btn" id="diagnosticsBtn" aria-label="Diagnóstico">⌁</button>
+          <button class="icon-btn" id="mobileNewBtn" aria-label="Nueva conversación">＋</button>
+        </div>
+      </header>
+
+      <section class="chat-view view active" id="chatView">
+        <div class="conversation" id="conversation">
+          <section class="welcome" id="welcome">
+            <div class="welcome-reactor" aria-hidden="true">
+              <span class="orbit orbit-a"></span><span class="orbit orbit-b"></span>
+              <img src="./static/jarvis-reactor-v46.svg" alt="" />
+            </div>
+            <p class="eyebrow">JARVIS · ESPACIO PERSONAL</p>
+            <h1>¿En qué trabajamos hoy?</h1>
+            <p class="welcome-copy">Pregunta, analiza un archivo o convierte una idea en una misión. El núcleo te dirá claramente si necesita iniciar sesión o revisar una conexión.</p>
+            <div class="suggestions">
+              <button data-prompt="Ayúdame a organizar mis prioridades de hoy."><span>01</span><strong>Organizar mi día</strong><small>Prioridades y plan breve</small></button>
+              <button data-prompt="Investiga este tema y separa hechos, fuentes y conclusiones: "><span>02</span><strong>Investigar</strong><small>Evidencia y conclusiones</small></button>
+              <button data-prompt="Analiza el archivo que voy a adjuntar y dame los hallazgos principales."><span>03</span><strong>Analizar archivo</strong><small>PDF, Word, Excel y texto</small></button>
+              <button data-prompt="Crea una misión profesional para resolver este objetivo: "><span>04</span><strong>Crear una misión</strong><small>Plan, ejecución y verificación</small></button>
+            </div>
+          </section>
+          <div class="messages" id="messages" aria-live="polite"></div>
+          <div class="thinking" id="thinking" hidden><span class="thinking-core"></span><div><strong id="thinkingTitle">JARVIS está trabajando</strong><small id="thinkingDetail">Analizando la solicitud…</small></div></div>
+        </div>
+
+        <div class="composer-zone">
+          <div class="attachments" id="attachments" hidden></div>
+          <form class="composer" id="composer">
+            <input type="file" id="fileInput" multiple hidden accept=".pdf,.docx,.xlsx,.xlsm,.pptx,.txt,.md,.csv,.json,.py,.js,.html,.css,image/*" />
+            <button type="button" class="composer-icon" id="attachBtn" aria-label="Adjuntar archivo">⌕</button>
+            <textarea id="messageInput" rows="1" maxlength="12000" placeholder="Escribe un mensaje…"></textarea>
+            <button type="button" class="composer-icon voice-btn" id="voiceBtn" aria-label="Dictar mensaje">◉</button>
+            <button class="send-btn" id="sendBtn" type="submit" aria-label="Enviar"><span>➤</span></button>
+          </form>
+          <p class="composer-hint">Enter para enviar · Shift+Enter para una línea nueva</p>
+        </div>
+      </section>
+
+      <section class="panel-view view" id="panelView">
+        <header class="panel-header"><button class="icon-btn" id="panelBack" aria-label="Volver">←</button><div><p id="panelEyebrow">JARVIS</p><h2 id="panelTitle">Panel</h2></div><button class="soft-btn" id="panelRefresh">Actualizar</button></header>
+        <div class="panel-content" id="panelContent"></div>
+      </section>
+    </main>
+
+    <nav class="mobile-nav" aria-label="Navegación móvil">
+      <button class="active" data-view="chat"><span>◌</span><small>Chat</small></button>
+      <button data-view="library"><span>▤</span><small>Archivos</small></button>
+      <button id="mobileCompose"><span class="mobile-plus">＋</span><small>Nuevo</small></button>
+      <button data-view="missions"><span>✦</span><small>Misiones</small></button>
+      <button data-view="channels"><span>↗</span><small>Canales</small></button>
+    </nav>
+  </div>
+
+  <dialog class="modal" id="authModal">
+    <form method="dialog" class="modal-shell auth-shell" id="authForm">
+      <button class="modal-close" value="cancel" aria-label="Cerrar">×</button>
+      <div class="modal-mark"><img src="./static/jarvis-reactor-v46.svg" alt="" /></div>
+      <p class="eyebrow">ACCESO PERSONAL</p>
+      <h2 id="authTitle">Conecta tu núcleo</h2>
+      <p id="authCopy">Inicia sesión para utilizar las funciones privadas.</p>
+      <div class="auth-tabs"><button type="button" class="active" data-auth-tab="login">Iniciar sesión</button><button type="button" data-auth-tab="register" id="registerTab">Crear cuenta</button></div>
+      <div class="field" id="nameField" hidden><label for="authName">Nombre</label><input id="authName" autocomplete="name" /></div>
+      <div class="field"><label for="authEmail">Correo</label><input id="authEmail" type="email" autocomplete="username" required /></div>
+      <div class="field"><label for="authPassword">Contraseña</label><input id="authPassword" type="password" autocomplete="current-password" required /></div>
+      <p class="form-error" id="authError" hidden></p>
+      <button class="primary-btn wide" id="authSubmit" value="default">Continuar</button>
+      <small class="privacy-note">El token permanece solo en esta sesión del navegador. Las claves de IA nunca se guardan aquí.</small>
+    </form>
+  </dialog>
+
+  <dialog class="modal" id="connectionModal">
+    <form method="dialog" class="modal-shell">
+      <button class="modal-close" value="cancel" aria-label="Cerrar">×</button>
+      <div class="connection-illustration"><span></span><i></i></div>
+      <p class="eyebrow">CONEXIÓN</p>
+      <h2>Conecta JARVIS con su núcleo</h2>
+      <p id="connectionExplanation">Comprueba la dirección del backend y vuelve a intentarlo.</p>
+      <div class="field"><label for="apiBaseInput">URL del backend</label><input id="apiBaseInput" placeholder="https://tu-servicio.onrender.com" /></div>
+      <div class="button-row"><button type="button" class="soft-btn" id="resetConnection">Usar dirección original</button><button type="button" class="primary-btn" id="saveConnection">Guardar y probar</button></div>
+      <div class="diagnostic-result" id="connectionResult"></div>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status"></div>
+</body>
+</html>

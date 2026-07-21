@@ -1,0 +1,724 @@
+(() => {
+  'use strict';
+
+  const $ = (selector, root = document) => root.querySelector(selector);
+  const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
+  const safeStorage = storage => ({
+    getItem(key) { try { return storage?.getItem(key); } catch { return null; } },
+    setItem(key, value) { try { storage?.setItem(key, value); } catch {} },
+    removeItem(key) { try { storage?.removeItem(key); } catch {} }
+  });
+  const local = safeStorage(window.localStorage);
+  const session = safeStorage(window.sessionStorage);
+
+  const KEYS = {
+    client: 'jarvis_v47_client',
+    chats: 'jarvis_v47_chats',
+    active: 'jarvis_v47_active_chat',
+    api: 'jarvis_v47_api_base',
+    token: 'jarvis_v47_auth_token',
+    user: 'jarvis_v47_auth_user',
+    mode: 'jarvis_v47_mode'
+  };
+
+  const els = {
+    app: $('#app'), sidebar: $('#sidebar'), scrim: $('#scrim'), sidebarClose: $('#sidebarClose'),
+    menuBtn: $('#menuBtn'), brandBtn: $('#brandBtn'), newChatBtn: $('#newChatBtn'), mobileNewBtn: $('#mobileNewBtn'),
+    mobileCompose: $('#mobileCompose'), chatList: $('#chatList'), chatSearch: $('#chatSearch'), searchChatsBtn: $('#searchChatsBtn'),
+    modeSelect: $('#modeSelect'), statusButton: $('#statusButton'), statusText: $('#statusText'), diagnosticsBtn: $('#diagnosticsBtn'),
+    chatView: $('#chatView'), panelView: $('#panelView'), conversation: $('#conversation'), welcome: $('#welcome'), messages: $('#messages'),
+    thinking: $('#thinking'), thinkingTitle: $('#thinkingTitle'), thinkingDetail: $('#thinkingDetail'),
+    composer: $('#composer'), messageInput: $('#messageInput'), sendBtn: $('#sendBtn'), attachBtn: $('#attachBtn'),
+    fileInput: $('#fileInput'), attachments: $('#attachments'), voiceBtn: $('#voiceBtn'),
+    panelBack: $('#panelBack'), panelEyebrow: $('#panelEyebrow'), panelTitle: $('#panelTitle'), panelContent: $('#panelContent'), panelRefresh: $('#panelRefresh'),
+    accountBtn: $('#accountBtn'), accountName: $('#accountName'), accountState: $('#accountState'), avatar: $('#avatar'),
+    authModal: $('#authModal'), authForm: $('#authForm'), authTitle: $('#authTitle'), authCopy: $('#authCopy'), registerTab: $('#registerTab'),
+    nameField: $('#nameField'), authName: $('#authName'), authEmail: $('#authEmail'), authPassword: $('#authPassword'), authError: $('#authError'), authSubmit: $('#authSubmit'),
+    connectionModal: $('#connectionModal'), connectionExplanation: $('#connectionExplanation'), apiBaseInput: $('#apiBaseInput'),
+    resetConnection: $('#resetConnection'), saveConnection: $('#saveConnection'), connectionResult: $('#connectionResult'), toast: $('#toast')
+  };
+
+  const isGitHubPages = location.hostname.endsWith('.github.io');
+  const configuredBase = normalizeBase(window.JARVIS_CONFIG?.API_BASE || 'https://jarvis-ai-hud.onrender.com');
+  const savedBase = normalizeBase(local.getItem(KEYS.api) || '');
+
+  const state = {
+    clientId: local.getItem(KEYS.client) || uid('client'),
+    apiBase: isGitHubPages ? (savedBase || configuredBase) : savedBase,
+    token: session.getItem(KEYS.token) || '',
+    user: parseJSON(session.getItem(KEYS.user), null),
+    auth: { required: false, registration: false, authenticated: false },
+    core: { online: false, version: '', busy: false },
+    mode: local.getItem(KEYS.mode) || 'auto',
+    chats: parseJSON(local.getItem(KEYS.chats), {}),
+    activeChatId: local.getItem(KEYS.active) || '',
+    files: [],
+    abortController: null,
+    currentView: 'chat',
+    authMode: 'login',
+    toastTimer: null
+  };
+  local.setItem(KEYS.client, state.clientId);
+
+  class ApiError extends Error {
+    constructor(message, status = 0, data = null) {
+      super(message);
+      this.name = 'ApiError';
+      this.status = Number(status || 0);
+      this.data = data;
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', init);
+
+  function init() {
+    ensureChat();
+    bindEvents();
+    els.modeSelect.value = state.mode;
+    renderChatList();
+    renderConversation();
+    renderAttachments();
+    autoResize();
+    bootCore();
+    registerServiceWorker();
+  }
+
+  function bindEvents() {
+    els.menuBtn.addEventListener('click', () => els.app.classList.add('sidebar-open'));
+    els.sidebarClose.addEventListener('click', closeSidebar);
+    els.scrim.addEventListener('click', closeSidebar);
+    els.brandBtn.addEventListener('click', () => openView('chat'));
+    els.newChatBtn.addEventListener('click', newChat);
+    els.mobileNewBtn.addEventListener('click', newChat);
+    els.mobileCompose.addEventListener('click', newChat);
+    els.panelBack.addEventListener('click', () => openView('chat'));
+    els.panelRefresh.addEventListener('click', () => renderPanel(state.currentView));
+    els.statusButton.addEventListener('click', () => state.core.online ? openView('system') : openConnection());
+    els.diagnosticsBtn.addEventListener('click', () => openView('system'));
+    els.accountBtn.addEventListener('click', openAccount);
+    els.searchChatsBtn.addEventListener('click', () => {
+      els.chatSearch.hidden = !els.chatSearch.hidden;
+      if (!els.chatSearch.hidden) els.chatSearch.focus();
+    });
+    els.chatSearch.addEventListener('input', renderChatList);
+    els.modeSelect.addEventListener('change', () => {
+      state.mode = els.modeSelect.value;
+      local.setItem(KEYS.mode, state.mode);
+    });
+    els.composer.addEventListener('submit', event => { event.preventDefault(); state.core.busy ? stopGeneration() : sendMessage(); });
+    els.messageInput.addEventListener('input', autoResize);
+    els.messageInput.addEventListener('keydown', event => {
+      if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); state.core.busy ? stopGeneration() : sendMessage(); }
+    });
+    els.attachBtn.addEventListener('click', () => els.fileInput.click());
+    els.fileInput.addEventListener('change', handleFiles);
+    els.voiceBtn.addEventListener('click', startVoiceInput);
+    $$('[data-prompt]').forEach(button => button.addEventListener('click', () => {
+      els.messageInput.value = button.dataset.prompt || '';
+      autoResize();
+      els.messageInput.focus();
+    }));
+    $$('[data-view]').forEach(button => button.addEventListener('click', () => openView(button.dataset.view)));
+
+    $$('[data-auth-tab]').forEach(button => button.addEventListener('click', () => setAuthMode(button.dataset.authTab)));
+    els.authForm.addEventListener('submit', submitAuth);
+    els.saveConnection.addEventListener('click', saveConnection);
+    els.resetConnection.addEventListener('click', () => {
+      state.apiBase = isGitHubPages ? configuredBase : '';
+      local.removeItem(KEYS.api);
+      els.apiBaseInput.value = state.apiBase || location.origin;
+      testConnection();
+    });
+
+    window.addEventListener('online', bootCore);
+    window.addEventListener('offline', () => setStatus('Sin conexión a internet', 'offline'));
+  }
+
+  function normalizeBase(value) {
+    return String(value || '').trim().replace(/\/+$/, '').replace(/\/api\/jarvis(?:\/stream)?$/i, '');
+  }
+
+  function apiUrl(path) {
+    const clean = path.startsWith('/') ? path : `/${path}`;
+    return state.apiBase ? `${state.apiBase}${clean}` : clean;
+  }
+
+  function uid(prefix) {
+    const random = window.crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    return `${prefix}_${random}`;
+  }
+
+  function parseJSON(value, fallback) {
+    try { return value ? JSON.parse(value) : fallback; } catch { return fallback; }
+  }
+
+  function escapeHTML(value) {
+    return String(value ?? '').replace(/[&<>'"]/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[char]));
+  }
+
+  async function request(path, options = {}, config = {}) {
+    const attempts = Math.max(1, Number(config.attempts || 1));
+    const timeoutMs = Math.max(3000, Number(config.timeoutMs || 20000));
+    const retryable = new Set([408, 425, 429, 500, 502, 503, 504]);
+    let lastError;
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      const controller = new AbortController();
+      const outerSignal = options.signal;
+      const forwardAbort = () => controller.abort();
+      if (outerSignal) {
+        if (outerSignal.aborted) throw new DOMException('Solicitud cancelada', 'AbortError');
+        outerSignal.addEventListener('abort', forwardAbort, { once: true });
+      }
+      const timer = setTimeout(() => controller.abort('timeout'), timeoutMs);
+      try {
+        const headers = new Headers(options.headers || {});
+        if (state.token) headers.set('Authorization', `Bearer ${state.token}`);
+        if (options.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
+        const response = await fetch(apiUrl(path), { ...options, headers, signal: controller.signal, credentials: 'omit' });
+        clearTimeout(timer);
+        outerSignal?.removeEventListener('abort', forwardAbort);
+        const raw = await response.text();
+        let data = {};
+        try { data = raw ? JSON.parse(raw) : {}; }
+        catch { throw new ApiError(`El servidor respondió contenido no válido (HTTP ${response.status}).`, response.status); }
+        if (response.ok) return data;
+        const message = data.detail || data.reply || `Error HTTP ${response.status}`;
+        const error = new ApiError(message, response.status, data);
+        if (!retryable.has(response.status) || attempt === attempts) throw error;
+        lastError = error;
+      } catch (error) {
+        clearTimeout(timer);
+        outerSignal?.removeEventListener('abort', forwardAbort);
+        if (outerSignal?.aborted) throw new DOMException('Solicitud cancelada', 'AbortError');
+        if (error instanceof ApiError && (!retryable.has(error.status) || attempt === attempts)) throw error;
+        lastError = error?.name === 'AbortError' ? new ApiError('El núcleo tardó demasiado en responder.', 0) : error;
+        if (attempt === attempts) throw lastError;
+      }
+      await sleep(Math.min(800 * attempt, 1800));
+    }
+    throw lastError || new ApiError('No fue posible conectar con el núcleo.');
+  }
+
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+  async function bootCore() {
+    setStatus('Comprobando núcleo', 'checking');
+    try {
+      const health = await request('/api/health/live', {}, { attempts: 2, timeoutMs: 15000 });
+      state.core.online = health.status === 'ok';
+      state.core.version = health.version || '';
+      const auth = await request('/api/auth/status', {}, { attempts: 1, timeoutMs: 12000 });
+      state.auth = {
+        required: Boolean(auth.auth_required),
+        registration: Boolean(auth.registration_enabled),
+        authenticated: Boolean(auth.authenticated)
+      };
+      state.user = auth.user || null;
+      if (!state.auth.authenticated && state.token) clearSession();
+      if (state.auth.authenticated && state.user) saveUser();
+      updateAccountUI();
+      setStatus(state.auth.required && !state.auth.authenticated ? 'Inicia sesión' : 'Núcleo operativo', state.auth.required && !state.auth.authenticated ? 'checking' : 'online');
+      if (state.auth.required && !state.auth.authenticated) openAccount(true);
+      else startNotificationPolling();
+      return true;
+    } catch (error) {
+      state.core.online = false;
+      setStatus('Núcleo sin conexión', 'error');
+      els.connectionExplanation.textContent = explainError(error);
+      return false;
+    }
+  }
+
+  function setStatus(text, type = 'checking') {
+    els.statusText.textContent = text;
+    els.statusButton.className = `status-button ${type}`;
+  }
+
+  function explainError(error) {
+    if (!navigator.onLine) return 'El dispositivo no tiene conexión a internet.';
+    if (error?.status === 401) return 'El núcleo requiere iniciar sesión.';
+    if (error?.status === 403) return 'El dominio o la cuenta no tienen autorización.';
+    if (error?.status === 404) return 'La URL no corresponde al backend de JARVIS.';
+    if ([502,503,504].includes(error?.status)) return 'Render está iniciando o el servicio no pudo arrancar.';
+    return String(error?.message || 'No fue posible contactar el backend.').slice(0, 220);
+  }
+
+  function ensureChat() {
+    if (state.activeChatId && state.chats[state.activeChatId]) return;
+    const id = uid('chat');
+    state.chats[id] = { id, title: 'Nueva conversación', messages: [], updatedAt: Date.now() };
+    state.activeChatId = id;
+    persistChats();
+  }
+
+  function currentChat() { ensureChat(); return state.chats[state.activeChatId]; }
+
+  function persistChats() {
+    local.setItem(KEYS.chats, JSON.stringify(state.chats));
+    local.setItem(KEYS.active, state.activeChatId);
+  }
+
+  function newChat() {
+    const id = uid('chat');
+    state.chats[id] = { id, title: 'Nueva conversación', messages: [], updatedAt: Date.now() };
+    state.activeChatId = id;
+    state.files = [];
+    persistChats();
+    renderChatList();
+    renderConversation();
+    renderAttachments();
+    openView('chat');
+    els.messageInput.focus();
+  }
+
+  function renderChatList() {
+    const query = els.chatSearch.value.trim().toLowerCase();
+    const chats = Object.values(state.chats).sort((a,b) => b.updatedAt - a.updatedAt).filter(chat => !query || chat.title.toLowerCase().includes(query));
+    els.chatList.innerHTML = chats.length ? chats.map(chat => `
+      <article class="chat-item ${chat.id === state.activeChatId ? 'active' : ''}" data-chat-id="${escapeHTML(chat.id)}">
+        <div><strong>${escapeHTML(chat.title)}</strong><small>${chat.messages.length} mensajes · ${relativeTime(chat.updatedAt)}</small></div>
+        <button class="chat-delete" data-delete-chat="${escapeHTML(chat.id)}" aria-label="Eliminar conversación">×</button>
+      </article>`).join('') : '<div class="empty-history">No encontramos conversaciones.</div>';
+    $$('[data-chat-id]', els.chatList).forEach(item => item.addEventListener('click', event => {
+      if (event.target.closest('[data-delete-chat]')) return;
+      state.activeChatId = item.dataset.chatId;
+      persistChats();
+      renderChatList();
+      renderConversation();
+      openView('chat');
+    }));
+    $$('[data-delete-chat]', els.chatList).forEach(button => button.addEventListener('click', event => {
+      event.stopPropagation();
+      const id = button.dataset.deleteChat;
+      if (Object.keys(state.chats).length === 1) return newChat();
+      delete state.chats[id];
+      if (state.activeChatId === id) state.activeChatId = Object.keys(state.chats)[0];
+      persistChats(); renderChatList(); renderConversation();
+    }));
+  }
+
+  function relativeTime(timestamp) {
+    const diff = Date.now() - Number(timestamp || 0);
+    if (diff < 60000) return 'ahora';
+    if (diff < 3600000) return `${Math.floor(diff/60000)} min`;
+    if (diff < 86400000) return `${Math.floor(diff/3600000)} h`;
+    return new Date(timestamp).toLocaleDateString('es-HN', { day:'numeric', month:'short' });
+  }
+
+  function renderConversation() {
+    const chat = currentChat();
+    els.welcome.hidden = chat.messages.length > 0;
+    els.messages.innerHTML = chat.messages.map(renderMessageHTML).join('');
+    scrollBottom(false);
+  }
+
+  function renderMessageHTML(message) {
+    const role = message.role === 'user' ? 'user' : 'assistant';
+    const meta = message.meta || {};
+    const metaHTML = role === 'assistant' && (meta.model || meta.route || meta.cached) ? `<div class="message-meta">${meta.model ? `<span>${escapeHTML(meta.model)}</span>` : ''}${meta.route ? `<span>${escapeHTML(meta.route)}</span>` : ''}${meta.cached ? '<span>caché</span>' : ''}</div>` : '';
+    if (role === 'user') return `<article class="message user"><div class="message-body">${formatContent(message.content)}</div></article>`;
+    return `<article class="message assistant"><span class="message-avatar">J</span><div class="message-body ${meta.error ? 'message-error' : ''}">${formatContent(message.content)}${metaHTML}</div></article>`;
+  }
+
+  function formatContent(value) {
+    const source = escapeHTML(value || '');
+    const fenced = source.replace(/```([\w-]*)\n([\s\S]*?)```/g, (_, lang, code) => `<pre><code data-language="${lang}">${code.trim()}</code></pre>`);
+    return fenced.split(/\n{2,}/).map(block => block.startsWith('<pre>') ? block : `<p>${block.replace(/\n/g,'<br>').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/`([^`]+)`/g,'<code>$1</code>')}</p>`).join('');
+  }
+
+  function addMessage(role, content, meta = {}) {
+    const chat = currentChat();
+    chat.messages.push({ role, content: String(content || ''), meta, createdAt: Date.now() });
+    chat.updatedAt = Date.now();
+    if (role === 'user' && chat.title === 'Nueva conversación') chat.title = String(content).replace(/\s+/g,' ').slice(0,46) || 'Conversación';
+    persistChats();
+    renderChatList();
+    renderConversation();
+  }
+
+  async function sendMessage() {
+    const text = els.messageInput.value.trim();
+    if (!text && !state.files.length) return;
+    if (!state.core.online) { openConnection(); return; }
+    if (state.auth.required && !state.auth.authenticated) { openAccount(true); return; }
+
+    const prompt = text || 'Analiza los archivos adjuntos.';
+    const files = state.files.map(file => ({ file_name:file.name, file_b64:file.base64 }));
+    addMessage('user', prompt);
+    els.messageInput.value = '';
+    state.files = [];
+    renderAttachments();
+    autoResize();
+    setBusy(true, 'Analizando la solicitud…');
+    state.abortController = new AbortController();
+
+    try {
+      const data = await request('/api/jarvis', {
+        method:'POST',
+        signal: state.abortController.signal,
+        body:JSON.stringify({
+          message:prompt,
+          session_id:backendSessionId(),
+          files,
+          mode:state.mode,
+          project_name:'General',
+          request_id:uid('request')
+        })
+      }, { attempts:2, timeoutMs:65000 });
+      const reply = String(data.reply || data.response || '').trim();
+      if (!reply) throw new ApiError('El núcleo respondió sin contenido.');
+      addMessage('assistant', reply, {
+        model:data.model || '', route:data.route || data.mode || '', cached:Boolean(data.cached)
+      });
+      setStatus('Núcleo operativo', 'online');
+    } catch (error) {
+      if (error?.name === 'AbortError') addMessage('assistant', 'Generación detenida por el usuario.', { error:true, route:'cancelled' });
+      else if (error?.status === 401) {
+        clearSession();
+        addMessage('assistant', '🔐 El núcleo está operativo, pero requiere iniciar sesión. Abre **Cuenta personal** y vuelve a intentarlo.', { error:true, route:'authentication' });
+        openAccount(true);
+      } else {
+        const localReply = localRecovery(prompt, error);
+        addMessage('assistant', localReply, { error:true, route:'local_recovery' });
+        setStatus('Revisar conexión', 'error');
+      }
+    } finally {
+      state.abortController = null;
+      setBusy(false);
+    }
+  }
+
+  function localRecovery(prompt, error) {
+    const expression = String(prompt).trim().replace(/,/g,'.').replace(/×/g,'*').replace(/÷/g,'/');
+    if (/^[\d\s()+\-*/.%]+$/.test(expression) && expression.length < 100) {
+      try {
+        const result = Function(`"use strict";return (${expression})`)();
+        if (Number.isFinite(result)) return `Resultado local: **${result}**.\n\nEl cálculo se completó en el dispositivo mientras se revisa la conexión remota.`;
+      } catch {}
+    }
+    return `⚠️ **JARVIS recibió tu mensaje, pero no pudo completar la solicitud remota.**\n\n${explainError(error)}\n\nNo se seguirá reintentando indefinidamente. Abre el indicador de estado para revisar la conexión y vuelve a enviar cuando aparezca **Núcleo operativo**.`;
+  }
+
+  function stopGeneration() { state.abortController?.abort(); }
+
+  function setBusy(busy, detail = '') {
+    state.core.busy = busy;
+    els.thinking.hidden = !busy;
+    els.thinkingDetail.textContent = detail || 'Procesando…';
+    els.sendBtn.classList.toggle('stop', busy);
+    els.sendBtn.innerHTML = busy ? '<span>■</span>' : '<span>➤</span>';
+    if (busy) scrollBottom();
+  }
+
+  function backendSessionId() {
+    const owner = state.user?.id || state.clientId;
+    return `web:${owner}:${state.activeChatId}`.slice(0,150);
+  }
+
+  async function handleFiles(event) {
+    const selected = [...event.target.files];
+    event.target.value = '';
+    for (const file of selected) {
+      if (file.size > 12 * 1024 * 1024) { toast(`${file.name} supera 12 MB.`); continue; }
+      try { state.files.push({ name:file.name, base64:await fileToBase64(file), size:file.size }); }
+      catch { toast(`No se pudo leer ${file.name}.`); }
+    }
+    renderAttachments();
+  }
+
+  function fileToBase64(file) {
+    return new Promise((resolve,reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function renderAttachments() {
+    els.attachments.hidden = !state.files.length;
+    els.attachments.innerHTML = state.files.map((file,index) => `<div class="attachment-chip"><span>${escapeHTML(file.name)}</span><button data-remove-file="${index}" aria-label="Quitar archivo">×</button></div>`).join('');
+    $$('[data-remove-file]', els.attachments).forEach(button => button.addEventListener('click', () => {
+      state.files.splice(Number(button.dataset.removeFile),1); renderAttachments();
+    }));
+  }
+
+  function autoResize() {
+    els.messageInput.style.height = 'auto';
+    els.messageInput.style.height = `${Math.min(180, Math.max(42, els.messageInput.scrollHeight))}px`;
+  }
+
+  function scrollBottom(smooth = true) {
+    requestAnimationFrame(() => els.conversation.scrollTo({ top:els.conversation.scrollHeight, behavior:smooth ? 'smooth' : 'auto' }));
+  }
+
+  function closeSidebar() { els.app.classList.remove('sidebar-open'); }
+
+  function openView(view) {
+    closeSidebar();
+    state.currentView = view;
+    $$('[data-view]').forEach(button => button.classList.toggle('active', button.dataset.view === view));
+    if (view === 'chat') {
+      els.chatView.classList.add('active');
+      els.panelView.classList.remove('active');
+      return;
+    }
+    if (state.auth.required && !state.auth.authenticated) { openAccount(true); return; }
+    els.chatView.classList.remove('active');
+    els.panelView.classList.add('active');
+    renderPanel(view);
+  }
+
+  const PANEL_INFO = {
+    library:['CONOCIMIENTO','Biblioteca'], memory:['CONTEXTO','Memoria'], missions:['AUTONOMÍA','Misiones'],
+    channels:['INTEGRACIONES','WhatsApp y Telegram'], system:['ESTADO','Diagnóstico del núcleo']
+  };
+
+  async function renderPanel(view) {
+    const [eyebrow,title] = PANEL_INFO[view] || ['JARVIS','Panel'];
+    els.panelEyebrow.textContent = eyebrow;
+    els.panelTitle.textContent = title;
+    els.panelContent.innerHTML = '<div class="empty-state">Cargando…</div>';
+    try {
+      if (view === 'library') await renderLibrary();
+      else if (view === 'memory') await renderMemory();
+      else if (view === 'missions') await renderMissions();
+      else if (view === 'channels') await renderChannels();
+      else await renderSystem();
+    } catch (error) {
+      if (error.status === 401) { clearSession(); openAccount(true); return; }
+      els.panelContent.innerHTML = `<div class="empty-state">${escapeHTML(explainError(error))}<br><br><button class="soft-btn" id="retryPanel">Volver a intentar</button></div>`;
+      $('#retryPanel')?.addEventListener('click', () => renderPanel(view));
+    }
+  }
+
+  async function renderLibrary() {
+    const data = await request(`/api/library?session_id=${encodeURIComponent(backendSessionId())}`);
+    const docs = data.documents || [];
+    els.panelContent.innerHTML = `
+      <div class="panel-grid"><article class="panel-card"><h3>Archivos disponibles</h3><strong class="metric">${docs.length}</strong><p>Documentos vinculados al espacio actual.</p></article><article class="panel-card"><h3>Subida segura</h3><p>Máximo 12 MB por archivo. PDF, Word, Excel, PowerPoint, texto y código.</p><button class="primary-btn" id="libraryUploadBtn" style="margin-top:12px">Subir archivo</button><input id="libraryFileInput" type="file" hidden /></article></div>
+      <section class="panel-section"><div class="panel-section-head"><h3>Documentos</h3></div><div class="list-stack">${docs.length ? docs.map(doc => `<article class="list-row"><div><strong>${escapeHTML(doc.file_name || doc.name || 'Documento')}</strong><small>${escapeHTML(doc.file_type || '')} · ${escapeHTML(String(doc.created_at || ''))}</small></div><button class="danger-btn" data-delete-doc="${escapeHTML(doc.id)}">Eliminar</button></article>`).join('') : '<div class="empty-state">Todavía no hay documentos.</div>'}</div></section>`;
+    $('#libraryUploadBtn').addEventListener('click', () => $('#libraryFileInput').click());
+    $('#libraryFileInput').addEventListener('change', async event => {
+      const file = event.target.files[0]; if (!file) return;
+      if (file.size > 12*1024*1024) return toast('El archivo supera 12 MB.');
+      const button = $('#libraryUploadBtn'); button.disabled = true; button.textContent = 'Subiendo…';
+      try {
+        await request('/api/library/upload', { method:'POST', body:JSON.stringify({ session_id:backendSessionId(), file_name:file.name, file_b64:await fileToBase64(file) }) }, { timeoutMs:65000 });
+        toast('Archivo guardado'); renderLibrary();
+      } catch (error) { toast(explainError(error)); button.disabled = false; button.textContent = 'Subir archivo'; }
+    });
+    $$('[data-delete-doc]').forEach(button => button.addEventListener('click', async () => {
+      if (!confirm('¿Eliminar este documento de JARVIS?')) return;
+      await request(`/api/library/${encodeURIComponent(button.dataset.deleteDoc)}?session_id=${encodeURIComponent(backendSessionId())}`, { method:'DELETE' });
+      renderLibrary();
+    }));
+  }
+
+  async function renderMemory() {
+    const data = await request(`/api/memory?session_id=${encodeURIComponent(backendSessionId())}`);
+    const memories = data.memories || [];
+    els.panelContent.innerHTML = `
+      <div class="panel-card"><h3>Guardar un recuerdo</h3><p>Conserva únicamente preferencias o información útil que quieras reutilizar.</p><div class="form-grid" style="margin-top:13px"><input class="text-input" id="memoryContent" placeholder="Ejemplo: Prefiero respuestas breves"/><select class="text-input" id="memoryCategory"><option value="preference">Preferencia</option><option value="project">Proyecto</option><option value="fact">Dato</option></select><button class="primary-btn" id="saveMemory">Guardar</button></div></div>
+      <section class="panel-section"><div class="panel-section-head"><h3>Recuerdos</h3><span class="status-tag">${memories.length}</span></div><div class="list-stack">${memories.length ? memories.map(item => `<article class="list-row"><div><strong>${escapeHTML(item.content)}</strong><small>${escapeHTML(item.category || 'memory')} · importancia ${Number(item.importance || 3)}</small></div><button class="danger-btn" data-delete-memory="${escapeHTML(item.id)}">Eliminar</button></article>`).join('') : '<div class="empty-state">JARVIS no ha guardado recuerdos todavía.</div>'}</div></section>`;
+    $('#saveMemory').addEventListener('click', async () => {
+      const content = $('#memoryContent').value.trim(); if (!content) return;
+      await request('/api/memory', { method:'POST', body:JSON.stringify({ session_id:backendSessionId(), content, category:$('#memoryCategory').value, importance:3 }) });
+      toast('Recuerdo guardado'); renderMemory();
+    });
+    $$('[data-delete-memory]').forEach(button => button.addEventListener('click', async () => {
+      await request(`/api/memory/${encodeURIComponent(button.dataset.deleteMemory)}?session_id=${encodeURIComponent(backendSessionId())}`, { method:'DELETE' }); renderMemory();
+    }));
+  }
+
+  async function renderMissions() {
+    const data = await request(`/api/autonomy/workflows?session_id=${encodeURIComponent(backendSessionId())}&limit=20`);
+    const workflows = data.workflows || [];
+    els.panelContent.innerHTML = `
+      <div class="panel-card"><h3>Nueva misión</h3><p>JARVIS dividirá el objetivo en etapas, guardará checkpoints y se detendrá antes de acciones sensibles.</p><div class="form-grid" style="margin-top:13px"><input class="text-input" id="missionObjective" placeholder="Describe un resultado concreto"/><select class="text-input" id="missionMode"><option value="auto">Automático</option><option value="research">Investigación</option><option value="professional">Profesional</option></select><button class="primary-btn" id="createMission">Crear misión</button></div></div>
+      <section class="panel-section"><div class="panel-section-head"><h3>Misiones recientes</h3><span class="status-tag">${workflows.length}</span></div><div class="list-stack">${workflows.length ? workflows.map(item => { const steps=item.steps||[]; const done=steps.filter(step=>step.status==='completed').length; const progress=steps.length?Math.round(done/steps.length*100):0; return `<article class="list-row"><div><strong>${escapeHTML(item.objective || 'Misión')}</strong><small>${escapeHTML(item.status || 'planned')} · ${done}/${steps.length} etapas<div class="job-progress"><i style="width:${progress}%"></i></div></small></div><span class="status-tag ${item.status==='completed'?'ok':'warn'}">${progress}%</span></article>`; }).join('') : '<div class="empty-state">No hay misiones todavía.</div>'}</div></section>`;
+    $('#createMission').addEventListener('click', async () => {
+      const objective = $('#missionObjective').value.trim(); if (!objective) return;
+      const button=$('#createMission'); button.disabled=true; button.textContent='Creando…';
+      try {
+        await request('/api/autonomy/workflows', { method:'POST', body:JSON.stringify({ session_id:backendSessionId(), objective, mode:$('#missionMode').value, project_name:'General', start:true }) }, { timeoutMs:30000 });
+        toast('Misión iniciada'); renderMissions();
+      } catch(error) { toast(explainError(error)); button.disabled=false; button.textContent='Crear misión'; }
+    });
+  }
+
+  async function renderChannels() {
+    const data = await request('/api/channels/status');
+    const telegram = data.channels?.telegram || data.telegram || {};
+    const whatsapp = data.channels?.whatsapp || data.whatsapp || {};
+    const business = data.whatsapp_business || {};
+    const multimodal = data.multimodal || {};
+    const casesData = await request('/api/channels/whatsapp/cases?limit=5').catch(() => ({ cases:[], counts:{} }));
+    const cases = casesData.cases || [];
+    const base = state.apiBase || location.origin;
+    els.panelContent.innerHTML = `
+      <div class="panel-grid">
+        <article class="panel-card channel-card"><span class="channel-icon">T</span><div><h3>Telegram</h3><p>${telegram.configured ? 'Chat general, imágenes, voz y documentos.' : 'Faltan variables en Render.'}</p></div><span class="status-tag ${telegram.configured?'ok':'warn'}">${telegram.configured?'Listo':'Pendiente'}</span></article>
+        <article class="panel-card channel-card"><span class="channel-icon">W</span><div><h3>WhatsApp Business</h3><p>${whatsapp.configured ? 'Atención, citas, pedidos y soporte empresarial.' : 'Faltan variables en Render.'}</p></div><span class="status-tag ${whatsapp.configured?'ok':'warn'}">${whatsapp.configured?'Listo':'Pendiente'}</span></article>
+        <article class="panel-card channel-card"><span class="channel-icon">◎</span><div><h3>Multimedia</h3><p>Imágenes ${multimodal.vision?'listas':'pendientes'} · voz ${multimodal.transcription?'lista':'pendiente'}.</p></div><span class="status-tag ${multimodal.vision&&multimodal.transcription?'ok':'warn'}">${multimodal.vision&&multimodal.transcription?'Completo':'Revisar'}</span></article>
+      </div>
+      <section class="panel-section"><div class="panel-card"><h3>Webhook de Telegram</h3><p><code>${escapeHTML(base)}/api/channels/telegram/webhook</code></p><button class="soft-btn" id="registerTelegram" style="margin-top:12px" ${telegram.configured?'':'disabled'}>Registrar webhook</button></div></section>
+      <section class="panel-section"><div class="panel-card"><h3>Webhook de WhatsApp</h3><p>En Meta configura: <code>${escapeHTML(base)}/api/channels/whatsapp/webhook</code></p><p style="margin-top:8px">Negocio: ${escapeHTML(business.business_name || 'sin configurar')} · información comercial ${business.business_context?'lista':'pendiente'}.</p></div></section>
+      <section class="panel-section"><div class="panel-section-head"><h3>Casos recientes de WhatsApp</h3><small>${Object.values(casesData.counts || {}).reduce((sum,value)=>sum+Number(value||0),0)} registrados</small></div><div class="list-stack">${cases.length ? cases.map(item => `<article class="list-row"><div><strong>${escapeHTML(item.id)} · ${escapeHTML(item.case_type)}</strong><small>${escapeHTML(item.summary)} · ${escapeHTML(item.status)}</small></div>${item.status==='resolved'||item.status==='cancelled' ? '' : `<button class="soft-btn" data-resolve-case="${escapeHTML(item.id)}">Resolver</button>`}</article>`).join('') : '<div class="empty-state">Todavía no hay solicitudes empresariales.</div>'}</div></section>
+      <section class="panel-section"><div class="panel-card"><h3>Enviar mensaje de prueba</h3><div class="form-grid" style="margin-top:13px"><select class="text-input" id="channelType"><option value="telegram">Telegram</option><option value="whatsapp">WhatsApp</option></select><input class="text-input" id="channelRecipient" placeholder="Chat ID o número"/><button class="primary-btn" id="sendChannelTest">Preparar envío</button></div><textarea class="text-input" id="channelMessage" placeholder="Mensaje" style="margin-top:8px;min-height:80px"></textarea></div></section>`;
+    $('#registerTelegram').addEventListener('click', async () => {
+      if (!confirm('¿Registrar el webhook seguro de Telegram?')) return;
+      await request('/api/channels/telegram/register-webhook', { method:'POST', body:JSON.stringify({ webhook_url:`${base}/api/channels/telegram/webhook`, drop_pending_updates:false }) });
+      toast('Webhook registrado'); renderChannels();
+    });
+    $('#sendChannelTest').addEventListener('click', async () => {
+      const channel=$('#channelType').value, recipient=$('#channelRecipient').value.trim(), message=$('#channelMessage').value.trim();
+      if (!recipient || !message) return toast('Completa destinatario y mensaje.');
+      if (!confirm(`¿Confirmas enviar este mensaje por ${channel}?`)) return;
+      await request('/api/channels/send', { method:'POST', body:JSON.stringify({ channel, recipient, message, confirmed:true }) }, { timeoutMs:30000 });
+      toast('Mensaje enviado');
+    });
+    $$('[data-resolve-case]').forEach(button => button.addEventListener('click', async () => {
+      if (!confirm(`¿Marcar ${button.dataset.resolveCase} como resuelto?`)) return;
+      await request(`/api/channels/whatsapp/cases/${encodeURIComponent(button.dataset.resolveCase)}`, { method:'PATCH', body:JSON.stringify({ status:'resolved' }) });
+      toast('Caso resuelto'); renderChannels();
+    }));
+  }
+
+  async function renderSystem() {
+    const checks = await Promise.allSettled([
+      request('/api/health/live'), request('/api/health/ready'), request('/api/auth/status'), request('/api/providers')
+    ]);
+    const live = valueOf(checks[0]), ready=valueOf(checks[1]), auth=valueOf(checks[2]), providers=valueOf(checks[3]);
+    const configured = providers.providers?.filter?.(item=>item.configured)?.length || providers.configured?.length || 0;
+    els.panelContent.innerHTML = `
+      <div class="panel-grid">
+        <article class="panel-card"><h3>Proceso</h3><strong class="metric">${live.status==='ok'?'Operativo':'Revisar'}</strong><p>Versión ${escapeHTML(live.version || state.core.version || '—')}</p></article>
+        <article class="panel-card"><h3>Preparación</h3><strong class="metric">${ready.status==='ready'?'Lista':'Revisar'}</strong><p>Base de datos y recursos de interfaz.</p></article>
+        <article class="panel-card"><h3>Acceso</h3><strong class="metric">${auth.authenticated?'Conectado':auth.auth_required?'Privado':'Público'}</strong><p>${auth.authenticated?'Sesión válida':auth.auth_required?'Inicia sesión para utilizar funciones':'No requiere sesión'}</p></article>
+        <article class="panel-card"><h3>Proveedores</h3><strong class="metric">${configured}</strong><p>Rutas generativas configuradas.</p></article>
+      </div>
+      <section class="panel-section"><div class="panel-card"><h3>Dirección activa</h3><p><code>${escapeHTML(state.apiBase || location.origin)}</code></p><div class="button-row"><button class="soft-btn" id="openConnectionSettings">Cambiar conexión</button><button class="soft-btn" id="openAccountSettings">Cuenta personal</button></div></div></section>`;
+    $('#openConnectionSettings').addEventListener('click', openConnection);
+    $('#openAccountSettings').addEventListener('click', () => openAccount(false));
+  }
+
+  function valueOf(result) { return result.status === 'fulfilled' ? result.value : {}; }
+
+  async function openAccount(force = false) {
+    closeSidebar();
+    try {
+      const data = await request('/api/auth/status', {}, { attempts:1, timeoutMs:12000 });
+      state.auth = { required:Boolean(data.auth_required), registration:Boolean(data.registration_enabled), authenticated:Boolean(data.authenticated) };
+      state.user = data.user || null;
+      if (data.authenticated) {
+        updateAccountUI();
+        if (force) return;
+        const logout = confirm(`Sesión activa: ${data.user?.email || 'cuenta personal'}\n\n¿Cerrar sesión?`);
+        if (logout) {
+          await request('/api/auth/logout', { method:'POST' }).catch(()=>({}));
+          clearSession(); updateAccountUI(); toast('Sesión cerrada'); openAccount(true);
+        }
+        return;
+      }
+      if (state.token) clearSession();
+      els.registerTab.hidden = !data.registration_enabled;
+      setAuthMode(data.first_user_pending && data.registration_enabled ? 'register' : 'login');
+      els.authCopy.textContent = data.first_user_pending ? 'Crea la primera cuenta propietaria para activar JARVIS.' : 'Inicia sesión para utilizar las funciones privadas.';
+      if (!els.authModal.open) els.authModal.showModal();
+    } catch (error) {
+      els.connectionExplanation.textContent = explainError(error);
+      openConnection();
+    }
+  }
+
+  function setAuthMode(mode) {
+    state.authMode = mode;
+    $$('[data-auth-tab]').forEach(button => button.classList.toggle('active', button.dataset.authTab === mode));
+    els.nameField.hidden = mode !== 'register';
+    els.authTitle.textContent = mode === 'register' ? 'Crea tu cuenta propietaria' : 'Bienvenido de nuevo';
+    els.authSubmit.textContent = mode === 'register' ? 'Crear cuenta y conectar' : 'Iniciar sesión';
+    els.authPassword.autocomplete = mode === 'register' ? 'new-password' : 'current-password';
+    els.authError.hidden = true;
+  }
+
+  async function submitAuth(event) {
+    event.preventDefault();
+    const email=els.authEmail.value.trim(), password=els.authPassword.value;
+    const payload = state.authMode === 'register' ? { display_name:els.authName.value.trim(), email, password } : { email, password };
+    els.authSubmit.disabled = true; els.authSubmit.textContent = 'Conectando…'; els.authError.hidden = true;
+    try {
+      const result = await request(state.authMode === 'register' ? '/api/auth/register' : '/api/auth/login', { method:'POST', body:JSON.stringify(payload) }, { timeoutMs:20000 });
+      state.token=result.token || ''; state.user=result.user || null; state.auth.authenticated=true;
+      session.setItem(KEYS.token,state.token); saveUser(); updateAccountUI();
+      els.authModal.close(); setStatus('Núcleo operativo','online'); toast('Cuenta conectada');
+      startNotificationPolling();
+    } catch(error) {
+      els.authError.textContent = explainError(error); els.authError.hidden=false;
+    } finally {
+      els.authSubmit.disabled=false; els.authSubmit.textContent=state.authMode==='register'?'Crear cuenta y conectar':'Iniciar sesión';
+    }
+  }
+
+  function saveUser() { session.setItem(KEYS.user, JSON.stringify(state.user || null)); }
+  function clearSession() { state.token=''; state.user=null; state.auth.authenticated=false; session.removeItem(KEYS.token); session.removeItem(KEYS.user); }
+  function updateAccountUI() {
+    const name=state.user?.display_name || 'Cuenta personal';
+    els.accountName.textContent=name;
+    els.accountState.textContent=state.auth.authenticated?'Sesión protegida':state.auth.required?'Inicia sesión':'Acceso opcional';
+    els.avatar.textContent=(name.trim()[0] || 'C').toUpperCase();
+  }
+
+  function openConnection() {
+    closeSidebar();
+    els.apiBaseInput.value=state.apiBase || (isGitHubPages?configuredBase:location.origin);
+    els.connectionResult.textContent='';
+    if (!els.connectionModal.open) els.connectionModal.showModal();
+  }
+
+  async function saveConnection() {
+    const value=normalizeBase(els.apiBaseInput.value);
+    if (!/^https?:\/\//i.test(value)) { els.connectionResult.textContent='Escribe una URL completa que comience con https://'; return; }
+    state.apiBase = (!isGitHubPages && value === normalizeBase(location.origin)) ? '' : value;
+    if (state.apiBase) local.setItem(KEYS.api,state.apiBase); else local.removeItem(KEYS.api);
+    await testConnection();
+  }
+
+  async function testConnection() {
+    els.connectionResult.textContent='Comprobando…';
+    const ok=await bootCore();
+    if (ok) { els.connectionResult.textContent='✓ Núcleo conectado correctamente.'; setTimeout(()=>els.connectionModal.close(),650); }
+    else els.connectionResult.textContent='No se pudo conectar. Confirma que Render esté Live y que esta sea la URL del Web Service.';
+  }
+
+  let notificationTimer;
+  function startNotificationPolling() {
+    if (notificationTimer) return;
+    notificationTimer=setInterval(async()=>{
+      if (!state.core.online || (state.auth.required && !state.auth.authenticated)) return;
+      try {
+        const data=await request(`/api/notifications?session_id=${encodeURIComponent(backendSessionId())}`,{}, { attempts:1,timeoutMs:12000 });
+        (data.notifications||[]).forEach(item=>toast(`Recordatorio: ${item.title}`));
+      } catch { /* Las notificaciones no cambian el estado del núcleo. */ }
+    },60000);
+  }
+
+  function startVoiceInput() {
+    const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if (!Recognition) return toast('El dictado no está disponible en este navegador.');
+    const recognition=new Recognition(); recognition.lang='es-HN'; recognition.interimResults=false;
+    recognition.onresult=event=>{ els.messageInput.value=`${els.messageInput.value} ${event.results[0][0].transcript}`.trim(); autoResize(); };
+    recognition.onerror=()=>toast('No fue posible utilizar el micrófono.');
+    recognition.start();
+  }
+
+  function toast(message) {
+    clearTimeout(state.toastTimer); els.toast.textContent=String(message||''); els.toast.classList.add('show');
+    state.toastTimer=setTimeout(()=>els.toast.classList.remove('show'),3200);
+  }
+
+  function registerServiceWorker() {
+    if (!('serviceWorker' in navigator) || location.protocol === 'file:') return;
+    navigator.serviceWorker.register('./service-worker.js?v=48').catch(()=>{});
+  }
+})();
