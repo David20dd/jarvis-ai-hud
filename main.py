@@ -95,8 +95,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger("jarvis")
 
-APP_VERSION = "55.0.0"
-APP_EDITION = "Unified Intelligence"
+APP_VERSION = "57.0.0"
+APP_EDITION = "Refined Intelligence"
 
 DB_FILE = os.getenv("JARVIS_DB_FILE", "jarvis_memory.db").strip() or "jarvis_memory.db"
 BASE_DIR = Path(__file__).resolve().parent
@@ -487,6 +487,35 @@ def init_db() -> None:
     unified_store.init_schema()
 
 
+def _safe_wal_checkpoint() -> str:
+    """Try a non-blocking WAL checkpoint without failing maintenance.
+
+    SQLite can legitimately report SQLITE_BUSY/SQLITE_LOCKED while a request is
+    writing.  A passive checkpoint is an optimization, not a correctness
+    requirement, so maintenance defers it to the next cycle instead of turning
+    ordinary concurrent traffic into an application error.
+    """
+    ensure_database_directory()
+    conn: Optional[sqlite3.Connection] = None
+    try:
+        conn = sqlite3.connect(DB_FILE, check_same_thread=False, timeout=2)
+        conn.execute("PRAGMA busy_timeout = 2000")
+        result = conn.execute("PRAGMA wal_checkpoint(PASSIVE)").fetchone()
+        if result and int(result[0] or 0) != 0:
+            logger.info("Checkpoint SQLite aplazado: la base continúa ocupada")
+            return "deferred"
+        return "completed"
+    except sqlite3.OperationalError as exc:
+        detail = str(exc).lower()
+        if "locked" in detail or "busy" in detail:
+            logger.info("Checkpoint SQLite aplazado: %s", safe_error_text(exc))
+            return "deferred"
+        raise
+    finally:
+        if conn is not None:
+            conn.close()
+
+
 def _maintenance_cycle() -> Dict[str, Any]:
     started = time.perf_counter()
     now = time.time()
@@ -496,7 +525,6 @@ def _maintenance_cycle() -> Dict[str, Any]:
         cleaned["request_results"] = conn.execute("DELETE FROM request_results WHERE created_at < ?", (now - 86400,)).rowcount
         cleaned["telemetry_events"] = conn.execute("DELETE FROM telemetry_events WHERE created_at < ?", (now - 30 * 86400,)).rowcount
         cleaned["activity_log"] = conn.execute("DELETE FROM activity_log WHERE created_at < ?", (now - 90 * 86400,)).rowcount
-        conn.execute("PRAGMA wal_checkpoint(PASSIVE)")
         conn.execute("PRAGMA optimize")
         stale = conn.execute(
             """
@@ -511,6 +539,7 @@ def _maintenance_cycle() -> Dict[str, Any]:
                 "UPDATE jobs SET status = 'queued', control = '', checkpoint = 'recuperado por mantenimiento', updated_at = ? WHERE id = ?",
                 (now, row["id"]),
             )
+    checkpoint = _safe_wal_checkpoint()
     recovered = 0
     for row in stale:
         if _submit_job(row["id"]):
@@ -554,6 +583,7 @@ def _maintenance_cycle() -> Dict[str, Any]:
     runtime.metrics.record("maintenance", (time.perf_counter() - started) * 1000, "success")
     return {
         "cleaned": cleaned,
+        "wal_checkpoint": checkpoint,
         "recovered_jobs": recovered,
         "dispatched_automations": dispatched_automations,
         "telegram_notifications": telegram_notifications,
@@ -593,7 +623,7 @@ async def lifespan(_: FastAPI):
     recovered_workflows = _recover_interrupted_workflows()
     recovered_channels = _recover_channel_events()
     logger.info(
-        "J.A.R.V.I.S. v55 iniciado | public_mode=%s | redis=%s | jobs_recuperados=%s | workflows_recuperados=%s | canales_recuperados=%s",
+        "J.A.R.V.I.S. v57 iniciado | public_mode=%s | redis=%s | jobs_recuperados=%s | workflows_recuperados=%s | canales_recuperados=%s",
         PUBLIC_MODE,
         bool(REDIS_URL),
         recovered,
@@ -604,11 +634,11 @@ async def lifespan(_: FastAPI):
     _stop_maintenance()
     JOB_EXECUTOR.shutdown(wait=False, cancel_futures=True)
     provider_gateway.close()
-    logger.info("J.A.R.V.I.S. v55 detenido")
+    logger.info("J.A.R.V.I.S. v57 detenido")
 
 
 app = FastAPI(
-    title=f"J.A.R.V.I.S. {APP_EDITION} v55",
+    title=f"J.A.R.V.I.S. {APP_EDITION} v57",
     version=APP_VERSION,
     lifespan=lifespan,
 )
@@ -4823,7 +4853,9 @@ def _unified_plan(objective: str, mode: str = "auto") -> Dict[str, Any]:
     return plan
 
 
-@app.get("/api/v55/status")
+@app.get("/api/v55/status", include_in_schema=False)
+@app.get("/api/v56/status", include_in_schema=False)
+@app.get("/api/v57/status")
 def unified_status(session_id: str = ""):
     sid = safe_session_id(session_id) if session_id else ""
     provider_snapshot = provider_gateway.snapshot()
@@ -4850,7 +4882,7 @@ def intelligence_plan(data: IntelligencePlanInput, request: Request):
     sid = safe_session_id(data.session_id)
     plan = _unified_plan(data.objective, data.mode)
     decision = unified_store.save_decision(sid, data.objective, plan)
-    log_activity(sid, "intelligence", "Plan v55 creado", decision.get("id", ""), "planned")
+    log_activity(sid, "intelligence", "Plan v57 creado", decision.get("id", ""), "planned")
     return {"status": "planned", "decision": decision, "plan": plan}
 
 
@@ -4868,7 +4900,7 @@ def intelligence_execute(data: IntelligencePlanInput, request: Request):
     unified_store.link_workflow(decision["id"], workflow["id"])
     autonomy_store.update_workflow(workflow["id"], status="queued")
     submitted = _submit_workflow(workflow["id"])
-    log_activity(sid, "intelligence", "Misión v55 iniciada", workflow["id"], "queued")
+    log_activity(sid, "intelligence", "Misión v57 iniciada", workflow["id"], "queued")
     return {
         "status": "queued", "submitted": submitted,
         "decision": unified_store.get_decision(decision["id"]), "plan": plan,

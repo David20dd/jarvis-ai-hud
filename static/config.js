@@ -1,6 +1,6 @@
 /* Configuración pública. Las claves privadas pertenecen exclusivamente al backend. */
 window.JARVIS_CONFIG = Object.freeze({
   API_BASE: "https://jarvis-ai-hud.onrender.com",
-  APP_NAME: "J.A.R.V.I.S. — Unified Intelligence v55",
+  APP_NAME: "J.A.R.V.I.S. — Refined Intelligence v57",
   PUBLIC_MODE: true
 });

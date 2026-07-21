@@ -1,12 +1,12 @@
 {
-  "name": "J.A.R.V.I.S. Unified Intelligence v55",
+  "name": "J.A.R.V.I.S. Refined Intelligence v57",
   "short_name": "JARVIS",
-  "description": "Asistente multimodelo con chat, conocimiento, misiones persistentes, integraciones y Telegram.",
+  "description": "Asistente multimodelo con una experiencia refinada para chat, conocimiento, misiones, integraciones y Telegram.",
   "start_url": "../",
   "scope": "../",
   "display": "standalone",
-  "background_color": "#070b11",
-  "theme_color": "#070b11",
+  "background_color": "#0d0f12",
+  "theme_color": "#0d0f12",
   "orientation": "any",
   "icons": [
     {
