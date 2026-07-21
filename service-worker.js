@@ -1,12 +1,12 @@
-const CACHE_NAME = 'jarvis-business-channels-v48';
+const CACHE_NAME = 'jarvis-telegram-pro-v49';
 const APP_SHELL = [
   './',
   './index.html',
   './404.html',
-  './static/styles.css?v=48',
-  './static/app.js?v=48',
-  './static/config.js?v=48',
-  './static/manifest.webmanifest?v=48',
+  './static/styles.css?v=49',
+  './static/app.js?v=49',
+  './static/config.js?v=49',
+  './static/manifest.webmanifest?v=49',
   './static/favicon-v46.svg',
   './static/jarvis-reactor-v46.svg'
 ];

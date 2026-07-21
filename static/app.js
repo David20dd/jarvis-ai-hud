@@ -471,7 +471,7 @@
 
   const PANEL_INFO = {
     library:['CONOCIMIENTO','Biblioteca'], memory:['CONTEXTO','Memoria'], missions:['AUTONOMÍA','Misiones'],
-    channels:['INTEGRACIONES','WhatsApp y Telegram'], system:['ESTADO','Diagnóstico del núcleo']
+    channels:['TELEGRAM PRO','Asistente móvil'], system:['ESTADO','Diagnóstico del núcleo']
   };
 
   async function renderPanel(view) {
@@ -550,39 +550,30 @@
   async function renderChannels() {
     const data = await request('/api/channels/status');
     const telegram = data.channels?.telegram || data.telegram || {};
-    const whatsapp = data.channels?.whatsapp || data.whatsapp || {};
-    const business = data.whatsapp_business || {};
     const multimodal = data.multimodal || {};
-    const casesData = await request('/api/channels/whatsapp/cases?limit=5').catch(() => ({ cases:[], counts:{} }));
-    const cases = casesData.cases || [];
+    const preferences = data.preferences || {};
     const base = state.apiBase || location.origin;
     els.panelContent.innerHTML = `
       <div class="panel-grid">
-        <article class="panel-card channel-card"><span class="channel-icon">T</span><div><h3>Telegram</h3><p>${telegram.configured ? 'Chat general, imágenes, voz y documentos.' : 'Faltan variables en Render.'}</p></div><span class="status-tag ${telegram.configured?'ok':'warn'}">${telegram.configured?'Listo':'Pendiente'}</span></article>
-        <article class="panel-card channel-card"><span class="channel-icon">W</span><div><h3>WhatsApp Business</h3><p>${whatsapp.configured ? 'Atención, citas, pedidos y soporte empresarial.' : 'Faltan variables en Render.'}</p></div><span class="status-tag ${whatsapp.configured?'ok':'warn'}">${whatsapp.configured?'Listo':'Pendiente'}</span></article>
-        <article class="panel-card channel-card"><span class="channel-icon">◎</span><div><h3>Multimedia</h3><p>Imágenes ${multimodal.vision?'listas':'pendientes'} · voz ${multimodal.transcription?'lista':'pendiente'}.</p></div><span class="status-tag ${multimodal.vision&&multimodal.transcription?'ok':'warn'}">${multimodal.vision&&multimodal.transcription?'Completo':'Revisar'}</span></article>
+        <article class="panel-card channel-card"><span class="channel-icon">T</span><div><h3>Telegram Pro</h3><p>${telegram.configured ? 'Texto, imágenes, notas de voz, documentos y misiones.' : 'Agrega las variables de Telegram en Render.'}</p></div><span class="status-tag ${telegram.configured?'ok':'warn'}">${telegram.configured?'Operativo':'Pendiente'}</span></article>
+        <article class="panel-card channel-card"><span class="channel-icon">◎</span><div><h3>Comprensión multimedia</h3><p>Imágenes ${multimodal.vision?'listas':'pendientes'} · transcripción ${multimodal.transcription?'lista':'pendiente'}.</p></div><span class="status-tag ${multimodal.vision&&multimodal.transcription?'ok':'warn'}">${multimodal.vision&&multimodal.transcription?'Completa':'Revisar'}</span></article>
+        <article class="panel-card channel-card"><span class="channel-icon">◉</span><div><h3>Respuesta de voz</h3><p>${multimodal.speech ? `${preferences.voice_enabled||0} chat(s) con voz activa.` : 'Configura OpenAI para generar audio.'}</p></div><span class="status-tag ${multimodal.speech?'ok':'warn'}">${multimodal.speech?'Disponible':'Opcional'}</span></article>
       </div>
-      <section class="panel-section"><div class="panel-card"><h3>Webhook de Telegram</h3><p><code>${escapeHTML(base)}/api/channels/telegram/webhook</code></p><button class="soft-btn" id="registerTelegram" style="margin-top:12px" ${telegram.configured?'':'disabled'}>Registrar webhook</button></div></section>
-      <section class="panel-section"><div class="panel-card"><h3>Webhook de WhatsApp</h3><p>En Meta configura: <code>${escapeHTML(base)}/api/channels/whatsapp/webhook</code></p><p style="margin-top:8px">Negocio: ${escapeHTML(business.business_name || 'sin configurar')} · información comercial ${business.business_context?'lista':'pendiente'}.</p></div></section>
-      <section class="panel-section"><div class="panel-section-head"><h3>Casos recientes de WhatsApp</h3><small>${Object.values(casesData.counts || {}).reduce((sum,value)=>sum+Number(value||0),0)} registrados</small></div><div class="list-stack">${cases.length ? cases.map(item => `<article class="list-row"><div><strong>${escapeHTML(item.id)} · ${escapeHTML(item.case_type)}</strong><small>${escapeHTML(item.summary)} · ${escapeHTML(item.status)}</small></div>${item.status==='resolved'||item.status==='cancelled' ? '' : `<button class="soft-btn" data-resolve-case="${escapeHTML(item.id)}">Resolver</button>`}</article>`).join('') : '<div class="empty-state">Todavía no hay solicitudes empresariales.</div>'}</div></section>
-      <section class="panel-section"><div class="panel-card"><h3>Enviar mensaje de prueba</h3><div class="form-grid" style="margin-top:13px"><select class="text-input" id="channelType"><option value="telegram">Telegram</option><option value="whatsapp">WhatsApp</option></select><input class="text-input" id="channelRecipient" placeholder="Chat ID o número"/><button class="primary-btn" id="sendChannelTest">Preparar envío</button></div><textarea class="text-input" id="channelMessage" placeholder="Mensaje" style="margin-top:8px;min-height:80px"></textarea></div></section>`;
+      <section class="panel-section"><div class="panel-card"><h3>Conexión segura</h3><p>Webhook: <code>${escapeHTML(base)}/api/channels/telegram/webhook</code></p><p style="margin-top:8px">El botón registra la URL y habilita mensajes y botones interactivos.</p><button class="soft-btn" id="registerTelegram" style="margin-top:12px" ${telegram.configured?'':'disabled'}>Registrar webhook</button></div></section>
+      <section class="panel-section"><div class="panel-card"><h3>Funciones desde Telegram</h3><p><code>/menu</code> · <code>/status</code> · <code>/new</code> · <code>/mission objetivo</code> · <code>/tasks</code> · <code>/stop ID</code> · <code>/voice on|off</code> · <code>/export</code></p></div></section>
+      <section class="panel-section"><div class="panel-card"><h3>Enviar mensaje de prueba</h3><div class="form-grid" style="margin-top:13px"><input class="text-input" id="channelRecipient" placeholder="Chat ID de Telegram"/><button class="primary-btn" id="sendChannelTest">Preparar envío</button></div><textarea class="text-input" id="channelMessage" placeholder="Mensaje" style="margin-top:8px;min-height:80px"></textarea></div></section>`;
     $('#registerTelegram').addEventListener('click', async () => {
       if (!confirm('¿Registrar el webhook seguro de Telegram?')) return;
       await request('/api/channels/telegram/register-webhook', { method:'POST', body:JSON.stringify({ webhook_url:`${base}/api/channels/telegram/webhook`, drop_pending_updates:false }) });
       toast('Webhook registrado'); renderChannels();
     });
     $('#sendChannelTest').addEventListener('click', async () => {
-      const channel=$('#channelType').value, recipient=$('#channelRecipient').value.trim(), message=$('#channelMessage').value.trim();
+      const channel='telegram', recipient=$('#channelRecipient').value.trim(), message=$('#channelMessage').value.trim();
       if (!recipient || !message) return toast('Completa destinatario y mensaje.');
       if (!confirm(`¿Confirmas enviar este mensaje por ${channel}?`)) return;
       await request('/api/channels/send', { method:'POST', body:JSON.stringify({ channel, recipient, message, confirmed:true }) }, { timeoutMs:30000 });
       toast('Mensaje enviado');
     });
-    $$('[data-resolve-case]').forEach(button => button.addEventListener('click', async () => {
-      if (!confirm(`¿Marcar ${button.dataset.resolveCase} como resuelto?`)) return;
-      await request(`/api/channels/whatsapp/cases/${encodeURIComponent(button.dataset.resolveCase)}`, { method:'PATCH', body:JSON.stringify({ status:'resolved' }) });
-      toast('Caso resuelto'); renderChannels();
-    }));
   }
 
   async function renderSystem() {
@@ -719,6 +710,6 @@
 
   function registerServiceWorker() {
     if (!('serviceWorker' in navigator) || location.protocol === 'file:') return;
-    navigator.serviceWorker.register('./service-worker.js?v=48').catch(()=>{});
+    navigator.serviceWorker.register('./service-worker.js?v=49').catch(()=>{});
   }
 })();

@@ -128,6 +128,7 @@ class ChannelStore:
             return session_id
 
     def status(self) -> Dict[str, Any]:
+        self.init_schema()
         since = time.time() - 86400
         with self._connect() as conn:
             links = conn.execute("SELECT channel,COUNT(*) count FROM channel_links WHERE enabled = 1 GROUP BY channel").fetchall()
@@ -160,6 +161,28 @@ class TelegramChannel:
 
     @staticmethod
     def parse(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        callback = payload.get("callback_query")
+        if isinstance(callback, dict):
+            message = callback.get("message") or {}
+            chat = message.get("chat") or {}
+            sender = callback.get("from") or {}
+            chat_id = str(chat.get("id") or sender.get("id") or "")
+            if not chat_id:
+                return None
+            return {
+                "event_id": f"telegram:callback:{callback.get('id', payload.get('update_id', ''))}",
+                "chat_id": chat_id,
+                "sender_id": str(sender.get("id", chat_id)),
+                "display_name": " ".join(filter(None, [sender.get("first_name"), sender.get("last_name")])).strip(),
+                "text": str(callback.get("data") or "").strip(),
+                "message_id": message.get("message_id"),
+                "message_type": "callback",
+                "callback_query_id": str(callback.get("id") or ""),
+                "media_id": "",
+                "mime_type": "",
+                "file_name": "",
+                "unsupported": not bool(callback.get("data")),
+            }
         message = payload.get("message") or payload.get("edited_message")
         if not isinstance(message, dict):
             return None
@@ -212,14 +235,74 @@ class TelegramChannel:
             raise RuntimeError(str(data.get("description", f"Telegram HTTP {response.status_code}"))[:500])
         return data
 
-    def send_text(self, chat_id: str, text: str, reply_to: Any = None) -> List[Dict[str, Any]]:
+    def send_text(
+        self,
+        chat_id: str,
+        text: str,
+        reply_to: Any = None,
+        reply_markup: Optional[Dict[str, Any]] = None,
+    ) -> List[Dict[str, Any]]:
         results = []
         for index, chunk in enumerate(_split_text(text, 4000)):
             payload: Dict[str, Any] = {"chat_id": chat_id, "text": chunk, "link_preview_options": {"is_disabled": True}}
             if reply_to and index == 0:
                 payload["reply_parameters"] = {"message_id": reply_to, "allow_sending_without_reply": True}
+            if reply_markup and index == 0:
+                payload["reply_markup"] = reply_markup
             results.append(self.request("sendMessage", payload).get("result", {}))
         return results
+
+    def send_chat_action(self, chat_id: str, action: str = "typing") -> Dict[str, Any]:
+        return self.request("sendChatAction", {"chat_id": chat_id, "action": action}).get("result", {})
+
+    def answer_callback(self, callback_query_id: str, text: str = "") -> Dict[str, Any]:
+        if not callback_query_id:
+            return {}
+        payload: Dict[str, Any] = {"callback_query_id": callback_query_id}
+        if text:
+            payload["text"] = text[:180]
+        return self.request("answerCallbackQuery", payload).get("result", {})
+
+    def _multipart(
+        self,
+        method: str,
+        data: Dict[str, Any],
+        field: str,
+        file_name: str,
+        content: bytes,
+        mime_type: str,
+    ) -> Dict[str, Any]:
+        if not self.token:
+            raise RuntimeError("Telegram no está configurado.")
+        with httpx.Client(timeout=max(self.timeout, 60)) as client:
+            response = client.post(
+                f"https://api.telegram.org/bot{self.token}/{method}",
+                data={key: str(value) for key, value in data.items() if value not in (None, "")},
+                files={field: (file_name, content, mime_type)},
+            )
+        try:
+            payload = response.json()
+        except Exception as exc:
+            raise RuntimeError(f"Telegram {method} HTTP {response.status_code}") from exc
+        if not response.is_success or not payload.get("ok"):
+            raise RuntimeError(str(payload.get("description", f"Telegram HTTP {response.status_code}"))[:500])
+        return payload.get("result", {})
+
+    def send_voice(self, chat_id: str, content: bytes, caption: str = "", reply_to: Any = None) -> Dict[str, Any]:
+        data: Dict[str, Any] = {"chat_id": chat_id, "caption": caption[:900]}
+        if reply_to:
+            data["reply_parameters"] = json.dumps({"message_id": reply_to, "allow_sending_without_reply": True})
+        return self._multipart("sendVoice", data, "voice", "respuesta-jarvis.ogg", content, "audio/ogg")
+
+    def send_document(self, chat_id: str, content: bytes, file_name: str, caption: str = "") -> Dict[str, Any]:
+        return self._multipart(
+            "sendDocument",
+            {"chat_id": chat_id, "caption": caption[:900]},
+            "document",
+            file_name or "jarvis.txt",
+            content,
+            "application/octet-stream",
+        )
 
     def download_file(self, file_id: str, max_bytes: int = 12 * 1024 * 1024) -> Dict[str, Any]:
         if not self.token:
@@ -257,10 +340,19 @@ class TelegramChannel:
             {
                 "url": url,
                 "secret_token": self.secret,
-                "allowed_updates": ["message", "edited_message"],
+                "allowed_updates": ["message", "edited_message", "callback_query"],
                 "drop_pending_updates": bool(drop_pending),
             },
         )
+
+    def set_commands(self, commands: List[Dict[str, str]]) -> Dict[str, Any]:
+        clean = []
+        for item in commands[:100]:
+            command = re.sub(r"[^a-z0-9_]", "", str(item.get("command") or "").lower())[:32]
+            description = str(item.get("description") or "").strip()[:256]
+            if command and description:
+                clean.append({"command": command, "description": description})
+        return self.request("setMyCommands", {"commands": clean})
 
     def status(self) -> Dict[str, Any]:
         return {
@@ -269,171 +361,15 @@ class TelegramChannel:
             "allowed_chats": len(self.allowed),
             "webhook_secret": bool(self.secret),
             "media": ["images", "audio", "documents", "video_captions"],
-        }
-
-
-class WhatsAppChannel:
-    def __init__(
-        self,
-        access_token: str,
-        phone_number_id: str,
-        verify_token: str,
-        app_secret: str,
-        graph_version: str,
-        allowed_numbers: str = "",
-        timeout: int = 20,
-    ) -> None:
-        self.access_token = (access_token or "").strip()
-        self.phone_number_id = (phone_number_id or "").strip()
-        self.verify_token = (verify_token or "").strip()
-        self.app_secret = (app_secret or "").strip()
-        self.graph_version = (graph_version or "").strip().lstrip("/")
-        self.allowed = _allowlist(allowed_numbers)
-        self.timeout = max(5, min(int(timeout), 60))
-
-    @property
-    def configured(self) -> bool:
-        return bool(self.access_token and self.phone_number_id and self.verify_token and self.app_secret and self.graph_version)
-
-    def verify_subscription(self, mode: str, token: str) -> bool:
-        return bool(mode == "subscribe" and self.verify_token and hmac.compare_digest(token or "", self.verify_token))
-
-    def verify_signature(self, raw_body: bytes, signature: str) -> bool:
-        if not self.app_secret or not signature.startswith("sha256="):
-            return False
-        expected = "sha256=" + hmac.new(self.app_secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
-        return hmac.compare_digest(expected, signature)
-
-    def allowed_sender(self, sender: str) -> bool:
-        return not self.allowed or str(sender) in self.allowed
-
-    @staticmethod
-    def parse(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
-        result: List[Dict[str, Any]] = []
-        for entry in payload.get("entry", []) if isinstance(payload.get("entry"), list) else []:
-            for change in entry.get("changes", []) if isinstance(entry.get("changes"), list) else []:
-                value = change.get("value") or {}
-                contacts = {str(item.get("wa_id")): item.get("profile", {}).get("name", "") for item in value.get("contacts", [])}
-                for message in value.get("messages", []) if isinstance(value.get("messages"), list) else []:
-                    sender = str(message.get("from", ""))
-                    kind = str(message.get("type", ""))
-                    text = ""
-                    media: Dict[str, Any] = {}
-                    if kind == "text":
-                        text = str((message.get("text") or {}).get("body", ""))
-                    elif kind in {"image", "document", "video", "audio", "sticker"}:
-                        media = message.get(kind) or {}
-                        text = str(media.get("caption", ""))
-                    elif kind == "interactive":
-                        interactive = message.get("interactive") or {}
-                        selected = interactive.get("button_reply") or interactive.get("list_reply") or {}
-                        text = str(selected.get("title") or selected.get("id") or "")
-                    elif kind == "button":
-                        button = message.get("button") or {}
-                        text = str(button.get("text") or button.get("payload") or "")
-                    elif kind == "location":
-                        location = message.get("location") or {}
-                        latitude = location.get("latitude")
-                        longitude = location.get("longitude")
-                        text = f"Ubicación compartida: {latitude}, {longitude}"
-                    elif kind == "contacts":
-                        contacts_payload = message.get("contacts") or []
-                        names = [str((item.get("name") or {}).get("formatted_name") or "") for item in contacts_payload]
-                        text = "Contactos compartidos: " + ", ".join(item for item in names if item)
-                    result.append(
-                        {
-                            "event_id": f"whatsapp:{message.get('id', '')}",
-                            "sender_id": sender,
-                            "display_name": str(contacts.get(sender, "")),
-                            "text": text.strip(),
-                            "message_id": message.get("id"),
-                            "message_type": kind,
-                            "media_id": str(media.get("id") or ""),
-                            "mime_type": str(media.get("mime_type") or ""),
-                            "file_name": str(media.get("filename") or ""),
-                            "unsupported": not bool(text.strip() or media.get("id")),
-                        }
-                    )
-        return result
-
-    def download_media(self, media_id: str, max_bytes: int = 12 * 1024 * 1024) -> Dict[str, Any]:
-        """Resolve and download a Cloud API media object without exposing its URL."""
-        if not self.configured:
-            raise RuntimeError("WhatsApp Cloud API no está configurada.")
-        media_id = str(media_id or "").strip()
-        if not media_id:
-            raise ValueError("El evento de WhatsApp no contiene un media ID.")
-        max_bytes = max(1024, min(int(max_bytes), 25 * 1024 * 1024))
-        headers = {"Authorization": f"Bearer {self.access_token}"}
-        metadata_url = f"https://graph.facebook.com/{self.graph_version}/{media_id}"
-        with httpx.Client(timeout=self.timeout, follow_redirects=True) as client:
-            metadata_response = client.get(metadata_url, headers=headers)
-            if not metadata_response.is_success:
-                raise RuntimeError(f"WhatsApp media metadata HTTP {metadata_response.status_code}")
-            metadata = metadata_response.json()
-            declared_size = int(metadata.get("file_size", 0) or 0)
-            if declared_size > max_bytes:
-                raise ValueError(f"El archivo supera el límite de {max_bytes // (1024 * 1024)} MB.")
-            media_url = str(metadata.get("url") or "")
-            if not media_url.startswith("https://"):
-                raise RuntimeError("Meta no devolvió una URL HTTPS válida para el archivo.")
-            media_response = client.get(media_url, headers=headers)
-            if not media_response.is_success:
-                raise RuntimeError(f"WhatsApp media download HTTP {media_response.status_code}")
-            content = media_response.content
-        if len(content) > max_bytes:
-            raise ValueError(f"El archivo supera el límite de {max_bytes // (1024 * 1024)} MB.")
-        return {
-            "content": content,
-            "mime_type": str(metadata.get("mime_type") or media_response.headers.get("content-type") or "application/octet-stream").split(";", 1)[0],
-            "sha256": str(metadata.get("sha256") or ""),
-            "file_size": len(content),
-            "media_id": media_id,
-        }
-
-    def send_text(self, recipient: str, text: str, reply_to: str = "") -> List[Dict[str, Any]]:
-        if not self.configured:
-            raise RuntimeError("WhatsApp Cloud API no está configurada.")
-        url = f"https://graph.facebook.com/{self.graph_version}/{self.phone_number_id}/messages"
-        headers = {"Authorization": f"Bearer {self.access_token}", "Content-Type": "application/json"}
-        results = []
-        with httpx.Client(timeout=self.timeout) as client:
-            for index, chunk in enumerate(_split_text(text, 4000)):
-                body: Dict[str, Any] = {
-                    "messaging_product": "whatsapp",
-                    "recipient_type": "individual",
-                    "to": recipient,
-                    "type": "text",
-                    "text": {"preview_url": False, "body": chunk},
-                }
-                if reply_to and index == 0:
-                    body["context"] = {"message_id": reply_to}
-                response = client.post(url, headers=headers, json=body)
-                if not response.is_success:
-                    try:
-                        detail = response.json().get("error", {}).get("message", "")
-                    except Exception:
-                        detail = response.text
-                    raise RuntimeError(f"WhatsApp HTTP {response.status_code}: {detail}"[:600])
-                results.append(response.json())
-        return results
-
-    def status(self) -> Dict[str, Any]:
-        return {
-            "configured": self.configured,
-            "phone_number_id": bool(self.phone_number_id),
-            "graph_version": self.graph_version or "not_configured",
-            "signature_verification": bool(self.app_secret),
-            "allowlist_enabled": bool(self.allowed),
-            "allowed_numbers": len(self.allowed),
+            "interactive": ["inline_buttons", "callback_queries", "chat_actions"],
+            "outbound": ["text", "voice", "documents"],
         }
 
 
 class ChannelHub:
-    def __init__(self, store: ChannelStore, telegram: TelegramChannel, whatsapp: WhatsAppChannel) -> None:
+    def __init__(self, store: ChannelStore, telegram: TelegramChannel) -> None:
         self.store = store
         self.telegram = telegram
-        self.whatsapp = whatsapp
 
     def status(self) -> Dict[str, Any]:
-        return {"telegram": self.telegram.status(), "whatsapp": self.whatsapp.status(), "activity": self.store.status()}
+        return {"telegram": self.telegram.status(), "activity": self.store.status()}

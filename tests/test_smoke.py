@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import json
-import hashlib
-import hmac
 import os
 import tempfile
 import time
@@ -18,13 +16,11 @@ from fastapi.testclient import TestClient
 
 import main
 from jarvis_core import (
-    ChannelMultimodalClient,
     ChannelStore,
     IdentityStore,
+    TelegramMediaAI,
+    TelegramPreferenceStore,
     TelegramChannel,
-    WhatsAppBusinessService,
-    WhatsAppBusinessStore,
-    WhatsAppChannel,
     compact_messages,
 )
 
@@ -69,8 +65,8 @@ def test_http_health_and_headers():
     with TestClient(main.app) as client:
         live = client.get("/api/health/live")
         assert live.status_code == 200
-        assert live.json()["version"] == "48.0.0"
-        assert live.headers["x-jarvis-version"] == "48.0.0"
+        assert live.json()["version"] == "49.0.0"
+        assert live.headers["x-jarvis-version"] == "49.0.0"
         assert live.headers.get("x-request-id")
 
         ready = client.get("/api/health/ready")
@@ -87,13 +83,14 @@ def test_http_health_and_headers():
 def test_capabilities_include_stability_features():
     with TestClient(main.app) as client:
         data = client.get("/api/capabilities").json()
-        assert data["version"] == "48.0.0"
+        assert data["version"] == "49.0.0"
         features = set(data["features"])
         assert "singleflight_deduplication" in features
         assert "persistent_job_recovery" in features
         assert "deep_health_checks" in features
         assert "telegram_multimodal" in features
-        assert "whatsapp_business_support" in features
+        assert "telegram_voice_replies" in features
+        assert "telegram_interactive_menu" in features
 
 
 def test_direct_chat_returns_without_provider():
@@ -196,7 +193,7 @@ def test_provider_gateway_endpoints_and_route_preview():
         status = client.get("/api/providers")
         assert status.status_code == 200
         payload = status.json()
-        assert payload["version"] == "48.0.0"
+        assert payload["version"] == "49.0.0"
         assert "gateway" in payload
         assert "providers" in payload["gateway"]
 
@@ -335,7 +332,7 @@ def test_agent_plan_and_execute_endpoints():
 
         status = client.get('/api/agents/status', params={'session_id': 'agent-test'})
         assert status.status_code == 200
-        assert status.json()['version'] == '48.0.0'
+        assert status.json()['version'] == '49.0.0'
 
 
 
@@ -395,7 +392,7 @@ def test_provider_capability_matrix_and_tool_registry_endpoints():
         capabilities = client.get('/api/providers/capabilities')
         assert capabilities.status_code == 200
         payload = capabilities.json()
-        assert payload['version'] == '48.0.0'
+        assert payload['version'] == '49.0.0'
         assert 'anthropic' in payload['matrix']['providers']
         assert 'coding' in payload['matrix']['task_preferences']
         assert payload['quality_council']['max_providers'] >= 2
@@ -403,7 +400,7 @@ def test_provider_capability_matrix_and_tool_registry_endpoints():
         registry = client.get('/api/tools/registry')
         assert registry.status_code == 200
         tools = registry.json()
-        assert tools['version'] == '48.0.0'
+        assert tools['version'] == '49.0.0'
         assert tools['available_count'] >= 10
         names = {item['name'] for item in tools['tools'] if item['available']}
         assert {'web_search', 'calculator', 'document_search'}.issubset(names)
@@ -463,7 +460,7 @@ def test_professional_endpoints_expose_profiles_and_plan():
         profiles = client.get("/api/professional/profiles")
         assert profiles.status_code == 200
         payload = profiles.json()
-        assert payload["version"] == "48.0.0"
+        assert payload["version"] == "49.0.0"
         assert len(payload["profiles"]) >= 6
 
         planned = client.post(
@@ -485,7 +482,7 @@ def test_professional_endpoints_expose_profiles_and_plan():
 
         status = client.get("/api/professional/status?session_id=professional-test")
         assert status.status_code == 200
-        assert status.json()["version"] == "48.0.0"
+        assert status.json()["version"] == "49.0.0"
 
 
 def test_responsive_frontend_contract():
@@ -495,7 +492,7 @@ def test_responsive_frontend_contract():
     manifest = json.loads(Path("static/manifest.webmanifest").read_text(encoding="utf-8"))
 
     assert "viewport-fit=cover" in html
-    assert "?v=48" in html
+    assert "?v=49" in html
     assert "jarvis-reactor-v46.svg" in html
     assert 'class="mobile-nav"' in html
     assert 'id="composer"' in html
@@ -595,7 +592,7 @@ def test_v38_automation_and_optional_integrations_status():
         status = client.get("/api/autonomy/status?session_id=automation-test")
         assert status.status_code == 200
         payload = status.json()
-        assert payload["version"] == "48.0.0"
+        assert payload["version"] == "49.0.0"
         assert "mcp" in payload and "code_lab" in payload and "semantic" in payload
 
 
@@ -696,40 +693,7 @@ def test_v46_telegram_secret_allowlist_and_parser():
     assert event["text"] == "Hola"
 
 
-def test_v46_whatsapp_signature_allowlist_and_parser():
-    channel = WhatsAppChannel("token", "phone", "verify", "app-secret", "v23.0", "50499999999")
-    raw = b'{"object":"whatsapp_business_account"}'
-    signature = "sha256=" + hmac.new(b"app-secret", raw, hashlib.sha256).hexdigest()
-    assert channel.configured is True
-    assert channel.verify_signature(raw, signature) is True
-    assert channel.verify_signature(raw, "sha256=bad") is False
-    assert channel.verify_subscription("subscribe", "verify") is True
-    payload = {"entry": [{"changes": [{"value": {"contacts": [{"wa_id": "50499999999", "profile": {"name": "Cristian"}}], "messages": [{"id": "wamid.1", "from": "50499999999", "type": "text", "text": {"body": "Hola JARVIS"}}]}}]}]}
-    event = channel.parse(payload)[0]
-    assert event["event_id"] == "whatsapp:wamid.1"
-    assert event["text"] == "Hola JARVIS"
-    assert channel.allowed_sender("50499999999") is True
-
-
-def test_v48_channel_parsers_accept_images_voice_and_interactions():
-    whatsapp = WhatsAppChannel("token", "phone", "verify", "secret", "v23.0")
-    payload = {
-        "entry": [{"changes": [{"value": {
-            "contacts": [{"wa_id": "50499999999", "profile": {"name": "Cristian"}}],
-            "messages": [
-                {"id": "wa-image", "from": "50499999999", "type": "image", "image": {"id": "media-image", "mime_type": "image/jpeg", "caption": "¿Está dañado?"}},
-                {"id": "wa-audio", "from": "50499999999", "type": "audio", "audio": {"id": "media-audio", "mime_type": "audio/ogg"}},
-                {"id": "wa-button", "from": "50499999999", "type": "interactive", "interactive": {"button_reply": {"id": "appointment", "title": "Agendar cita"}}},
-            ],
-        }}]}],
-    }
-    events = whatsapp.parse(payload)
-    assert events[0]["message_type"] == "image"
-    assert events[0]["media_id"] == "media-image"
-    assert events[0]["unsupported"] is False
-    assert events[1]["message_type"] == "audio"
-    assert events[2]["text"] == "Agendar cita"
-
+def test_v49_telegram_parsers_accept_media_and_callbacks():
     telegram = TelegramChannel("token", "secret")
     image = telegram.parse({
         "update_id": 10,
@@ -739,56 +703,41 @@ def test_v48_channel_parsers_accept_images_voice_and_interactions():
         "update_id": 11,
         "message": {"message_id": 2, "chat": {"id": 7}, "voice": {"file_id": "voice-1", "mime_type": "audio/ogg"}},
     })
+    callback = telegram.parse({
+        "update_id": 12,
+        "callback_query": {
+            "id": "callback-1",
+            "from": {"id": 7, "first_name": "Cristian"},
+            "message": {"message_id": 3, "chat": {"id": 7}},
+            "data": "cmd:status",
+        },
+    })
     assert image["message_type"] == "image" and image["media_id"] == "large"
     assert voice["message_type"] == "audio" and voice["unsupported"] is False
+    assert callback["message_type"] == "callback"
+    assert callback["text"] == "cmd:status"
+    assert callback["callback_query_id"] == "callback-1"
 
 
-def test_v48_whatsapp_business_router_creates_cases_and_blocks_general_chat():
-    db_file = str(Path(tempfile.mkdtemp()) / "whatsapp-business.db")
-    store = WhatsAppBusinessStore(db_file)
+def test_v49_telegram_preferences_are_persistent():
+    db_file = str(Path(tempfile.mkdtemp()) / "telegram-preferences.db")
+    store = TelegramPreferenceStore(db_file)
     store.init_schema()
-    service = WhatsAppBusinessService(
-        store,
-        business_name="JARVIS Taller",
-        business_context="Horario: lunes a viernes de 8 a 5. Diagnóstico con cita.",
-        human_contact="+504 9999-9999",
-    )
-    unrelated = service.route("5041", "session-1", "Explícame la teoría de la relatividad")
-    assert unrelated["action"] == "reply"
-    assert "canal atiende consultas del negocio" in unrelated["reply"]
-    assert service.classify("Quiero solicitar ayuda técnica") == "unsupported"
-
-    appointment = service.route("5041", "session-1", "/cita mañana a las 10")
-    assert appointment["case"]["id"].startswith("WA-")
-    assert appointment["case"]["case_type"] == "appointment"
-    cases = store.list_cases()
-    assert len(cases) == 1 and cases[0]["status"] == "open"
-    assert store.update_status(cases[0]["id"], "resolved") is True
-
-    faq = service.route("5041", "session-1", "¿Cuál es el horario?")
-    assert faq["action"] == "ai"
-    assert "Información comercial autorizada" in faq["prompt"]
+    assert store.get("7")["voice_reply"] is False
+    assert store.set_voice("7", True)["voice_reply"] is True
+    assert store.get("7")["voice_reply"] is True
+    assert store.status()["voice_enabled"] == 1
+    store.link_mission("workflow-1", "7")
+    assert store.pending_missions()[0]["workflow_id"] == "workflow-1"
+    store.mark_mission_notified("workflow-1", "completed")
+    assert store.pending_missions()[0]["notified_status"] == "completed"
 
 
-def test_v48_multimodal_status_requires_private_provider_keys():
-    client = ChannelMultimodalClient()
+def test_v49_telegram_media_status_requires_private_provider_keys():
+    client = TelegramMediaAI()
     assert client.status()["vision"] is False
     assert client.status()["transcription"] is False
-
-
-def test_v48_whatsapp_business_case_endpoints():
-    main.whatsapp_business_store.init_schema()
-    main.whatsapp_business_store.create_case("50499999999", "endpoint-session", "order", "Pedido 42")
-    with TestClient(main.app) as client:
-        listed = client.get("/api/channels/whatsapp/cases")
-        assert listed.status_code == 200
-        case = next(item for item in listed.json()["cases"] if item["summary"] == "Pedido 42")
-        updated = client.patch(
-            f"/api/channels/whatsapp/cases/{case['id']}",
-            json={"status": "in_progress"},
-        )
-        assert updated.status_code == 200
-        assert updated.json()["case_status"] == "in_progress"
+    assert client.status()["speech"] is False
 
 
 def test_v46_operations_and_channel_status_endpoints():
@@ -800,12 +749,12 @@ def test_v46_operations_and_channel_status_endpoints():
         assert client.get("/404.html").status_code == 200
         operations = client.get("/api/operations/overview", params={"session_id": "test-v46"})
         assert operations.status_code == 200
-        assert operations.json()["version"] == "48.0.0"
+        assert operations.json()["version"] == "49.0.0"
         assert operations.json()["safety"]["human_approval"] is True
         channels = client.get("/api/channels/status")
         assert channels.status_code == 200
-        assert set(channels.json()["channels"]) == {"telegram", "whatsapp", "activity"}
-        assert channels.json()["whatsapp_business"]["capabilities"]
+        assert set(channels.json()["channels"]) == {"telegram", "activity"}
+        assert "preferences" in channels.json()
         assert "vision" in channels.json()["multimodal"]
 
 
@@ -814,14 +763,14 @@ def test_v47_frontend_is_clean_connected_and_boot_safe():
     js = Path("static/app.js").read_text(encoding="utf-8")
     css = Path("static/styles.css").read_text(encoding="utf-8")
     assert "¿En qué trabajamos hoy?" in html
-    assert "WhatsApp y Telegram" in js
+    assert "Telegram Pro" in js
     assert 'data-view="channels"' in html
     assert "window.storage" not in js
     assert "headers.set('Authorization', `Bearer ${state.token}`)" in js
     assert "renderChannels" in js and "openAccount" in js
     assert "auth_required" in js
     assert "error?.status === 401" in js
-    assert "jarvis-business-channels-v48" in Path("service-worker.js").read_text(encoding="utf-8")
+    assert "jarvis-telegram-pro-v49" in Path("service-worker.js").read_text(encoding="utf-8")
     assert "url.pathname.includes('/api/')" in Path("service-worker.js").read_text(encoding="utf-8")
     assert "overflow-x: hidden" in css
 

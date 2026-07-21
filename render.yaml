@@ -128,35 +128,15 @@ services:
         sync: false
       - key: TELEGRAM_ALLOWED_CHAT_IDS
         sync: false
-      - key: JARVIS_CHANNEL_VISION_MODEL
+      - key: TELEGRAM_VISION_MODEL
         sync: false
-      - key: JARVIS_CHANNEL_TRANSCRIBE_MODEL
+      - key: TELEGRAM_TRANSCRIBE_MODEL
         value: whisper-large-v3-turbo
-      - key: JARVIS_CHANNEL_MAX_MEDIA_MB
+      - key: TELEGRAM_TTS_MODEL
+        value: tts-1
+      - key: TELEGRAM_TTS_VOICE
+        value: alloy
+      - key: TELEGRAM_MAX_MEDIA_MB
         value: "12"
-      - key: WHATSAPP_ACCESS_TOKEN
-        sync: false
-      - key: WHATSAPP_PHONE_NUMBER_ID
-        sync: false
-      - key: WHATSAPP_VERIFY_TOKEN
-        sync: false
-      - key: WHATSAPP_APP_SECRET
-        sync: false
-      - key: WHATSAPP_GRAPH_API_VERSION
-        sync: false
-      - key: WHATSAPP_ALLOWED_NUMBERS
-        sync: false
-      - key: WHATSAPP_BUSINESS_NAME
-        value: JARVIS Business
-      - key: WHATSAPP_BUSINESS_CONTEXT
-        sync: false
-      - key: WHATSAPP_HUMAN_CONTACT
-        sync: false
-      - key: WHATSAPP_BUSINESS_KEYWORDS
-        sync: false
-      - key: WHATSAPP_VISION_MODEL
-        sync: false
-      - key: WHATSAPP_TRANSCRIBE_MODEL
-        value: whisper-large-v3-turbo
-      - key: WHATSAPP_MAX_MEDIA_MB
-        value: "12"
+      - key: TELEGRAM_VOICE_REPLIES_DEFAULT
+        value: "false"
