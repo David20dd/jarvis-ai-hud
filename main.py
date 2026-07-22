@@ -55,6 +55,13 @@ from jarvis_core import (
     IntelligencePlanner,
     IntegrationRegistry,
     UnifiedIntelligenceStore,
+    ActionCenter,
+    GeminiGroundedSearchClient,
+    GoogleSearchClient,
+    OperationsLedger,
+    PublicPageFetcher,
+    QualitySuite,
+    ResearchLibrary,
     compact_messages,
     disk_status,
 )
@@ -95,8 +102,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger("jarvis")
 
-APP_VERSION = "58.0.0"
-APP_EDITION = "Polished Intelligence"
+APP_VERSION = "65.0.0"
+APP_EDITION = "Unified Intelligence"
 
 DB_FILE = os.getenv("JARVIS_DB_FILE", "jarvis_memory.db").strip() or "jarvis_memory.db"
 BASE_DIR = Path(__file__).resolve().parent
@@ -176,6 +183,13 @@ TELEGRAM_TTS_MODEL = os.getenv("TELEGRAM_TTS_MODEL", "tts-1").strip() or "tts-1"
 TELEGRAM_TTS_VOICE = os.getenv("TELEGRAM_TTS_VOICE", "alloy").strip() or "alloy"
 TELEGRAM_MAX_MEDIA_MB = max(1, min(int(os.getenv("TELEGRAM_MAX_MEDIA_MB", "12")), 24))
 TELEGRAM_VOICE_REPLIES_DEFAULT = os.getenv("TELEGRAM_VOICE_REPLIES_DEFAULT", "false").strip().lower() in {"1", "true", "yes", "on"}
+GOOGLE_SEARCH_API_KEY = os.getenv("GOOGLE_SEARCH_API_KEY", "").strip()
+GOOGLE_SEARCH_ENGINE_ID = os.getenv("GOOGLE_SEARCH_ENGINE_ID", "").strip()
+GOOGLE_GROUNDING_ENABLED = os.getenv("JARVIS_GOOGLE_GROUNDING_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+GEMINI_SEARCH_MODEL = os.getenv("JARVIS_GEMINI_SEARCH_MODEL", "").strip() or (GEMINI_MODELS[0] if GEMINI_MODELS else "")
+RESEARCH_FETCH_PAGES = os.getenv("JARVIS_RESEARCH_FETCH_PAGES", "true").strip().lower() not in {"0", "false", "no", "off"}
+RESEARCH_PAGE_LIMIT = max(0, min(int(os.getenv("JARVIS_RESEARCH_PAGE_LIMIT", "4")), 8))
+RESEARCH_PAGE_MAX_BYTES = max(100_000, min(int(os.getenv("JARVIS_RESEARCH_PAGE_MAX_BYTES", "1500000")), 4_000_000))
 
 runtime = RuntimeSupport(
     redis_url=REDIS_URL,
@@ -214,6 +228,16 @@ telegram_media_ai = TelegramMediaAI(
 unified_store = UnifiedIntelligenceStore(DB_FILE)
 intelligence_planner = IntelligencePlanner()
 integration_registry = IntegrationRegistry(dict(os.environ))
+google_search_client = GoogleSearchClient(GOOGLE_SEARCH_API_KEY, GOOGLE_SEARCH_ENGINE_ID, min(PROVIDER_TIMEOUT_SECONDS, 30))
+gemini_grounded_search = GeminiGroundedSearchClient(
+    GEMINI_API_KEY, GEMINI_SEARCH_MODEL, GEMINI_API_VERSION,
+    min(PROVIDER_TIMEOUT_SECONDS, 60), GOOGLE_GROUNDING_ENABLED,
+)
+public_page_fetcher = PublicPageFetcher(min(PROVIDER_TIMEOUT_SECONDS, 20), RESEARCH_PAGE_MAX_BYTES)
+research_library = ResearchLibrary(DB_FILE)
+action_center = ActionCenter(DB_FILE)
+operations_ledger = OperationsLedger(DB_FILE)
+quality_suite = QualitySuite()
 
 
 def _provider_models(names: List[str], provider: str) -> List[ProviderModel]:
@@ -485,6 +509,9 @@ def init_db() -> None:
     channel_store.init_schema()
     telegram_preferences.init_schema()
     unified_store.init_schema()
+    research_library.init_schema()
+    action_center.init_schema()
+    operations_ledger.init_schema()
 
 
 def _safe_wal_checkpoint() -> str:
@@ -623,7 +650,7 @@ async def lifespan(_: FastAPI):
     recovered_workflows = _recover_interrupted_workflows()
     recovered_channels = _recover_channel_events()
     logger.info(
-        "J.A.R.V.I.S. v58 iniciado | public_mode=%s | redis=%s | jobs_recuperados=%s | workflows_recuperados=%s | canales_recuperados=%s",
+        "J.A.R.V.I.S. v65 iniciado | public_mode=%s | redis=%s | jobs_recuperados=%s | workflows_recuperados=%s | canales_recuperados=%s",
         PUBLIC_MODE,
         bool(REDIS_URL),
         recovered,
@@ -634,11 +661,11 @@ async def lifespan(_: FastAPI):
     _stop_maintenance()
     JOB_EXECUTOR.shutdown(wait=False, cancel_futures=True)
     provider_gateway.close()
-    logger.info("J.A.R.V.I.S. v58 detenido")
+    logger.info("J.A.R.V.I.S. v65 detenido")
 
 
 app = FastAPI(
-    title=f"J.A.R.V.I.S. {APP_EDITION} v58",
+    title=f"J.A.R.V.I.S. {APP_EDITION} v65",
     version=APP_VERSION,
     lifespan=lifespan,
 )
@@ -796,6 +823,7 @@ async def request_observability(request: Request, call_next):
 class ArchivoInput(BaseModel):
     file_b64: Optional[str] = None
     file_name: Optional[str] = None
+    mime_type: Optional[str] = None
 
 
 class ChatInput(BaseModel):
@@ -903,6 +931,35 @@ class ResearchInput(BaseModel):
     session_id: str
     query: str = Field(min_length=1, max_length=12000)
     max_sources: int = Field(default=12, ge=2, le=30)
+
+
+class ResearchIngestInput(ResearchInput):
+    project_name: str = "General"
+    fetch_pages: bool = True
+    page_limit: int = Field(default=4, ge=0, le=8)
+
+
+class ActionCreateInput(BaseModel):
+    session_id: str
+    action_type: str = Field(min_length=3, max_length=80)
+    title: str = Field(default="", max_length=300)
+    arguments: Dict[str, Any] = Field(default_factory=dict)
+
+
+class ActionDecisionInput(BaseModel):
+    session_id: str
+    decision: str = Field(pattern="^(approved|rejected)$")
+    note: str = Field(default="", max_length=2000)
+
+
+class ActionExecuteInput(BaseModel):
+    session_id: str
+
+
+class VoiceTranscriptionInput(BaseModel):
+    audio_b64: str = Field(min_length=1)
+    file_name: str = Field(default="voice.ogg", max_length=300)
+    mime_type: str = Field(default="audio/ogg", max_length=100)
 
 
 class AutomationInput(BaseModel):
@@ -1574,7 +1631,10 @@ def _dedupe_search_results(results: List[Dict[str, str]], limit: int) -> List[Di
             seen_urls.add(key_url)
         if key_title:
             seen_titles.add(key_title)
-        output.append({"title": title or "Resultado", "snippet": snippet, "url": url})
+        output.append({
+            "title": title or "Resultado", "snippet": snippet, "url": url,
+            "provider": str(item.get("provider") or "web")[:80],
+        })
         if len(output) >= limit:
             break
     return output
@@ -1606,6 +1666,7 @@ def _wikipedia_search(query: str, limit: int = 5) -> List[Dict[str, str]]:
                 "title": title,
                 "snippet": re.sub(r"\s+", " ", snippet).strip(),
                 "url": f"https://es.wikipedia.org/wiki/{title.replace(' ', '_')}",
+                "provider": "wikipedia",
             })
         return output
     except Exception as exc:
@@ -1632,7 +1693,39 @@ def web_search(session_id: str, query: str, max_results: int = WEB_SEARCH_RESULT
     last_error = ""
     circuit_name = "search:ddgs"
 
-    if runtime.circuits.allow(circuit_name):
+    grounding_circuit = "search:gemini_google"
+    if gemini_grounded_search.configured and runtime.circuits.allow(grounding_circuit):
+        grounding_started = time.perf_counter()
+        try:
+            payload = gemini_grounded_search.search(normalized_query, limit=min(limit, 10))
+            batch = list(payload.get("results") or [])
+            collected.extend(batch)
+            runtime.circuits.success(grounding_circuit)
+            runtime.metrics.record("provider:gemini_google_search", (time.perf_counter() - grounding_started) * 1000, "success")
+            attempts.append({"provider": "gemini_google", "query": normalized_query, "status": "completed", "count": len(batch)})
+        except Exception as exc:
+            last_error = safe_error_text(exc, 300)
+            runtime.circuits.failure(grounding_circuit, last_error)
+            runtime.metrics.record("provider:gemini_google_search", (time.perf_counter() - grounding_started) * 1000, "error")
+            attempts.append({"provider": "gemini_google", "query": normalized_query, "status": "failed", "detail": last_error})
+
+    google_circuit = "search:google"
+    if google_search_client.configured and runtime.circuits.allow(google_circuit):
+        google_started = time.perf_counter()
+        try:
+            payload = google_search_client.search(normalized_query, limit=min(limit, 10))
+            batch = list(payload.get("results") or [])
+            collected.extend(batch)
+            runtime.circuits.success(google_circuit)
+            runtime.metrics.record("provider:google_search", (time.perf_counter() - google_started) * 1000, "success")
+            attempts.append({"provider": "google", "query": normalized_query, "status": "completed", "count": len(batch)})
+        except Exception as exc:
+            last_error = safe_error_text(exc, 300)
+            runtime.circuits.failure(google_circuit, last_error)
+            runtime.metrics.record("provider:google_search", (time.perf_counter() - google_started) * 1000, "error")
+            attempts.append({"provider": "google", "query": normalized_query, "status": "failed", "detail": last_error})
+
+    if len(_dedupe_search_results(collected, limit)) < min(4, limit) and runtime.circuits.allow(circuit_name):
         try:
             try:
                 from ddgs import DDGS
@@ -1650,6 +1743,7 @@ def web_search(session_id: str, query: str, max_results: int = WEB_SEARCH_RESULT
                                 "title": str(item.get("title", "")),
                                 "snippet": str(item.get("body", item.get("snippet", ""))),
                                 "url": str(item.get("href", item.get("url", ""))),
+                                "provider": "ddgs",
                             }
                             for item in raw
                         ]
@@ -1976,10 +2070,93 @@ def semantic_search(
 
 def deep_research_tool(session_id: str, query: str, max_sources: int = 12) -> Dict[str, Any]:
     sid = safe_session_id(session_id)
-    return research_collector.collect(
+    return run_research_pipeline(sid, query, "General", max_sources=max_sources)
+
+
+def _hydrate_research_pack(pack: Dict[str, Any], page_limit: int) -> Dict[str, Any]:
+    evidence = list(pack.get("evidence") or [])
+    targets = [item for item in evidence if item.get("url")][:max(0, min(int(page_limit), 8))]
+    if not targets:
+        return pack
+
+    def fetch_one(item: Dict[str, Any]) -> Dict[str, Any]:
+        try:
+            page = public_page_fetcher.fetch(str(item.get("url") or ""))
+            full_text = str(page.get("text") or "")
+            return {
+                **item,
+                "title": str(page.get("title") or item.get("title") or "Fuente")[:500],
+                "full_text": full_text,
+                "snippet": str(item.get("snippet") or full_text[:2400]),
+                "metadata": {
+                    **dict(item.get("metadata") or {}),
+                    "fetch_status": "completed",
+                    "content_type": page.get("content_type"),
+                    "characters": page.get("characters", 0),
+                    "fetch_duration_ms": page.get("duration_ms", 0),
+                },
+            }
+        except Exception as exc:
+            return {
+                **item,
+                "metadata": {
+                    **dict(item.get("metadata") or {}),
+                    "fetch_status": "failed",
+                    "fetch_error": safe_error_text(exc, 260),
+                },
+            }
+
+    hydrated_by_id: Dict[str, Dict[str, Any]] = {}
+    with ThreadPoolExecutor(max_workers=min(4, len(targets)), thread_name_prefix="jarvis-web") as executor:
+        for item in executor.map(fetch_one, targets):
+            hydrated_by_id[str(item.get("id") or item.get("url"))] = item
+    pack["evidence"] = [hydrated_by_id.get(str(item.get("id") or item.get("url")), item) for item in evidence]
+    pack["pages_fetched"] = sum(
+        1 for item in pack["evidence"] if (item.get("metadata") or {}).get("fetch_status") == "completed"
+    )
+    return pack
+
+
+def run_research_pipeline(
+    session_id: str,
+    query: str,
+    project_name: str = "General",
+    *,
+    max_sources: int = 12,
+    fetch_pages: Optional[bool] = None,
+    page_limit: Optional[int] = None,
+) -> Dict[str, Any]:
+    sid = safe_session_id(session_id)
+    pack = research_collector.collect(
         query, lambda value, limit: web_search(sid, value, max_results=limit),
         max_sources=max_sources,
     )
+    should_fetch = RESEARCH_FETCH_PAGES if fetch_pages is None else bool(fetch_pages)
+    if should_fetch:
+        pack = _hydrate_research_pack(pack, RESEARCH_PAGE_LIMIT if page_limit is None else page_limit)
+    persisted = research_library.save(sid, project_name or "General", pack)
+    indexed = 0
+    for item in pack.get("evidence", []):
+        content = str(item.get("full_text") or item.get("snippet") or "").strip()
+        if not content:
+            continue
+        source_id = f"{persisted['run_id']}:{item.get('id') or hashlib.sha256(content.encode()).hexdigest()[:16]}"
+        result = semantic_index.index_source(
+            session_id=sid,
+            project_name=project_name or "General",
+            source_type="web",
+            source_id=source_id,
+            title=str(item.get("title") or "Fuente web"),
+            content=content,
+            metadata={
+                "url": item.get("url", ""), "provider": item.get("provider", "web"),
+                "quality": item.get("quality", 0), "research_run_id": persisted["run_id"],
+            },
+        )
+        indexed += int(result.get("chunks", 0))
+    pack["research"] = {**persisted, "semantic_chunks": indexed}
+    log_activity(sid, "research", "Investigación web indexada", query, "completed" if pack.get("evidence") else "failed")
+    return pack
 
 
 TOOL_FUNCTIONS: Dict[str, Callable[..., Any]] = {
@@ -3969,6 +4146,11 @@ def operations_overview(request: Request, session_id: str = ""):
         "channels": channel_hub.status(),
         "identity": {**identity_store.status(), "required": AUTH_REQUIRED},
         "quality": evaluation_store.report(7),
+        "research": research_library.status(sid),
+        "actions": action_center.status(sid),
+        "google_search": google_search_client.status(),
+        "google_grounding": gemini_grounded_search.status(),
+        "multimodal": telegram_media_ai.status(),
         "code_lab": code_lab.status(),
         "mcp": mcp_manager.status(False),
         "safety": {
@@ -4008,6 +4190,43 @@ def export_personal_data(request: Request, session_id: str):
         "automations": automation_store.list(sid, 200),
     }
 
+IMAGE_EXTENSIONS = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif"}
+AUDIO_EXTENSIONS = {".ogg": "audio/ogg", ".opus": "audio/opus", ".mp3": "audio/mpeg", ".m4a": "audio/mp4", ".wav": "audio/wav", ".webm": "audio/webm"}
+
+
+def _attachment_bytes(attached: ArchivoInput) -> bytes:
+    encoded = str(attached.file_b64 or "").split(",", 1)[-1]
+    try:
+        raw = base64.b64decode(encoded, validate=True)
+    except Exception as exc:
+        raise ValueError("El adjunto no contiene Base64 válido.") from exc
+    if len(raw) > 12 * 1024 * 1024:
+        raise ValueError("El adjunto supera el límite de 12 MB.")
+    return raw
+
+
+def _attachment_mime(attached: ArchivoInput) -> str:
+    supplied = str(attached.mime_type or "").split(";", 1)[0].strip().lower()
+    if supplied:
+        return supplied
+    extension = Path(str(attached.file_name or "").lower()).suffix
+    return IMAGE_EXTENSIONS.get(extension) or AUDIO_EXTENSIONS.get(extension) or "application/octet-stream"
+
+
+def _process_chat_attachment(session_id: str, attached: ArchivoInput, prompt: str) -> Dict[str, Any]:
+    name = str(attached.file_name or "adjunto")[:300]
+    mime = _attachment_mime(attached)
+    raw = _attachment_bytes(attached)
+    if mime.startswith("image/"):
+        analysis = telegram_media_ai.analyze_image(raw, mime, prompt or "Describe y analiza esta imagen con precisión.")
+        return {"file_name": name, "kind": "image", "status": "analyzed", "context": analysis}
+    if mime.startswith("audio/"):
+        transcript = telegram_media_ai.transcribe_audio(raw, mime, name)
+        return {"file_name": name, "kind": "audio", "status": "transcribed", "context": transcript}
+    saved = save_document(session_id, name, str(attached.file_b64 or ""))
+    return {"file_name": name, "kind": "document", "status": "indexed", "document": saved}
+
+
 @app.post("/api/jarvis")
 async def consultar_jarvis(data: ChatInput, request: Request):
     started_at = time.perf_counter()
@@ -4040,18 +4259,36 @@ async def consultar_jarvis(data: ChatInput, request: Request):
     log_activity(sid, "request", "Solicitud recibida", prompt, "running")
 
     try:
+        attachment_results: List[Dict[str, Any]] = []
+        attachment_context: List[str] = []
         for attached in data.files[:3]:
-            if attached.file_b64 and attached.file_name:
-                await asyncio.to_thread(save_document, sid, attached.file_name, attached.file_b64)
+            if not attached.file_b64 or not attached.file_name:
+                continue
+            try:
+                processed = await asyncio.to_thread(_process_chat_attachment, sid, attached, prompt)
+                attachment_results.append({key: value for key, value in processed.items() if key != "context"})
+                if processed.get("context"):
+                    label = "Análisis visual" if processed.get("kind") == "image" else "Transcripción de audio"
+                    attachment_context.append(f"{label} de {processed['file_name']}:\n{processed['context']}")
+            except Exception as exc:
+                attachment_results.append({
+                    "file_name": str(attached.file_name), "status": "failed",
+                    "detail": safe_error_text(exc, 300),
+                })
+
+        resolution_prompt = prompt
+        if attachment_context:
+            resolution_prompt = f"{prompt}\n\nCONTEXTO EXTRAÍDO DE ADJUNTOS:\n" + "\n\n".join(attachment_context)
+        failed_attachments = [item for item in attachment_results if item.get("status") == "failed"]
 
         flight_key = hashlib.sha256(
-            f"{sid}::{project_name}::{requested_mode}::{_normalize_prompt_for_cache(prompt)}".encode("utf-8")
+            f"{sid}::{project_name}::{requested_mode}::{_normalize_prompt_for_cache(resolution_prompt)}".encode("utf-8")
         ).hexdigest()
 
         def resolve_once() -> Dict[str, Any]:
             return resilient_resolve(
                 sid,
-                prompt,
+                resolution_prompt,
                 project_name=project_name,
                 mode=requested_mode,
                 intent_info=intent_info,
@@ -4096,6 +4333,12 @@ async def consultar_jarvis(data: ChatInput, request: Request):
             "request_timeout_seconds": REQUEST_TIMEOUT_SECONDS,
             "context_limit_chars": CONTEXT_MAX_CHARS,
         }
+        result["attachments"] = attachment_results
+        if failed_attachments:
+            notice = "\n\n> Algunos adjuntos no pudieron procesarse: " + "; ".join(
+                f"{item.get('file_name')}: {item.get('detail')}" for item in failed_attachments
+            )
+            result["reply"] = str(result.get("reply") or "") + notice
         if intelligence_decision_id:
             quality = 0.92 if result.get("verified") else (0.78 if not result.get("degraded") else 0.55)
             await asyncio.to_thread(
@@ -4856,7 +5099,14 @@ def _unified_plan(objective: str, mode: str = "auto") -> Dict[str, Any]:
 @app.get("/api/v55/status", include_in_schema=False)
 @app.get("/api/v56/status", include_in_schema=False)
 @app.get("/api/v57/status", include_in_schema=False)
-@app.get("/api/v58/status")
+@app.get("/api/v58/status", include_in_schema=False)
+@app.get("/api/v59/status", include_in_schema=False)
+@app.get("/api/v60/status", include_in_schema=False)
+@app.get("/api/v61/status", include_in_schema=False)
+@app.get("/api/v62/status", include_in_schema=False)
+@app.get("/api/v63/status", include_in_schema=False)
+@app.get("/api/v64/status", include_in_schema=False)
+@app.get("/api/v65/status")
 def unified_status(session_id: str = ""):
     sid = safe_session_id(session_id) if session_id else ""
     provider_snapshot = provider_gateway.snapshot()
@@ -4870,10 +5120,67 @@ def unified_status(session_id: str = ""):
         "providers": {"configured": provider_gateway.configured_names(), "last_routes": provider_snapshot.get("last_routes", [])},
         "channels": channel_snapshot,
         "integrations": {"configured": sum(1 for item in integrations if item["configured"]), "total": len(integrations)},
+        "google_search": google_search_client.status(),
+        "google_grounding": gemini_grounded_search.status(),
+        "research": research_library.status(sid),
+        "actions": action_center.status(sid),
+        "multimodal": telegram_media_ai.status(),
         "guarantees": [
             "respuesta visible o recuperación local", "presupuesto finito por tarea",
             "confirmación para acciones externas sensibles", "checkpoints en misiones persistentes",
         ],
+    }
+
+
+def _v65_database_check() -> bool:
+    with db_connection() as conn:
+        return bool(conn.execute("SELECT 1").fetchone()[0] == 1)
+
+
+def _v65_quality_checks(session_id: str) -> List[tuple[str, Callable[[], Any]]]:
+    return [
+        ("database", _v65_database_check),
+        ("calculator", lambda: calculator(session_id or "quality", "2+2").get("result") == 4),
+        ("semantic_index", lambda: semantic_index.status(session_id).get("backend") == "sqlite-local-hybrid"),
+        ("research_library", lambda: isinstance(research_library.status(session_id), dict)),
+        ("action_center", lambda: len(action_center.catalog()) >= 4),
+        ("frontend", lambda: INDEX_FILE.exists() and (STATIC_DIR / "app.js").exists() and (STATIC_DIR / "styles.css").exists()),
+        ("provider_gateway", lambda: isinstance(provider_gateway.snapshot(), dict)),
+        ("telegram_security", lambda: (not telegram_channel.configured) or bool(TELEGRAM_WEBHOOK_SECRET and TELEGRAM_ALLOWED_CHAT_IDS)),
+        ("code_lab_isolation", lambda: code_lab.status().get("isolation") in {"docker", "unavailable"}),
+    ]
+
+
+@app.post("/api/evaluations/suite")
+def run_quality_suite(request: Request, session_id: str = "quality"):
+    enforce_request_guard(request)
+    sid = safe_session_id(session_id)
+    suite = quality_suite.run(_v65_quality_checks(sid))
+    evaluation = evaluation_store.record(
+        sid, "system", f"v65:{int(time.time())}",
+        [{"name": item["name"], "score": 1.0 if item["ok"] else 0.0, "weight": 1.0, "detail": item["detail"]} for item in suite["checks"]],
+    )
+    components = {item["name"]: {"ok": item["ok"], "detail": item["detail"]} for item in suite["checks"]}
+    snapshot = operations_ledger.snapshot(components)
+    return {"suite": suite, "evaluation": evaluation, "snapshot": snapshot}
+
+
+@app.get("/api/operations/v65")
+def v65_operations(request: Request, session_id: str = ""):
+    enforce_request_guard(request)
+    sid = safe_session_id(session_id) if session_id else ""
+    history = operations_ledger.history(20)
+    return {
+        "status": "ok", "version": APP_VERSION,
+        "latest": history[0] if history else None,
+        "history": history,
+        "incidents": operations_ledger.incidents(20),
+        "research": research_library.status(sid),
+        "actions": action_center.status(sid),
+        "google_search": google_search_client.status(),
+        "google_grounding": gemini_grounded_search.status(),
+        "providers": provider_gateway.snapshot(),
+        "runtime": runtime.snapshot(),
     }
 
 
@@ -4883,7 +5190,7 @@ def intelligence_plan(data: IntelligencePlanInput, request: Request):
     sid = safe_session_id(data.session_id)
     plan = _unified_plan(data.objective, data.mode)
     decision = unified_store.save_decision(sid, data.objective, plan)
-    log_activity(sid, "intelligence", "Plan v58 creado", decision.get("id", ""), "planned")
+    log_activity(sid, "intelligence", "Plan v65 creado", decision.get("id", ""), "planned")
     return {"status": "planned", "decision": decision, "plan": plan}
 
 
@@ -4901,7 +5208,7 @@ def intelligence_execute(data: IntelligencePlanInput, request: Request):
     unified_store.link_workflow(decision["id"], workflow["id"])
     autonomy_store.update_workflow(workflow["id"], status="queued")
     submitted = _submit_workflow(workflow["id"])
-    log_activity(sid, "intelligence", "Misión v58 iniciada", workflow["id"], "queued")
+    log_activity(sid, "intelligence", "Misión v65 iniciada", workflow["id"], "queued")
     return {
         "status": "queued", "submitted": submitted,
         "decision": unified_store.get_decision(decision["id"]), "plan": plan,
@@ -5336,11 +5643,131 @@ def semantic_status(session_id: str = ""):
 @app.post("/api/research/deep")
 def deep_research(data: ResearchInput, request: Request):
     enforce_request_guard(request)
-    sid = safe_session_id(data.session_id)
-    return research_collector.collect(
-        data.query, lambda query, limit: web_search(sid, query, max_results=limit),
+    return run_research_pipeline(
+        safe_session_id(data.session_id), data.query, "General",
         max_sources=data.max_sources,
     )
+
+
+@app.post("/api/research/ingest")
+def research_ingest(data: ResearchIngestInput, request: Request):
+    enforce_request_guard(request)
+    return run_research_pipeline(
+        safe_session_id(data.session_id), data.query, data.project_name.strip() or "General",
+        max_sources=data.max_sources, fetch_pages=data.fetch_pages, page_limit=data.page_limit,
+    )
+
+
+@app.get("/api/research/library")
+def research_runs(session_id: str, limit: int = 20):
+    sid = safe_session_id(session_id)
+    return {"runs": research_library.list(sid, limit), "status": research_library.status(sid)}
+
+
+@app.get("/api/research/library/{run_id}")
+def research_run(run_id: str, session_id: str):
+    item = research_library.get(run_id, safe_session_id(session_id))
+    if not item:
+        raise HTTPException(status_code=404, detail="Investigación no encontrada.")
+    return {"research": item}
+
+
+def _dispatch_v65_action(session_id: str, action_type: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
+    if action_type == "memory.save":
+        return memory_save(
+            session_id, str(arguments.get("content") or ""),
+            str(arguments.get("category") or "fact"), int(arguments.get("importance") or 3),
+        )
+    if action_type == "reminder.create":
+        return reminder_create(
+            session_id, str(arguments.get("title") or "Recordatorio JARVIS"),
+            str(arguments.get("due_at") or ""), str(arguments.get("recurrence") or "") or None,
+        )
+    if action_type == "automation.create":
+        return automation_store.create(
+            session_id, str(arguments.get("title") or "Automatización JARVIS"),
+            str(arguments.get("prompt") or ""), str(arguments.get("schedule_type") or "once"),
+            str(arguments.get("schedule_value") or ""),
+        )
+    if action_type == "telegram.notify":
+        recipient = str(arguments.get("recipient") or "").strip()
+        message = str(arguments.get("message") or "").strip()
+        if not recipient or not message:
+            raise ValueError("Telegram requiere recipient y message.")
+        if not telegram_channel.allowed_sender(recipient):
+            raise PermissionError("El chat no está incluido en TELEGRAM_ALLOWED_CHAT_IDS.")
+        sent = telegram_channel.send_text(recipient, message)
+        return {"sent": len(sent), "recipient": recipient, "channel": "telegram"}
+    raise ValueError("Acción no incluida en el dispatcher seguro.")
+
+
+@app.get("/api/actions/catalog")
+def actions_catalog():
+    return {"actions": action_center.catalog(), "writes_require_approval": True}
+
+
+@app.post("/api/actions")
+def create_action(data: ActionCreateInput, request: Request):
+    enforce_request_guard(request)
+    sid = safe_session_id(data.session_id)
+    try:
+        item = action_center.create(sid, data.action_type.strip(), data.title, data.arguments)
+        log_activity(sid, "action", "Acción preparada", item.get("action_type", ""), item.get("status", ""))
+        return {"action": item}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/actions")
+def list_actions(session_id: str, status: str = "", limit: int = 50):
+    return {"actions": action_center.list(safe_session_id(session_id), status, limit)}
+
+
+@app.post("/api/actions/{action_id}/decision")
+def decide_action(action_id: str, data: ActionDecisionInput, request: Request):
+    enforce_request_guard(request)
+    sid = safe_session_id(data.session_id)
+    try:
+        item = action_center.decide(action_id, sid, data.decision, data.note)
+        identity = _identity_for_request(request)
+        identity_store.audit((identity or {}).get("id", ""), f"action.{data.decision}", action_id, "success")
+        return {"action": item}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.post("/api/actions/{action_id}/execute")
+def execute_action(action_id: str, data: ActionExecuteInput, request: Request):
+    enforce_request_guard(request)
+    sid = safe_session_id(data.session_id)
+    try:
+        item = action_center.execute(action_id, sid, lambda kind, args: _dispatch_v65_action(sid, kind, args))
+        identity = _identity_for_request(request)
+        identity_store.audit((identity or {}).get("id", ""), "action.execute", action_id, item.get("status", ""))
+        log_activity(sid, "action", "Acción ejecutada", item.get("action_type", ""), item.get("status", ""))
+        return {"action": item}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.post("/api/voice/transcribe")
+def transcribe_voice(data: VoiceTranscriptionInput, request: Request):
+    enforce_request_guard(request)
+    try:
+        encoded = data.audio_b64.split(",", 1)[-1]
+        raw = base64.b64decode(encoded, validate=True)
+        if len(raw) > 12 * 1024 * 1024:
+            raise ValueError("El audio supera el límite de 12 MB.")
+        text = telegram_media_ai.transcribe_audio(raw, data.mime_type, data.file_name)
+        return {"status": "completed", "text": text, "model": TELEGRAM_TRANSCRIBE_MODEL}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=safe_error_text(exc)) from exc
 
 
 @app.post("/api/autonomy/workflows")
@@ -5601,7 +6028,7 @@ def dashboard(session_id: str):
         "models": provider_status(),
         "providers": resilience_provider_status(),
         "database": {"ok": True, "path": DB_FILE},
-        "features": ["executable_workflows", "persistent_workflow_steps", "approval_inbox", "evidence_ledger", "hybrid_semantic_memory", "deep_research_pipeline", "persistent_automations", "optional_mcp_client", "isolated_code_lab", "evaluation_core", "execution_planner", "resolution_trace", "local_verifier", "autonomous_agent", "smart_intent_router", "multi_provider_router", "anthropic_messages_api", "provider_capability_matrix", "optional_quality_council", "structured_tool_registry", "professional_mission_orchestrator", "specialist_team_selection", "quality_gates", "tool_calling", "persistent_background_jobs", "pause_resume_cancel", "multi_level_cache", "singleflight_deduplication", "circuit_breakers", "context_compaction", "performance_telemetry", "deep_health_checks", "project_workspaces", "memory", "documents", "reminders", "knowledge_search", "self_check"],
+        "features": ["gemini_google_search_grounding", "google_programmable_search", "bounded_public_page_ingestion", "traceable_research_library", "web_semantic_indexing", "multimodal_web_chat", "voice_transcription", "auditable_action_center", "approved_action_execution", "persistent_operations_ledger", "continuous_quality_suite", "executable_workflows", "persistent_workflow_steps", "approval_inbox", "evidence_ledger", "hybrid_semantic_memory", "deep_research_pipeline", "persistent_automations", "optional_mcp_client", "isolated_code_lab", "evaluation_core", "execution_planner", "resolution_trace", "local_verifier", "autonomous_agent", "smart_intent_router", "multi_provider_router", "anthropic_messages_api", "provider_capability_matrix", "optional_quality_council", "structured_tool_registry", "professional_mission_orchestrator", "specialist_team_selection", "quality_gates", "tool_calling", "persistent_background_jobs", "pause_resume_cancel", "multi_level_cache", "singleflight_deduplication", "circuit_breakers", "context_compaction", "performance_telemetry", "deep_health_checks", "project_workspaces", "memory", "documents", "reminders", "knowledge_search", "self_check"],
         "runtime": runtime.snapshot(),
         "jobs_health": _job_health(),
     }
@@ -5747,12 +6174,31 @@ def capabilities():
             "web_voice_output",
             "unified_knowledge_workspace",
             "nexus_control_center",
+            "gemini_google_search_grounding",
+            "google_programmable_search",
+            "bounded_public_page_ingestion",
+            "traceable_research_library",
+            "web_semantic_indexing",
+            "multimodal_web_chat",
+            "voice_transcription",
+            "auditable_action_center",
+            "approved_action_execution",
+            "persistent_operations_ledger",
+            "continuous_quality_suite",
         ],
         "channels": {
             "telegram": telegram_channel.status(),
             "multimodal": telegram_media_ai.status(),
             "preferences": telegram_preferences.status(),
         },
+        "research": {
+            "google": google_search_client.status(),
+            "google_grounding": gemini_grounded_search.status(),
+            "library": research_library.status(""),
+            "page_fetching": RESEARCH_FETCH_PAGES,
+            "page_limit": RESEARCH_PAGE_LIMIT,
+        },
+        "actions": {"catalog": action_center.catalog(), "status": action_center.status("")},
         "stability": {
             "request_timeout_seconds": REQUEST_TIMEOUT_SECONDS,
             "context_max_chars": CONTEXT_MAX_CHARS,

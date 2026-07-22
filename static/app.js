@@ -570,7 +570,7 @@
     const text = els.messageInput.value.trim();
     if (!text && !state.files.length) return;
     const prompt = text || 'Analiza los archivos adjuntos.';
-    const files = state.files.map(file => ({ file_name:file.name, file_b64:file.base64 }));
+    const files = state.files.map(file => ({ file_name:file.name, file_b64:file.base64, mime_type:file.type || '' }));
     addMessage('user', prompt);
     els.messageInput.value = '';
     state.files = [];
@@ -682,7 +682,7 @@
     event.target.value = '';
     for (const file of selected) {
       if (file.size > 12 * 1024 * 1024) { toast(`${file.name} supera 12 MB.`); continue; }
-      try { state.files.push({ name:file.name, base64:await fileToBase64(file), size:file.size }); }
+      try { state.files.push({ name:file.name, type:file.type || '', base64:await fileToBase64(file), size:file.size }); }
       catch { toast(`No se pudo leer ${file.name}.`); }
     }
     renderAttachments();
@@ -734,7 +734,7 @@
 
   const PANEL_INFO = {
     knowledge:['CONOCIMIENTO','Biblioteca y memoria'], missions:['AUTONOMÍA','Misiones'],
-    nexus:['CONTROL','Nexus v58'], channels:['TELEGRAM','Asistente móvil'],
+    nexus:['CONTROL','Nexus v65'], channels:['TELEGRAM','Asistente móvil'],
     library:['CONOCIMIENTO','Biblioteca'], memory:['CONTEXTO','Memoria'], system:['ESTADO','Diagnóstico del núcleo']
   };
 
@@ -804,17 +804,30 @@
     const results = await Promise.allSettled([
       request(`/api/library?session_id=${sid}`),
       request(`/api/memory?session_id=${sid}`),
-      request(`/api/knowledge/facts?session_id=${sid}&limit=30`)
+      request(`/api/knowledge/facts?session_id=${sid}&limit=30`),
+      request(`/api/research/library?session_id=${sid}&limit=8`)
     ]);
     const docs = valueOf(results[0]).documents || [];
     const memories = valueOf(results[1]).memories || [];
     const facts = valueOf(results[2]).facts || [];
+    const research = valueOf(results[3]);
+    const researchRuns = research.runs || [];
+    const researchStatus = research.status || {};
     els.panelContent.innerHTML = `
       <div class="panel-grid knowledge-metrics">
         <article class="panel-card metric-card"><span class="card-kicker">ARCHIVOS</span><strong class="metric">${docs.length}</strong><p>Documentos del espacio actual.</p></article>
         <article class="panel-card metric-card"><span class="card-kicker">MEMORIA</span><strong class="metric">${memories.length}</strong><p>Preferencias y contexto personal.</p></article>
         <article class="panel-card metric-card"><span class="card-kicker">HECHOS</span><strong class="metric">${facts.length}</strong><p>Conocimiento estructurado y trazable.</p></article>
+        <article class="panel-card metric-card"><span class="card-kicker">FUENTES WEB</span><strong class="metric">${Number(researchStatus.sources||0)}</strong><p>Evidencia recuperada e indexada.</p></article>
       </div>
+      <section class="panel-section">
+        <article class="panel-card research-workbench">
+          <div class="panel-section-head"><div><span class="card-kicker">INVESTIGACIÓN CONTROLADA</span><h3>Buscar, leer e incorporar evidencia</h3></div><span class="status-tag ${researchStatus.sources?'ok':'warn'}">Google ${state.core?.google_search?.configured?'listo':'opcional'} · web abierta</span></div>
+          <p>JARVIS consulta varias rutas, deduplica fuentes, lee páginas públicas seguras y las añade a la memoria semántica con procedencia.</p>
+          <div class="research-controls"><input class="text-input" id="researchQuery" placeholder="Tema, pregunta o hecho que deseas investigar"/><select class="text-input" id="researchDepth"><option value="8">Rápida · 8 fuentes</option><option value="16" selected>Profunda · 16 fuentes</option><option value="24">Extensa · 24 fuentes</option></select><button class="primary-btn" id="runResearch">Investigar</button></div>
+          <div class="research-result" id="researchResult" hidden></div>
+        </article>
+      </section>
       <section class="panel-section knowledge-actions">
         <article class="panel-card">
           <div class="panel-section-head"><div><span class="card-kicker">CAPTURAR</span><h3>Agregar conocimiento</h3></div></div>
@@ -830,7 +843,19 @@
             ...docs.slice(0,8).map(item => `<article class="list-row"><div><strong>${escapeHTML(item.file_name||'Documento')}</strong><small>Archivo · ${escapeHTML(item.file_type||'')}</small></div></article>`)
           ].join('') || '<div class="empty-state">Todavía no hay memoria ni archivos.</div>'}</div></div>
         </div>
-      </section>`;
+      </section>
+      <section class="panel-section"><div class="panel-section-head"><h3>Investigaciones guardadas</h3><span class="status-tag">${researchRuns.length}</span></div><div class="list-stack">${researchRuns.length?researchRuns.map(item=>`<article class="list-row research-run"><div><strong>${escapeHTML(item.query)}</strong><small>${Number(item.source_count||0)} fuentes · ${Number(item.official_count||0)} prioritarias · ${(item.providers||[]).map(escapeHTML).join(' + ')||'web'}</small></div><span class="status-tag ${item.status==='completed'?'ok':'warn'}">${escapeHTML(item.status)}</span></article>`).join(''):'<div class="empty-state">Las investigaciones trazables aparecerán aquí.</div>'}</div></section>`;
+    $('#runResearch')?.addEventListener('click', async () => {
+      const query=$('#researchQuery').value.trim(); if(!query)return toast('Escribe un tema para investigar.');
+      const button=$('#runResearch'), output=$('#researchResult'); button.disabled=true; button.textContent='Investigando…'; output.hidden=false; output.innerHTML='<div class="empty-state">Buscando, leyendo y verificando fuentes…</div>';
+      try {
+        const pack=await request('/api/research/ingest',{method:'POST',body:JSON.stringify({session_id:backendSessionId(),query,project_name:'General',max_sources:Number($('#researchDepth').value),fetch_pages:true,page_limit:4})},{attempts:1,timeoutMs:120000});
+        const evidence=pack.evidence||[];
+        output.innerHTML=`<div class="research-summary"><strong>${evidence.length} fuentes incorporadas</strong><span>${Number(pack.official_or_primary_count||0)} prioritarias · ${Number(pack.pages_fetched||0)} páginas leídas</span></div><div class="source-grid">${evidence.slice(0,8).map((item,index)=>`<a class="source-card" href="${escapeHTML(item.url||'#')}" target="_blank" rel="noopener noreferrer"><span>${String(index+1).padStart(2,'0')}</span><div><strong>${escapeHTML(item.title||'Fuente')}</strong><small>${escapeHTML(item.provider||'web')} · calidad ${Math.round(Number(item.quality||0)*100)}%</small></div></a>`).join('')}</div>`;
+        toast('Investigación guardada en la memoria semántica');
+      } catch(error) { output.innerHTML=`<div class="empty-state error-state">${escapeHTML(explainError(error))}</div>`; }
+      finally { button.disabled=false; button.textContent='Investigar'; }
+    });
     $('#saveFact')?.addEventListener('click', async () => {
       const subject=$('#factSubject').value.trim(), object_text=$('#factObject').value.trim();
       if (!subject || !object_text) return toast('Completa el tema y la información.');
@@ -877,22 +902,28 @@
   async function renderNexus() {
     const sid=encodeURIComponent(backendSessionId());
     const results=await Promise.allSettled([
-      request(`/api/v58/status?session_id=${sid}`), request('/api/integrations'),
+      request(`/api/v65/status?session_id=${sid}`), request('/api/integrations'),
       request(`/api/artifacts?session_id=${sid}&limit=12`), request(`/api/automations?session_id=${sid}&limit=12`),
-      request(`/api/intelligence/decisions?session_id=${sid}&limit=8`)
+      request(`/api/intelligence/decisions?session_id=${sid}&limit=8`),
+      request(`/api/actions?session_id=${sid}&limit=20`), request(`/api/operations/v65?session_id=${sid}`)
     ]);
     const core=valueOf(results[0]), integrations=valueOf(results[1]).integrations||[], artifacts=valueOf(results[2]).artifacts||[];
     const automations=valueOf(results[3]).automations||[], decisions=valueOf(results[4]).decisions||[];
+    const actions=valueOf(results[5]).actions||[], operations=valueOf(results[6]);
     const providers=core.providers?.configured||[], intelligence=core.intelligence||{};
+    const pendingActions=actions.filter(item=>item.status==='pending_approval');
+    const latestQuality=operations.latest||{};
     els.panelContent.innerHTML=`
-      <div class="nexus-hero panel-card"><div><span class="card-kicker">POLISHED INTELLIGENCE · v58</span><h3>Un núcleo, rutas claras y control humano</h3><p>Planifica con presupuesto, ejecuta con checkpoints y conserva evidencia sin exponer tus claves.</p></div><button class="soft-btn" id="nexusDiagnostics">Diagnóstico</button></div>
+      <div class="nexus-hero panel-card"><div><span class="card-kicker">UNIFIED INTELLIGENCE · v65</span><h3>Inteligencia, evidencia y acción bajo tu control</h3><p>Investiga con fuentes, ejecuta con checkpoints y aprueba cada cambio sensible desde un solo centro.</p></div><button class="soft-btn" id="nexusDiagnostics">Diagnóstico</button></div>
       <div class="panel-grid nexus-metrics">
         <article class="panel-card metric-card"><span class="card-kicker">PROVEEDORES</span><strong class="metric">${providers.length}</strong><p>${providers.length?providers.map(escapeHTML).join(' · '):'Modo local disponible'}</p></article>
         <article class="panel-card metric-card"><span class="card-kicker">DECISIONES</span><strong class="metric">${Object.values(intelligence.decisions||{}).reduce((a,b)=>a+Number(b||0),0)}</strong><p>Rutas registradas por el planificador.</p></article>
         <article class="panel-card metric-card"><span class="card-kicker">AUTOMATIZACIONES</span><strong class="metric">${automations.length}</strong><p>Rutinas persistentes del espacio.</p></article>
-        <article class="panel-card metric-card"><span class="card-kicker">INTEGRACIONES</span><strong class="metric">${integrations.filter(item=>item.configured).length}/${integrations.length}</strong><p>Conectores listos en el backend.</p></article>
+        <article class="panel-card metric-card"><span class="card-kicker">APROBACIONES</span><strong class="metric">${pendingActions.length}</strong><p>Acciones sensibles esperando tu decisión.</p></article>
       </div>
       <section class="panel-section"><article class="panel-card"><span class="card-kicker">PLANIFICADOR</span><h3>Diseña una ejecución antes de consumir recursos</h3><div class="form-grid nexus-planner"><input class="text-input" id="nexusObjective" placeholder="Objetivo concreto"/><select class="text-input" id="nexusMode"><option value="auto">Automático</option><option value="research">Investigación</option><option value="professional">Profesional</option><option value="private">Privado/local</option></select><button class="soft-btn" id="previewNexusPlan">Ver plan</button><button class="primary-btn" id="runNexusPlan">Ejecutar</button></div><div id="nexusPlanResult" class="plan-result" hidden></div></article></section>
+      <section class="panel-section"><div class="panel-section-head"><h3>Centro de acciones</h3><span class="status-tag">aprobación obligatoria</span></div><article class="panel-card action-center"><p>Prepara una acción, revisa sus argumentos y autorízala antes de que JARVIS modifique datos o envíe algo fuera del núcleo.</p><div class="action-form"><select class="text-input" id="actionType"><option value="memory.save">Guardar memoria</option><option value="reminder.create">Crear recordatorio</option><option value="automation.create">Crear automatización</option><option value="telegram.notify">Enviar por Telegram</option></select><input class="text-input" id="actionTarget" placeholder="Título o destinatario"/><textarea class="text-input" id="actionContent" placeholder="Contenido o instrucciones"></textarea><input class="text-input" id="actionSchedule" placeholder="Fecha ISO o intervalo opcional"/><button class="primary-btn" id="prepareAction">Preparar</button></div></article><div class="list-stack action-list">${actions.length?actions.map(item=>`<article class="list-row action-row"><div><strong>${escapeHTML(item.title||item.action_type)}</strong><small>${escapeHTML(item.action_type)} · riesgo ${escapeHTML(item.risk)} · ${escapeHTML(item.status)}</small></div><div class="mission-actions">${item.status==='pending_approval'?`<button class="soft-btn mini-btn" data-action-decision="approved" data-action-id="${escapeHTML(item.id)}">Aprobar</button><button class="danger-btn mini-btn" data-action-decision="rejected" data-action-id="${escapeHTML(item.id)}">Rechazar</button>`:''}${item.status==='approved'?`<button class="primary-btn mini-btn" data-action-execute="${escapeHTML(item.id)}">Ejecutar</button>`:''}<span class="status-tag ${item.status==='completed'?'ok':item.status==='failed'?'danger':'warn'}">${escapeHTML(item.status)}</span></div></article>`).join(''):'<div class="empty-state">No hay acciones preparadas.</div>'}</div></section>
+      <section class="panel-section"><div class="panel-section-head"><h3>Calidad y estabilidad</h3><button class="soft-btn" id="runQualitySuite">Ejecutar evaluación</button></div><article class="panel-card quality-card"><div><span class="card-kicker">ÚLTIMA MEDICIÓN</span><strong class="metric">${latestQuality.score===undefined?'—':Math.round(Number(latestQuality.score)*100)+'%'}</strong></div><p>${latestQuality.status?`Estado ${escapeHTML(latestQuality.status)}. La evaluación prueba base de datos, herramientas locales, memoria, rutas, frontend y seguridad.`:'Ejecuta la primera evaluación integral de esta instalación.'}</p></article></section>
       <section class="panel-section"><div class="panel-section-head"><h3>Integraciones</h3><span class="status-tag">las escrituras exigen confirmación</span></div><div class="integration-grid">${integrations.map(item=>`<article class="integration-card"><span>${icon(item.name==='telegram'?'telegram':'cpu')}</span><div><strong>${escapeHTML(item.label)}</strong><small>${escapeHTML((item.actions||[]).join(' · '))}</small></div><em class="status-tag ${item.configured?'ok':'warn'}">${item.configured?'Lista':'Configurar'}</em></article>`).join('')}</div></section>
       <section class="panel-section"><div class="panel-section-head"><h3>Resultados interactivos</h3><button class="soft-btn" id="newArtifact">Crear lista</button></div><div class="artifact-grid">${artifacts.length?artifacts.map(renderArtifactCard).join(''):'<div class="empty-state">Crea tablas, gráficas, listas y cronogramas seguros.</div>'}</div></section>
       <section class="panel-section"><div class="panel-section-head"><h3>Decisiones recientes</h3><span class="status-tag">${decisions.length}</span></div><div class="list-stack">${decisions.length?decisions.map(item=>`<article class="list-row"><div><strong>${escapeHTML(item.objective)}</strong><small>${escapeHTML(item.intent)} · ${escapeHTML(item.complexity)} · ${escapeHTML(item.status)}</small></div><span class="status-tag ${item.status==='completed'?'ok':'warn'}">${Math.round(Number(item.quality_score||0)*100)}%</span></article>`).join(''):'<div class="empty-state">Las decisiones aparecerán al conversar o ejecutar misiones.</div>'}</div></section>`;
@@ -908,6 +939,32 @@
     };
     $('#previewNexusPlan')?.addEventListener('click',()=>runPlan(false));
     $('#runNexusPlan')?.addEventListener('click',()=>runPlan(true));
+    $('#prepareAction')?.addEventListener('click',async()=>{
+      const type=$('#actionType').value,target=$('#actionTarget').value.trim(),content=$('#actionContent').value.trim(),schedule=$('#actionSchedule').value.trim();
+      if(!content)return toast('Escribe el contenido o las instrucciones.');
+      let args={};
+      if(type==='memory.save')args={content,category:'fact',importance:3};
+      if(type==='reminder.create')args={title:target||content,due_at:schedule};
+      if(type==='automation.create')args={title:target||'Automatización JARVIS',prompt:content,schedule_type:/^\d+$/.test(schedule)?'interval':'once',schedule_value:schedule};
+      if(type==='telegram.notify')args={recipient:target,message:content};
+      if((type==='telegram.notify'&&!target)||(type==='reminder.create'&&!schedule)||(type==='automation.create'&&!schedule))return toast('Completa el destinatario o la programación requerida.');
+      const button=$('#prepareAction');button.disabled=true;
+      try{await request('/api/actions',{method:'POST',body:JSON.stringify({session_id:backendSessionId(),action_type:type,title:target||type,arguments:args})});toast('Acción preparada para revisión');renderNexus();}
+      catch(error){toast(explainError(error));button.disabled=false;}
+    });
+    $$('[data-action-decision]').forEach(button=>button.addEventListener('click',async()=>{
+      const decision=button.dataset.actionDecision,id=button.dataset.actionId;
+      if(!confirm(decision==='approved'?'¿Aprobar esta acción? Aún no se ejecutará.':'¿Rechazar esta acción?'))return;
+      await request(`/api/actions/${encodeURIComponent(id)}/decision`,{method:'POST',body:JSON.stringify({session_id:backendSessionId(),decision,note:''})});renderNexus();
+    }));
+    $$('[data-action-execute]').forEach(button=>button.addEventListener('click',async()=>{
+      if(!confirm('¿Ejecutar ahora la acción aprobada?'))return;
+      button.disabled=true;try{await request(`/api/actions/${encodeURIComponent(button.dataset.actionExecute)}/execute`,{method:'POST',body:JSON.stringify({session_id:backendSessionId()})},{timeoutMs:45000});toast('Acción ejecutada');renderNexus();}catch(error){toast(explainError(error));button.disabled=false;}
+    }));
+    $('#runQualitySuite')?.addEventListener('click',async()=>{
+      const button=$('#runQualitySuite');button.disabled=true;button.textContent='Evaluando…';
+      try{const data=await request(`/api/evaluations/suite?session_id=${sid}`,{method:'POST'},{timeoutMs:45000});toast(`Evaluación ${Math.round(Number(data.suite?.score||0)*100)}%`);renderNexus();}catch(error){toast(explainError(error));button.disabled=false;button.textContent='Ejecutar evaluación';}
+    });
     $('#newArtifact')?.addEventListener('click',async()=>{
       const title=prompt('Nombre de la lista'); if(!title)return;
       const raw=prompt('Elementos, uno por línea'); if(!raw)return;
@@ -1107,6 +1164,6 @@
 
   function registerServiceWorker() {
     if (!('serviceWorker' in navigator) || location.protocol === 'file:') return;
-    navigator.serviceWorker.register('./service-worker.js?v=58.1').catch(()=>{});
+    navigator.serviceWorker.register('./service-worker.js?v=65.1').catch(()=>{});
   }
 })();

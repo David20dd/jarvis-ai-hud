@@ -1041,7 +1041,7 @@ body {
 .suggestions button:nth-child(n+4) { display: grid; }
 
 /* ================================================================
-   J.A.R.V.I.S. Polished Intelligence v58
+   J.A.R.V.I.S. Unified Intelligence v65
    Menús fuera de contenedores recortables y compositor equilibrado.
    ================================================================ */
 
@@ -1176,4 +1176,85 @@ body {
   .suggestions,
   .voice-btn.listening { animation: none !important; }
   .chat-menu-popover { transition: none; transform: none; }
+}
+
+/* Unified Intelligence v65: research, approvals and quality */
+.research-workbench,
+.action-center,
+.quality-card { position: relative; overflow: hidden; }
+
+.research-workbench::before,
+.action-center::before,
+.quality-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(97, 211, 255, .46), transparent);
+  pointer-events: none;
+}
+
+.research-controls {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) 190px auto;
+  gap: 10px;
+  margin-top: 18px;
+  align-items: center;
+}
+
+.research-result { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
+.research-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.research-summary span,
+.source-card small { color: var(--muted); }
+.source-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+
+.source-card {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+  padding: 12px;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .018);
+  text-decoration: none;
+  transition: border-color .18s ease, background .18s ease, transform .18s ease;
+}
+
+.source-card:hover { border-color: rgba(87, 206, 255, .36); background: rgba(71, 188, 255, .055); transform: translateY(-1px); }
+.source-card > span { display: grid; place-items: center; width: 32px; height: 32px; flex: 0 0 32px; border-radius: 10px; color: var(--accent); background: rgba(72, 197, 255, .08); font: 700 11px/1 var(--mono); }
+.source-card div { min-width: 0; }
+.source-card strong,
+.source-card small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.source-card strong { font-size: 13px; }
+.source-card small { margin-top: 4px; font-size: 11px; }
+.research-run strong { max-width: min(58vw, 680px); }
+
+.action-form { display: grid; grid-template-columns: 190px minmax(160px, .7fr) minmax(260px, 1.3fr) minmax(180px, .8fr) auto; gap: 9px; align-items: start; margin-top: 16px; }
+.action-form textarea { min-height: 44px; max-height: 120px; resize: vertical; }
+.action-list { margin-top: 10px; }
+.action-row { align-items: center; }
+.action-row .mission-actions { flex-wrap: wrap; justify-content: flex-end; }
+.quality-card { display: grid; grid-template-columns: minmax(110px, .25fr) 1fr; align-items: center; gap: 24px; }
+.quality-card .metric { margin-top: 7px; }
+.error-state { color: #ffb5b5; }
+
+@media (max-width: 1080px) {
+  .action-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .action-form textarea { grid-column: 1 / -1; }
+  .action-form .primary-btn { justify-self: start; }
+}
+
+@media (max-width: 720px) {
+  .research-controls,
+  .action-form,
+  .source-grid,
+  .quality-card { grid-template-columns: 1fr; }
+  .research-summary { align-items: flex-start; flex-direction: column; }
+  .research-controls .primary-btn,
+  .action-form .primary-btn { width: 100%; justify-content: center; }
+  .action-row { align-items: flex-start; }
+  .action-row .mission-actions { width: 100%; justify-content: flex-start; }
 }

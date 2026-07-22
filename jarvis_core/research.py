@@ -71,6 +71,7 @@ class Evidence:
     url: str
     snippet: str
     query: str
+    provider: str
     quality: float
     retrieved_at: float
 
@@ -81,6 +82,7 @@ class Evidence:
             "url": self.url,
             "snippet": self.snippet,
             "query": self.query,
+            "provider": self.provider,
             "quality": self.quality,
             "retrieved_at": self.retrieved_at,
         }
@@ -124,6 +126,7 @@ class ResearchCollector:
                             url=url,
                             snippet=snippet[:2400],
                             query=variant,
+                            provider=str(item.get("provider") or payload.get("provider") or "web")[:80],
                             quality=_quality({"url": url, "title": title, "snippet": snippet}),
                             retrieved_at=time.time(),
                         )

@@ -44,6 +44,20 @@ services:
         value: "3"
       - key: JARVIS_WEB_SEARCH_RESULTS
         value: "10"
+      - key: GOOGLE_SEARCH_API_KEY
+        sync: false
+      - key: GOOGLE_SEARCH_ENGINE_ID
+        sync: false
+      - key: JARVIS_GOOGLE_GROUNDING_ENABLED
+        value: "false"
+      - key: JARVIS_GEMINI_SEARCH_MODEL
+        sync: false
+      - key: JARVIS_RESEARCH_FETCH_PAGES
+        value: "true"
+      - key: JARVIS_RESEARCH_PAGE_LIMIT
+        value: "4"
+      - key: JARVIS_RESEARCH_PAGE_MAX_BYTES
+        value: "1500000"
       - key: JARVIS_PROVIDER_TIMEOUT_SECONDS
         value: "45"
       - key: JARVIS_REQUEST_TIMEOUT_SECONDS
