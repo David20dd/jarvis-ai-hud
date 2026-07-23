@@ -481,8 +481,17 @@
   function renderMessageHTML(message, index) {
     const role = message.role === 'user' ? 'user' : 'assistant';
     const meta = message.meta || {};
+    const adaptive = meta.adaptive || {};
+    const evidence = adaptive.evidence || {};
     const traceItems = [meta.model, meta.route, meta.complexity, meta.cached ? 'caché' : ''].filter(Boolean);
-    const traceHTML = role === 'assistant' && traceItems.length ? `<details class="message-trace"><summary>Detalles de la respuesta</summary><div>${traceItems.map(value => `<span>${escapeHTML(value)}</span>`).join('')}</div></details>` : '';
+    const evidenceItems = [
+      Number(evidence.memory_hits||0) ? `Memoria ${Number(evidence.memory_hits)}` : '',
+      Number(evidence.document_hits||0) ? `Documentos ${Number(evidence.document_hits)}` : '',
+      Number(evidence.web_sources||0) ? `Web ${Number(evidence.web_sources)}` : '',
+      adaptive.web_required ? 'Actualidad verificada' : '',
+      adaptive.quality?.passed === true ? 'Control aprobado' : ''
+    ].filter(Boolean);
+    const traceHTML = role === 'assistant' && (traceItems.length || evidenceItems.length) ? `<details class="message-trace"><summary>Criterio y evidencia</summary><div>${[...evidenceItems,...traceItems].map(value => `<span>${escapeHTML(value)}</span>`).join('')}</div></details>` : '';
     const actions = role === 'assistant' ? `<div class="message-actions"><button class="message-tool" data-copy-message="${index}" aria-label="Copiar respuesta" title="Copiar">${icon('copy')}<span>Copiar</span></button><button class="message-tool" data-speak-message="${index}" aria-label="Escuchar respuesta" title="Escuchar">${icon('volume')}<span>Escuchar</span></button><button class="message-tool" data-regenerate-message="${index}" aria-label="Regenerar respuesta" title="Regenerar">${icon('rotate')}<span>Regenerar</span></button></div>` : '';
     if (role === 'user') return `<article class="message user"><div class="message-body">${formatContent(message.content)}</div></article>`;
     return `<article class="message assistant"><span class="message-avatar">J</span><div class="message-body ${meta.error ? 'message-error' : ''}">${formatContent(message.content)}${traceHTML}${actions}</div></article>`;
@@ -606,7 +615,7 @@
       if (!reply) throw new ApiError('El núcleo respondió sin contenido.');
       addMessage('assistant', reply, {
         model:data.model || '', route:data.route || data.mode || '', cached:Boolean(data.cached),
-        complexity:data.intelligence?.complexity || ''
+        complexity:data.intelligence?.complexity || '', adaptive:data.adaptive || {}
       });
       setStatus('Núcleo operativo', 'online');
     } catch (error) {
@@ -905,22 +914,24 @@
       request(`/api/v65/status?session_id=${sid}`), request('/api/integrations'),
       request(`/api/artifacts?session_id=${sid}&limit=12`), request(`/api/automations?session_id=${sid}&limit=12`),
       request(`/api/intelligence/decisions?session_id=${sid}&limit=8`),
-      request(`/api/actions?session_id=${sid}&limit=20`), request(`/api/operations/v65?session_id=${sid}`)
+      request(`/api/actions?session_id=${sid}&limit=20`), request(`/api/operations/v65?session_id=${sid}`),
+      request(`/api/adaptive/status?session_id=${sid}&limit=8`)
     ]);
     const core=valueOf(results[0]), integrations=valueOf(results[1]).integrations||[], artifacts=valueOf(results[2]).artifacts||[];
     const automations=valueOf(results[3]).automations||[], decisions=valueOf(results[4]).decisions||[];
-    const actions=valueOf(results[5]).actions||[], operations=valueOf(results[6]);
+    const actions=valueOf(results[5]).actions||[], operations=valueOf(results[6]), adaptive=valueOf(results[7]);
     const providers=core.providers?.configured||[], intelligence=core.intelligence||{};
     const pendingActions=actions.filter(item=>item.status==='pending_approval');
     const latestQuality=operations.latest||{};
     els.panelContent.innerHTML=`
-      <div class="nexus-hero panel-card"><div><span class="card-kicker">UNIFIED INTELLIGENCE · v65</span><h3>Inteligencia, evidencia y acción bajo tu control</h3><p>Investiga con fuentes, ejecuta con checkpoints y aprueba cada cambio sensible desde un solo centro.</p></div><button class="soft-btn" id="nexusDiagnostics">Diagnóstico</button></div>
+      <div class="nexus-hero panel-card"><div><span class="card-kicker">ADAPTIVE INTELLIGENCE · v66</span><h3>Inteligencia, evidencia y acción bajo tu control</h3><p>JARVIS decide cuándo consultar memoria, documentos o internet; verifica actualidad y mantiene las acciones sensibles bajo aprobación.</p></div><button class="soft-btn" id="nexusDiagnostics">Diagnóstico</button></div>
       <div class="panel-grid nexus-metrics">
         <article class="panel-card metric-card"><span class="card-kicker">PROVEEDORES</span><strong class="metric">${providers.length}</strong><p>${providers.length?providers.map(escapeHTML).join(' · '):'Modo local disponible'}</p></article>
         <article class="panel-card metric-card"><span class="card-kicker">DECISIONES</span><strong class="metric">${Object.values(intelligence.decisions||{}).reduce((a,b)=>a+Number(b||0),0)}</strong><p>Rutas registradas por el planificador.</p></article>
         <article class="panel-card metric-card"><span class="card-kicker">AUTOMATIZACIONES</span><strong class="metric">${automations.length}</strong><p>Rutinas persistentes del espacio.</p></article>
         <article class="panel-card metric-card"><span class="card-kicker">APROBACIONES</span><strong class="metric">${pendingActions.length}</strong><p>Acciones sensibles esperando tu decisión.</p></article>
       </div>
+      <section class="panel-section"><div class="panel-section-head"><h3>Criterio adaptativo</h3><span class="status-tag ok">${adaptive.enabled===false?'Desactivado':'Activo'}</span></div><article class="panel-card adaptive-card"><div><span class="card-kicker">RESPUESTAS EVALUADAS</span><strong class="metric">${Number(adaptive.summary?.decisions||0)}</strong></div><div><strong>${Math.round(Number(adaptive.summary?.verification_rate||0)*100)}% verificadas</strong><p>${escapeHTML(adaptive.recommendations?.[0]?.detail||'JARVIS está aprendiendo qué rutas entregan mejores resultados sin modificar su código ni sus permisos.')}</p></div></article></section>
       <section class="panel-section"><article class="panel-card"><span class="card-kicker">PLANIFICADOR</span><h3>Diseña una ejecución antes de consumir recursos</h3><div class="form-grid nexus-planner"><input class="text-input" id="nexusObjective" placeholder="Objetivo concreto"/><select class="text-input" id="nexusMode"><option value="auto">Automático</option><option value="research">Investigación</option><option value="professional">Profesional</option><option value="private">Privado/local</option></select><button class="soft-btn" id="previewNexusPlan">Ver plan</button><button class="primary-btn" id="runNexusPlan">Ejecutar</button></div><div id="nexusPlanResult" class="plan-result" hidden></div></article></section>
       <section class="panel-section"><div class="panel-section-head"><h3>Centro de acciones</h3><span class="status-tag">aprobación obligatoria</span></div><article class="panel-card action-center"><p>Prepara una acción, revisa sus argumentos y autorízala antes de que JARVIS modifique datos o envíe algo fuera del núcleo.</p><div class="action-form"><select class="text-input" id="actionType"><option value="memory.save">Guardar memoria</option><option value="reminder.create">Crear recordatorio</option><option value="automation.create">Crear automatización</option><option value="telegram.notify">Enviar por Telegram</option></select><input class="text-input" id="actionTarget" placeholder="Título o destinatario"/><textarea class="text-input" id="actionContent" placeholder="Contenido o instrucciones"></textarea><input class="text-input" id="actionSchedule" placeholder="Fecha ISO o intervalo opcional"/><button class="primary-btn" id="prepareAction">Preparar</button></div></article><div class="list-stack action-list">${actions.length?actions.map(item=>`<article class="list-row action-row"><div><strong>${escapeHTML(item.title||item.action_type)}</strong><small>${escapeHTML(item.action_type)} · riesgo ${escapeHTML(item.risk)} · ${escapeHTML(item.status)}</small></div><div class="mission-actions">${item.status==='pending_approval'?`<button class="soft-btn mini-btn" data-action-decision="approved" data-action-id="${escapeHTML(item.id)}">Aprobar</button><button class="danger-btn mini-btn" data-action-decision="rejected" data-action-id="${escapeHTML(item.id)}">Rechazar</button>`:''}${item.status==='approved'?`<button class="primary-btn mini-btn" data-action-execute="${escapeHTML(item.id)}">Ejecutar</button>`:''}<span class="status-tag ${item.status==='completed'?'ok':item.status==='failed'?'danger':'warn'}">${escapeHTML(item.status)}</span></div></article>`).join(''):'<div class="empty-state">No hay acciones preparadas.</div>'}</div></section>
       <section class="panel-section"><div class="panel-section-head"><h3>Calidad y estabilidad</h3><button class="soft-btn" id="runQualitySuite">Ejecutar evaluación</button></div><article class="panel-card quality-card"><div><span class="card-kicker">ÚLTIMA MEDICIÓN</span><strong class="metric">${latestQuality.score===undefined?'—':Math.round(Number(latestQuality.score)*100)+'%'}</strong></div><p>${latestQuality.status?`Estado ${escapeHTML(latestQuality.status)}. La evaluación prueba base de datos, herramientas locales, memoria, rutas, frontend y seguridad.`:'Ejecuta la primera evaluación integral de esta instalación.'}</p></article></section>

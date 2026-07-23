@@ -1239,6 +1239,10 @@ body {
 .action-row .mission-actions { flex-wrap: wrap; justify-content: flex-end; }
 .quality-card { display: grid; grid-template-columns: minmax(110px, .25fr) 1fr; align-items: center; gap: 24px; }
 .quality-card .metric { margin-top: 7px; }
+.adaptive-card { display: grid; grid-template-columns: minmax(120px, .24fr) 1fr; align-items: center; gap: 24px; }
+.adaptive-card .metric { display: block; margin-top: 7px; }
+.adaptive-card p { margin: 6px 0 0; color: var(--muted); line-height: 1.6; }
+.message-trace > div span:first-child { border-color: rgba(91,203,242,.24); color: #bceeff; }
 .error-state { color: #ffb5b5; }
 
 @media (max-width: 1080px) {
@@ -1251,7 +1255,8 @@ body {
   .research-controls,
   .action-form,
   .source-grid,
-  .quality-card { grid-template-columns: 1fr; }
+  .quality-card,
+  .adaptive-card { grid-template-columns: 1fr; }
   .research-summary { align-items: flex-start; flex-direction: column; }
   .research-controls .primary-btn,
   .action-form .primary-btn { width: 100%; justify-content: center; }

@@ -44,6 +44,12 @@ services:
         value: "3"
       - key: JARVIS_WEB_SEARCH_RESULTS
         value: "10"
+      - key: JARVIS_ADAPTIVE_RETRIEVAL
+        value: "true"
+      - key: JARVIS_ADAPTIVE_MEMORY_LIMIT
+        value: "5"
+      - key: JARVIS_ADAPTIVE_WEB_SOURCE_LIMIT
+        value: "8"
       - key: GOOGLE_SEARCH_API_KEY
         sync: false
       - key: GOOGLE_SEARCH_ENGINE_ID

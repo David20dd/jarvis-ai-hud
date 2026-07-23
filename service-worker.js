@@ -1,4 +1,4 @@
-const CACHE_NAME = 'jarvis-unified-intelligence-v65-1';
+const CACHE_NAME = 'jarvis-adaptive-intelligence-v66-1';
 const APP_SHELL = [
   './',
   './index.html',

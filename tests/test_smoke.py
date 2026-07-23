@@ -66,8 +66,8 @@ def test_http_health_and_headers():
     with TestClient(main.app) as client:
         live = client.get("/api/health/live")
         assert live.status_code == 200
-        assert live.json()["version"] == "65.0.0"
-        assert live.headers["x-jarvis-version"] == "65.0.0"
+        assert live.json()["version"] == "66.0.0"
+        assert live.headers["x-jarvis-version"] == "66.0.0"
         assert live.headers.get("x-request-id")
 
         ready = client.get("/api/health/ready")
@@ -84,7 +84,7 @@ def test_http_health_and_headers():
 def test_capabilities_include_stability_features():
     with TestClient(main.app) as client:
         data = client.get("/api/capabilities").json()
-        assert data["version"] == "65.0.0"
+        assert data["version"] == "66.0.0"
         features = set(data["features"])
         assert "singleflight_deduplication" in features
         assert "persistent_job_recovery" in features
@@ -194,7 +194,7 @@ def test_provider_gateway_endpoints_and_route_preview():
         status = client.get("/api/providers")
         assert status.status_code == 200
         payload = status.json()
-        assert payload["version"] == "65.0.0"
+        assert payload["version"] == "66.0.0"
         assert "gateway" in payload
         assert "providers" in payload["gateway"]
 
@@ -333,7 +333,7 @@ def test_agent_plan_and_execute_endpoints():
 
         status = client.get('/api/agents/status', params={'session_id': 'agent-test'})
         assert status.status_code == 200
-        assert status.json()['version'] == '65.0.0'
+        assert status.json()['version'] == '66.0.0'
 
 
 
@@ -393,7 +393,7 @@ def test_provider_capability_matrix_and_tool_registry_endpoints():
         capabilities = client.get('/api/providers/capabilities')
         assert capabilities.status_code == 200
         payload = capabilities.json()
-        assert payload['version'] == '65.0.0'
+        assert payload['version'] == '66.0.0'
         assert 'anthropic' in payload['matrix']['providers']
         assert 'coding' in payload['matrix']['task_preferences']
         assert payload['quality_council']['max_providers'] >= 2
@@ -401,7 +401,7 @@ def test_provider_capability_matrix_and_tool_registry_endpoints():
         registry = client.get('/api/tools/registry')
         assert registry.status_code == 200
         tools = registry.json()
-        assert tools['version'] == '65.0.0'
+        assert tools['version'] == '66.0.0'
         assert tools['available_count'] >= 10
         names = {item['name'] for item in tools['tools'] if item['available']}
         assert {'web_search', 'calculator', 'document_search'}.issubset(names)
@@ -461,7 +461,7 @@ def test_professional_endpoints_expose_profiles_and_plan():
         profiles = client.get("/api/professional/profiles")
         assert profiles.status_code == 200
         payload = profiles.json()
-        assert payload["version"] == "65.0.0"
+        assert payload["version"] == "66.0.0"
         assert len(payload["profiles"]) >= 6
 
         planned = client.post(
@@ -483,7 +483,7 @@ def test_professional_endpoints_expose_profiles_and_plan():
 
         status = client.get("/api/professional/status?session_id=professional-test")
         assert status.status_code == 200
-        assert status.json()["version"] == "65.0.0"
+        assert status.json()["version"] == "66.0.0"
 
 
 def test_responsive_frontend_contract():
@@ -593,7 +593,7 @@ def test_v38_automation_and_optional_integrations_status():
         status = client.get("/api/autonomy/status?session_id=automation-test")
         assert status.status_code == 200
         payload = status.json()
-        assert payload["version"] == "65.0.0"
+        assert payload["version"] == "66.0.0"
         assert "mcp" in payload and "code_lab" in payload and "semantic" in payload
 
 
@@ -750,7 +750,7 @@ def test_v46_operations_and_channel_status_endpoints():
         assert client.get("/404.html").status_code == 200
         operations = client.get("/api/operations/overview", params={"session_id": "test-v46"})
         assert operations.status_code == 200
-        assert operations.json()["version"] == "65.0.0"
+        assert operations.json()["version"] == "66.0.0"
         assert operations.json()["safety"]["human_approval"] is True
         channels = client.get("/api/channels/status")
         assert channels.status_code == 200
@@ -771,7 +771,7 @@ def test_v47_frontend_is_clean_connected_and_boot_safe():
     assert "renderChannels" in js and "openAccount" in js
     assert "auth_required" in js
     assert "error?.status === 401" in js
-    assert "jarvis-unified-intelligence-v65-1" in Path("service-worker.js").read_text(encoding="utf-8")
+    assert "jarvis-adaptive-intelligence-v66-1" in Path("service-worker.js").read_text(encoding="utf-8")
     assert "url.pathname.includes('/api/')" in Path("service-worker.js").read_text(encoding="utf-8")
     assert "overflow-x: hidden" in css
 
@@ -881,7 +881,7 @@ def test_v65_status_integrations_and_ui_contract():
     with TestClient(main.app) as client:
         status = client.get("/api/v65/status", params={"session_id": "v65-status"})
         assert status.status_code == 200
-        assert status.json()["version"] == "65.0.0"
+        assert status.json()["version"] == "66.0.0"
         assert client.get("/api/v57/status").status_code == 200
         integrations = client.get("/api/integrations").json()["integrations"]
         assert {"telegram", "google_calendar", "gmail", "google_drive", "github", "notion", "mcp"}.issubset(
@@ -931,12 +931,12 @@ def test_v65_unified_interface_contract():
     css = Path("static/styles.css").read_text(encoding="utf-8")
     worker = Path("service-worker.js").read_text(encoding="utf-8")
 
-    assert "Unified Intelligence · v65" in html
+    assert "Adaptive Intelligence · v66" in html
     assert "Inteligencia personal unificada" in html
     assert "Planear una misión" in html
     assert 'aria-label="Actualizar panel"' in html
-    assert "J.A.R.V.I.S. Unified Intelligence v65" in Path("static/manifest.webmanifest").read_text(encoding="utf-8")
-    assert "jarvis-unified-intelligence-v65-1" in worker
+    assert "J.A.R.V.I.S. Adaptive Intelligence v66" in Path("static/manifest.webmanifest").read_text(encoding="utf-8")
+    assert "jarvis-adaptive-intelligence-v66-1" in worker
     assert ".suggestions button:nth-child(n+4) { display: grid; }" in css
     assert "--sidebar: 264px" in css
     assert 'id="chatContextMenu"' in html and 'class="composer-actions"' in html
@@ -1067,6 +1067,6 @@ def test_v65_frontend_exposes_research_actions_and_multimodal_uploads():
     html = Path("index.html").read_text(encoding="utf-8")
     js = Path("static/app.js").read_text(encoding="utf-8")
     css = Path("static/styles.css").read_text(encoding="utf-8")
-    assert "audio/*" in html and "Unified Intelligence · v65" in html
+    assert "audio/*" in html and "Adaptive Intelligence · v66" in html
     assert "/api/research/ingest" in js and "/api/evaluations/suite" in js and "/api/actions" in js
     assert ".research-controls" in css and ".action-form" in css and ".quality-card" in css

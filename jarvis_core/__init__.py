@@ -20,6 +20,7 @@ from .v65 import (
     QualitySuite,
     ResearchLibrary,
 )
+from .v66 import AdaptiveDecisionEngine, AdaptiveLearningStore, AnswerQualityGate, append_source_list
 
 __all__ = [
     "RuntimeSupport", "compact_messages", "disk_status", "ToolDefinition", "ToolRegistry",
@@ -30,4 +31,5 @@ __all__ = [
     "IntelligencePlanner", "IntegrationRegistry", "UnifiedIntelligenceStore",
     "ActionCenter", "GeminiGroundedSearchClient", "GoogleSearchClient", "OperationsLedger", "PublicPageFetcher",
     "QualitySuite", "ResearchLibrary",
+    "AdaptiveDecisionEngine", "AdaptiveLearningStore", "AnswerQualityGate", "append_source_list",
 ]
