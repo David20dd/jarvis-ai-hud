@@ -1,0 +1,337 @@
+/* J.A.R.V.I.S. v93 — restrained, responsive personal intelligence layer.
+   The five primary spaces remain unchanged; advanced controls live in Nexus. */
+
+:root {
+  --v93-accent: #73d9ff;
+  --v93-accent-2: #9c8cff;
+  --v93-surface: rgba(16, 22, 30, .86);
+  --v93-surface-hover: rgba(21, 29, 39, .96);
+  --v93-border: rgba(151, 184, 211, .14);
+  --v93-focus: 0 0 0 3px rgba(115, 217, 255, .16);
+}
+
+body {
+  text-rendering: optimizeLegibility;
+}
+
+.topbar {
+  gap: 18px;
+}
+
+.topbar-left,
+.topbar-actions {
+  min-width: 0;
+}
+
+.workspace-context {
+  max-width: min(34vw, 420px);
+}
+
+.project-switcher {
+  display: grid;
+  grid-template-columns: auto minmax(72px, 130px);
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 0 11px;
+  border: 1px solid var(--v93-border);
+  border-radius: 13px;
+  color: var(--muted, #8793a2);
+  background: rgba(255, 255, 255, .025);
+}
+
+.project-switcher span {
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+}
+
+.project-switcher select {
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  color: var(--text, #f1f5f9);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  text-overflow: ellipsis;
+}
+
+.project-switcher select option,
+.persona-select option {
+  color: #edf4fa;
+  background: #111821;
+}
+
+.project-switcher:focus-within,
+.composer:focus-within {
+  box-shadow: var(--v93-focus);
+}
+
+.welcome {
+  width: min(100%, 900px);
+}
+
+.welcome h1 {
+  max-width: 780px;
+  margin-inline: auto;
+  letter-spacing: -.055em;
+}
+
+.welcome-copy {
+  max-width: 720px !important;
+}
+
+.suggestions {
+  width: min(100%, 760px);
+}
+
+.suggestions > button {
+  min-height: 76px;
+  border-color: var(--v93-border);
+  background: linear-gradient(145deg, rgba(255, 255, 255, .025), rgba(255, 255, 255, .008));
+  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+}
+
+.suggestions > button:hover {
+  transform: translateY(-2px);
+  border-color: rgba(115, 217, 255, .28);
+  background: var(--v93-surface-hover);
+}
+
+.composer {
+  border-color: rgba(145, 178, 204, .2);
+  background:
+    linear-gradient(155deg, rgba(255, 255, 255, .025), transparent 44%),
+    rgba(14, 21, 29, .94);
+  box-shadow: 0 18px 54px rgba(0, 0, 0, .24);
+}
+
+.composer textarea {
+  line-height: 1.55;
+}
+
+.composer-toolbar {
+  gap: 10px;
+}
+
+.composer-tools {
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.persona-select {
+  max-width: 122px;
+}
+
+.send-btn {
+  background: linear-gradient(135deg, #76ddff, #8ea6ff);
+  box-shadow: 0 8px 22px rgba(82, 190, 237, .18);
+}
+
+.message.assistant .message-bubble {
+  max-width: min(100%, 820px);
+}
+
+.message.user .message-bubble {
+  max-width: min(82%, 680px);
+}
+
+.v93-preferences,
+.v93-projects {
+  padding: 18px;
+  border: 1px solid var(--v93-border);
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 2% 0, rgba(115, 217, 255, .065), transparent 35%),
+    rgba(13, 19, 27, .62);
+}
+
+.v93-preference-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) minmax(220px, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.v93-preference-grid > label:not(.v93-switch) {
+  display: grid;
+  gap: 7px;
+}
+
+.v93-preference-grid > label > span {
+  color: var(--muted, #8793a2);
+  font-size: 11px;
+}
+
+.v93-switch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 43px;
+  padding: 8px 12px;
+  border: 1px solid var(--v93-border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .018);
+}
+
+.v93-switch input {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--v93-accent);
+}
+
+.v93-switch span {
+  display: grid;
+  gap: 2px;
+}
+
+.v93-switch strong {
+  color: var(--text, #eff4f8);
+  font-size: 12px;
+}
+
+.v93-switch small {
+  color: var(--muted, #8793a2);
+  font-size: 9px;
+}
+
+.v93-project-create {
+  display: grid;
+  grid-template-columns: minmax(150px, .75fr) minmax(180px, 1fr) minmax(240px, 1.3fr) auto;
+  gap: 10px;
+  align-items: stretch;
+  padding: 12px;
+}
+
+.v93-project-create textarea {
+  min-height: 43px;
+  max-height: 100px;
+  resize: vertical;
+}
+
+.chat-list,
+.panel-content {
+  overscroll-behavior: contain;
+}
+
+.chat-item {
+  border: 1px solid transparent;
+}
+
+.chat-item:hover {
+  border-color: rgba(145, 178, 204, .09);
+}
+
+.chat-item.active {
+  border-color: rgba(115, 217, 255, .12);
+  background: linear-gradient(90deg, rgba(100, 207, 249, .09), rgba(255, 255, 255, .018));
+}
+
+@media (max-width: 1260px) {
+  .project-switcher span {
+    display: none;
+  }
+
+  .project-switcher {
+    grid-template-columns: minmax(72px, 105px);
+  }
+
+  .v93-preference-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .v93-project-create {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .project-switcher,
+  .v76-command-trigger {
+    display: none;
+  }
+
+  .workspace-context {
+    max-width: 52vw;
+  }
+}
+
+@media (max-width: 720px) {
+  .welcome {
+    padding-inline: 18px;
+  }
+
+  .welcome h1 {
+    font-size: clamp(36px, 11vw, 54px);
+  }
+
+  .suggestions {
+    grid-template-columns: 1fr;
+  }
+
+  .suggestions > button {
+    min-height: 66px;
+  }
+
+  .composer-zone {
+    padding-inline: 10px;
+    padding-bottom: calc(72px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .composer {
+    margin-bottom: 8px;
+  }
+
+  .composer-tools {
+    gap: 4px;
+  }
+
+  .mode-select,
+  .persona-select {
+    max-width: 112px;
+    padding-inline: 7px;
+  }
+
+  .v93-preferences,
+  .v93-projects {
+    padding: 14px;
+    border-radius: 18px;
+  }
+
+  .v93-preference-grid,
+  .v93-project-create {
+    grid-template-columns: 1fr;
+  }
+
+  .v93-preference-grid > button,
+  .v93-project-create > button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 390px) {
+  .persona-select {
+    max-width: 98px;
+  }
+
+  .composer-icon {
+    width: 38px;
+    height: 38px;
+  }
+
+  .message.user .message-bubble {
+    max-width: 92%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .suggestions > button {
+    transition: none;
+  }
+
+  .suggestions > button:hover {
+    transform: none;
+  }
+}

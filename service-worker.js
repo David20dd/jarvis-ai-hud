@@ -1,16 +1,17 @@
-const CACHE_NAME = 'jarvis-personal-intelligence-v82-1';
+const CACHE_NAME = 'jarvis-unified-intelligence-v93-1';
 const APP_SHELL = [
   './',
   './index.html',
   './404.html',
-  './static/styles.css?v=82.0',
-  './static/v76.css?v=82.0',
-  './static/v77.css?v=82.0',
-  './static/v82.css?v=82.0',
-  './static/app.js?v=82.0',
-  './static/v76.js?v=82.0',
-  './static/config.js?v=82.0',
-  './static/manifest.webmanifest?v=82.0',
+  './static/styles.css?v=93.0',
+  './static/v76.css?v=93.0',
+  './static/v77.css?v=93.0',
+  './static/v82.css?v=93.0',
+  './static/v93.css?v=93.0',
+  './static/app.js?v=93.0',
+  './static/v76.js?v=93.0',
+  './static/config.js?v=93.0',
+  './static/manifest.webmanifest?v=93.0',
   './static/favicon-v46.svg',
   './static/jarvis-reactor-v46.svg'
 ];

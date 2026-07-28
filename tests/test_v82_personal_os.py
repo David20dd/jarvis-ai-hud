@@ -109,7 +109,7 @@ def test_v82_api_contract():
         migration = client.post("/api/v82/migrate", json={"dry_run": True})
 
     assert status.status_code == 200
-    assert status.json()["version"] == "82.0.0"
+    assert status.json()["version"] == "93.0.0"
     assert status.json()["foundation"]["connected"] is True
     assert saved.status_code == 200
     assert search.status_code == 200
@@ -125,10 +125,10 @@ def test_v82_frontend_contract():
     css = Path("static/v82.css").read_text(encoding="utf-8")
     worker = Path("service-worker.js").read_text(encoding="utf-8")
 
-    assert "Personal Intelligence OS · v82" in html
-    assert "./static/v82.css?v=82.0" in html
+    assert "Unified Personal Intelligence · v93" in html
+    assert "./static/v82.css?v=93.0" in html
     assert "/api/v82/status" in app
     assert "/api/v82/memory/search" in app
     assert ".v82-foundation-grid" in css
     assert "@media (max-width: 720px)" in css
-    assert "jarvis-personal-intelligence-v82-1" in worker
+    assert "jarvis-unified-intelligence-v93-1" in worker

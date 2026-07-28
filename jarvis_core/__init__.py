@@ -28,6 +28,7 @@ from .v76 import (
     V76_STAGES,
 )
 from .v82 import DataFoundation, EmbeddingService, SCHEMA_VERSION
+from .v93 import PersonalIntelligenceOS, PERSONAS, V93_STAGES, V93_VERSION
 
 __all__ = [
     "RuntimeSupport", "compact_messages", "disk_status", "ToolDefinition", "ToolRegistry",
@@ -41,4 +42,5 @@ __all__ = [
     "AdaptiveDecisionEngine", "AdaptiveLearningStore", "AnswerQualityGate", "append_source_list",
     "CommandRouter", "ImprovementAdvisor", "UnifiedExperienceStore", "V76_STAGES",
     "DataFoundation", "EmbeddingService", "SCHEMA_VERSION",
+    "PersonalIntelligenceOS", "PERSONAS", "V93_STAGES", "V93_VERSION",
 ]

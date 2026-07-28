@@ -18,7 +18,9 @@
     api: 'jarvis_v56_api_base',
     token: 'jarvis_v56_auth_token',
     user: 'jarvis_v56_auth_user',
-    mode: 'jarvis_v56_mode'
+    mode: 'jarvis_v56_mode',
+    project: 'jarvis_v93_project',
+    persona: 'jarvis_v93_persona'
   };
   const LEGACY_KEYS = {
     client:'jarvis_v55_client', chats:'jarvis_v55_chats', active:'jarvis_v55_active_chat',
@@ -37,7 +39,8 @@
     menuBtn: $('#menuBtn'), brandBtn: $('#brandBtn'), newChatBtn: $('#newChatBtn'), mobileNewBtn: $('#mobileNewBtn'),
     mobileCompose: $('#mobileCompose'), chatList: $('#chatList'), chatSearch: $('#chatSearch'), searchChatsBtn: $('#searchChatsBtn'), historyCount: $('#historyCount'),
     chatContextMenu: $('#chatContextMenu'), chatPinLabel: $('#chatPinLabel'),
-    modeSelect: $('#modeSelect'), statusButton: $('#statusButton'), statusText: $('#statusText'), diagnosticsBtn: $('#diagnosticsBtn'),
+    modeSelect: $('#modeSelect'), personaSelect: $('#personaSelect'), projectSelect: $('#projectSelect'),
+    statusButton: $('#statusButton'), statusText: $('#statusText'), diagnosticsBtn: $('#diagnosticsBtn'),
     contextTitle: $('#contextTitle'), contextSubtitle: $('#contextSubtitle'), coreBanner: $('#coreBanner'), coreBannerText: $('#coreBannerText'), coreRetryBtn: $('#coreRetryBtn'),
     chatView: $('#chatView'), panelView: $('#panelView'), conversation: $('#conversation'), welcome: $('#welcome'), messages: $('#messages'),
     thinking: $('#thinking'), thinkingTitle: $('#thinkingTitle'), thinkingDetail: $('#thinkingDetail'),
@@ -64,6 +67,15 @@
     auth: { required: false, registration: false, authenticated: false },
     core: { online: false, version: '', busy: false },
     mode: local.getItem(KEYS.mode) || 'auto',
+    activeProject: local.getItem(KEYS.project) || 'General',
+    settings: {
+      persona: local.getItem(KEYS.persona) || 'balanced',
+      voice_enabled: true,
+      auto_speak: false,
+      voice_name: 'alloy',
+      voice_rate: 1,
+      locale: 'es-HN'
+    },
     chats: parseJSON(local.getItem(KEYS.chats), {}),
     activeChatId: local.getItem(KEYS.active) || '',
     files: [],
@@ -92,6 +104,7 @@
     ensureChat();
     bindEvents();
     els.modeSelect.value = state.mode;
+    els.personaSelect.value = state.settings.persona;
     renderChatList();
     renderConversation();
     renderAttachments();
@@ -127,6 +140,16 @@
       state.mode = els.modeSelect.value;
       local.setItem(KEYS.mode, state.mode);
       renderConversation();
+    });
+    els.personaSelect.addEventListener('change', async () => {
+      state.settings.persona = els.personaSelect.value;
+      local.setItem(KEYS.persona, state.settings.persona);
+      await saveV93Settings();
+    });
+    els.projectSelect.addEventListener('change', () => {
+      state.activeProject = els.projectSelect.value || 'General';
+      local.setItem(KEYS.project, state.activeProject);
+      els.contextSubtitle.textContent = state.activeProject === 'General' ? 'Chat general' : `Proyecto · ${state.activeProject}`;
     });
     els.composer.addEventListener('submit', event => { event.preventDefault(); state.core.busy ? stopGeneration() : sendMessage(); });
     els.messageInput.addEventListener('input', autoResize);
@@ -268,12 +291,60 @@
       updateAccountUI();
       setStatus(state.auth.required && !state.auth.authenticated ? 'Inicia sesión' : 'Núcleo operativo', state.auth.required && !state.auth.authenticated ? 'checking' : 'online');
       if (state.auth.required && !state.auth.authenticated) openAccount(true);
-      else startNotificationPolling();
+      else {
+        await loadPersonalOS();
+        startNotificationPolling();
+      }
       return true;
     } catch (error) {
       state.core.online = false;
       setStatus('Núcleo sin conexión', 'error');
       els.connectionExplanation.textContent = explainError(error);
+      return false;
+    }
+  }
+
+  async function loadPersonalOS() {
+    const sid = encodeURIComponent(backendSessionId());
+    const results = await Promise.allSettled([
+      request(`/api/v93/settings?session_id=${sid}`, {}, { attempts:1, timeoutMs:12000 }),
+      request(`/api/v93/projects?session_id=${sid}`, {}, { attempts:1, timeoutMs:12000 })
+    ]);
+    const settingsResult = results[0].status === 'fulfilled' ? results[0].value : {};
+    const projectResult = results[1].status === 'fulfilled' ? results[1].value : {};
+    if (settingsResult.settings) {
+      state.settings = { ...state.settings, ...settingsResult.settings };
+      state.settings.persona = local.getItem(KEYS.persona) || state.settings.persona || 'balanced';
+      els.personaSelect.value = state.settings.persona;
+    }
+    const projects = projectResult.projects || [];
+    const available = projects.length ? projects : [{ name:'General' }];
+    if (!available.some(project => project.name === state.activeProject)) state.activeProject = 'General';
+    els.projectSelect.innerHTML = available.map(project =>
+      `<option value="${escapeHTML(project.name)}">${escapeHTML(project.name)}</option>`
+    ).join('');
+    els.projectSelect.value = state.activeProject;
+    els.contextSubtitle.textContent = state.activeProject === 'General' ? 'Chat general' : `Proyecto · ${state.activeProject}`;
+  }
+
+  async function saveV93Settings(overrides = {}) {
+    state.settings = { ...state.settings, ...overrides };
+    try {
+      const payload = {
+        session_id: backendSessionId(),
+        persona: state.settings.persona,
+        voice_enabled: Boolean(state.settings.voice_enabled),
+        auto_speak: Boolean(state.settings.auto_speak),
+        voice_name: state.settings.voice_name || 'alloy',
+        voice_rate: Number(state.settings.voice_rate || 1),
+        locale: state.settings.locale || 'es-HN'
+      };
+      const data = await request('/api/v93/settings', { method:'PUT', body:JSON.stringify(payload) });
+      state.settings = { ...state.settings, ...(data.settings || {}) };
+      local.setItem(KEYS.persona, state.settings.persona);
+      return true;
+    } catch (error) {
+      toast(`No se guardó la preferencia: ${explainError(error)}`);
       return false;
     }
   }
@@ -608,7 +679,8 @@
           session_id:backendSessionId(),
           files,
           mode:state.mode,
-          project_name:'General',
+          project_name:state.activeProject,
+          persona:state.settings.persona,
           request_id:uid('request')
         })
       }, { attempts:2, timeoutMs:65000 });
@@ -618,6 +690,9 @@
         model:data.model || '', route:data.route || data.mode || '', cached:Boolean(data.cached),
         complexity:data.intelligence?.complexity || '', adaptive:data.adaptive || {}
       });
+      if (state.settings.voice_enabled && state.settings.auto_speak) {
+        speakText(reply).catch(() => {});
+      }
       setStatus('Núcleo operativo', 'online');
     } catch (error) {
       if (error?.name === 'AbortError') addMessage('assistant', 'Generación detenida por el usuario.', { error:true, route:'cancelled' });
@@ -655,14 +730,69 @@
     const original=button.innerHTML;
     button.disabled=true;button.innerHTML=`${icon('volume')}<span>Preparando…</span>`;
     try{
-      const headers=new Headers({'Content-Type':'application/json'});
-      if(state.token)headers.set('Authorization',`Bearer ${state.token}`);
-      const response=await fetch(apiUrl('/api/voice/speech'),{method:'POST',headers,body:JSON.stringify({text:String(message.content||'').slice(0,4000)})});
-      if(!response.ok){let detail='Voz no disponible';try{detail=(await response.json()).detail||detail;}catch{}throw new Error(detail);}
-      const url=URL.createObjectURL(await response.blob()),audio=new Audio(url);
-      audio.onended=()=>URL.revokeObjectURL(url);await audio.play();button.innerHTML=`${icon('volume')}<span>Reproduciendo</span>`;
+      await speakText(String(message.content||''));
+      button.innerHTML=`${icon('volume')}<span>Reproduciendo</span>`;
     }catch(error){toast(error.message||'No fue posible generar voz.');}
     finally{setTimeout(()=>{button.disabled=false;button.innerHTML=original;},900);}
+  }
+
+  function speechText(value) {
+    return String(value || '')
+      .replace(/```[\s\S]*?```/g, ' bloque de código ')
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+      .replace(/[*_#>`~$\\]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 4000);
+  }
+
+  function browserSpeech(value) {
+    return new Promise((resolve, reject) => {
+      const synth = window.speechSynthesis;
+      const text = speechText(value);
+      if (!synth || !window.SpeechSynthesisUtterance || !text) {
+        reject(new Error('Este navegador no permite lectura por voz.'));
+        return;
+      }
+      synth.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = state.settings.locale || 'es-HN';
+      utterance.rate = Math.max(.7, Math.min(Number(state.settings.voice_rate || 1), 1.4));
+      const voices = synth.getVoices();
+      const language = utterance.lang.toLowerCase().split('-')[0];
+      utterance.voice = voices.find(voice => voice.lang.toLowerCase() === utterance.lang.toLowerCase())
+        || voices.find(voice => voice.lang.toLowerCase().startsWith(language))
+        || null;
+      utterance.onend = () => resolve('browser');
+      utterance.onerror = event => reject(new Error(event.error === 'canceled' ? 'Lectura cancelada.' : 'La voz del navegador falló.'));
+      synth.speak(utterance);
+    });
+  }
+
+  async function speakText(value) {
+    if (!state.settings.voice_enabled) throw new Error('La lectura por voz está desactivada.');
+    const clean = speechText(value);
+    if (!clean) throw new Error('No hay texto legible.');
+    try {
+      const headers = new Headers({'Content-Type':'application/json'});
+      if (state.token) headers.set('Authorization', `Bearer ${state.token}`);
+      const response = await fetch(apiUrl('/api/voice/speech'), {
+        method:'POST', headers, body:JSON.stringify({text:clean})
+      });
+      if (!response.ok) throw new Error('Voz remota no disponible');
+      const url = URL.createObjectURL(await response.blob());
+      const audio = new Audio(url);
+      await new Promise((resolve, reject) => {
+        audio.onended = resolve;
+        audio.onerror = reject;
+        audio.play().catch(reject);
+      });
+      URL.revokeObjectURL(url);
+      return 'remote';
+    } catch {
+      return browserSpeech(clean);
+    }
   }
 
   function setBusy(busy, detail = '') {
@@ -744,7 +874,7 @@
 
   const PANEL_INFO = {
     knowledge:['CONOCIMIENTO','Biblioteca y memoria'], missions:['AUTONOMÍA','Misiones'],
-    nexus:['CONTROL','Nexus v82'], channels:['TELEGRAM','Asistente móvil'],
+    nexus:['CONTROL','Nexus v93'], channels:['TELEGRAM','Asistente móvil'],
     library:['CONOCIMIENTO','Biblioteca'], memory:['CONTEXTO','Memoria'], system:['ESTADO','Diagnóstico del núcleo']
   };
 
@@ -867,7 +997,7 @@
       const query=$('#researchQuery').value.trim(); if(!query)return toast('Escribe un tema para investigar.');
       const button=$('#runResearch'), output=$('#researchResult'); button.disabled=true; button.textContent='Investigando…'; output.hidden=false; output.innerHTML='<div class="empty-state">Buscando, leyendo y verificando fuentes…</div>';
       try {
-        const pack=await request('/api/research/ingest',{method:'POST',body:JSON.stringify({session_id:backendSessionId(),query,project_name:'General',max_sources:Number($('#researchDepth').value),fetch_pages:true,page_limit:4})},{attempts:1,timeoutMs:120000});
+        const pack=await request('/api/research/ingest',{method:'POST',body:JSON.stringify({session_id:backendSessionId(),query,project_name:state.activeProject,max_sources:Number($('#researchDepth').value),fetch_pages:true,page_limit:4})},{attempts:1,timeoutMs:120000});
         const evidence=pack.evidence||[];
         output.innerHTML=`<div class="research-summary"><strong>${evidence.length} fuentes incorporadas</strong><span>${Number(pack.official_or_primary_count||0)} prioritarias · ${Number(pack.pages_fetched||0)} páginas leídas</span></div><div class="source-grid">${evidence.slice(0,8).map((item,index)=>`<a class="source-card" href="${escapeHTML(item.url||'#')}" target="_blank" rel="noopener noreferrer"><span>${String(index+1).padStart(2,'0')}</span><div><strong>${escapeHTML(item.title||'Fuente')}</strong><small>${escapeHTML(item.provider||'web')} · calidad ${Math.round(Number(item.quality||0)*100)}%</small></div></a>`).join('')}</div>`;
         toast('Investigación guardada en la memoria semántica');
@@ -889,7 +1019,7 @@
     $('#saveFact')?.addEventListener('click', async () => {
       const subject=$('#factSubject').value.trim(), object_text=$('#factObject').value.trim();
       if (!subject || !object_text) return toast('Completa el tema y la información.');
-      await request('/api/knowledge/facts', { method:'POST', body:JSON.stringify({ session_id:backendSessionId(), project_name:'General', subject, predicate:'relacionado con', object_text, confidence:.75, verified:false }) });
+      await request('/api/knowledge/facts', { method:'POST', body:JSON.stringify({ session_id:backendSessionId(), project_name:state.activeProject, subject, predicate:'relacionado con', object_text, confidence:.75, verified:false }) });
       toast('Conocimiento guardado'); renderKnowledge();
     });
     $('#saveQuickMemory')?.addEventListener('click', async () => {
@@ -937,17 +1067,35 @@
       request(`/api/intelligence/decisions?session_id=${sid}&limit=8`),
       request(`/api/actions?session_id=${sid}&limit=20`), request(`/api/operations/v65?session_id=${sid}`),
       request(`/api/adaptive/status?session_id=${sid}&limit=8`),
-      request(`/api/v82/status?session_id=${sid}`)
+      request(`/api/v82/status?session_id=${sid}`),
+      request(`/api/v93/status?session_id=${sid}`)
     ]);
     const core=valueOf(results[0]), integrations=valueOf(results[1]).integrations||[], artifacts=valueOf(results[2]).artifacts||[];
     const automations=valueOf(results[3]).automations||[], decisions=valueOf(results[4]).decisions||[];
     const actions=valueOf(results[5]).actions||[], operations=valueOf(results[6]), adaptive=valueOf(results[7]);
-    const v82=valueOf(results[8]), foundation=v82.foundation||{}, foundationCounts=foundation.counts||{};
+    const v82=valueOf(results[8]), v93=valueOf(results[9]), foundation=v82.foundation||{}, foundationCounts=foundation.counts||{};
+    const v93Projects=v93.projects||{}, v93Quality=v93.quality||{}, v93Voice=v93.voice||{};
     const providers=core.providers?.configured||[], intelligence=core.intelligence||{};
     const pendingActions=actions.filter(item=>item.status==='pending_approval');
     const latestQuality=operations.latest||{};
     els.panelContent.innerHTML=`
-      <div class="nexus-hero panel-card"><div><span class="card-kicker">PERSONAL INTELLIGENCE OS · v82</span><h3>Inteligencia, evidencia y acción bajo tu control</h3><p>JARVIS decide cuándo consultar memoria, documentos o internet; verifica actualidad y mantiene las acciones sensibles bajo aprobación.</p></div><button class="soft-btn" id="nexusDiagnostics">Diagnóstico</button></div>
+      <div class="nexus-hero panel-card"><div><span class="card-kicker">UNIFIED PERSONAL INTELLIGENCE · v93</span><h3>Una inteligencia personal que entiende el contexto</h3><p>JARVIS combina perfiles de respuesta, proyectos, memoria, voz, investigación y ejecución segura sin saturar la experiencia.</p></div><button class="soft-btn" id="nexusDiagnostics">Diagnóstico</button></div>
+      <section class="panel-section v93-preferences">
+        <div class="panel-section-head"><div><span class="card-kicker">EXPERIENCIA PERSONAL</span><h3>Respuesta y voz</h3></div><span class="status-tag ok">${Math.round(Number(v93Quality.average_score||0)*100)}% calidad</span></div>
+        <div class="v93-preference-grid">
+          <label><span>Perfil de respuesta</span><select class="text-input" id="v93Persona">${[
+            ['balanced','Equilibrado'],['precise','Preciso'],['analytical','Analítico'],
+            ['teacher','Tutor'],['creative','Creativo'],['executive','Ejecutivo']
+          ].map(([value,label])=>`<option value="${value}" ${state.settings.persona===value?'selected':''}>${label}</option>`).join('')}</select></label>
+          <label><span>Idioma de voz</span><select class="text-input" id="v93Locale"><option value="es-HN" ${state.settings.locale==='es-HN'?'selected':''}>Español · Honduras</option><option value="es-MX" ${state.settings.locale==='es-MX'?'selected':''}>Español · Latinoamérica</option><option value="en-US" ${state.settings.locale==='en-US'?'selected':''}>English · US</option></select></label>
+          <label class="v93-switch"><input type="checkbox" id="v93AutoSpeak" ${state.settings.auto_speak?'checked':''}/><span><strong>Leer respuestas</strong><small>${v93Voice.speech?'Voz neural + respaldo del navegador':'Voz del navegador disponible'}</small></span></label>
+          <button class="soft-btn" id="v93SavePreferences">Guardar experiencia</button>
+        </div>
+      </section>
+      <section class="panel-section v93-projects">
+        <div class="panel-section-head"><div><span class="card-kicker">PROYECTOS</span><h3>Contexto separado para cada objetivo</h3></div><span class="status-tag">${Number(v93Projects.active||0)} activos</span></div>
+        <article class="panel-card v93-project-create"><input class="text-input" id="v93ProjectName" placeholder="Nombre del proyecto"/><input class="text-input" id="v93ProjectDescription" placeholder="Descripción breve"/><textarea class="text-input" id="v93ProjectInstructions" placeholder="Instrucciones opcionales para JARVIS"></textarea><button class="primary-btn" id="v93CreateProject">Crear proyecto</button></article>
+      </section>
       <section class="panel-section v82-foundation">
         <div class="panel-section-head"><div><span class="card-kicker">DATA FOUNDATION</span><h3>Tu información permanece disponible</h3></div><span class="status-tag ${foundation.connected?'ok':'warn'}">${foundation.connected?'Conectada':'Modo compatible'}</span></div>
         <div class="v82-foundation-grid">
@@ -973,6 +1121,31 @@
       <section class="panel-section"><div class="panel-section-head"><h3>Resultados interactivos</h3><button class="soft-btn" id="newArtifact">Crear lista</button></div><div class="artifact-grid">${artifacts.length?artifacts.map(renderArtifactCard).join(''):'<div class="empty-state">Crea tablas, gráficas, listas y cronogramas seguros.</div>'}</div></section>
       <section class="panel-section"><div class="panel-section-head"><h3>Decisiones recientes</h3><span class="status-tag">${decisions.length}</span></div><div class="list-stack">${decisions.length?decisions.map(item=>`<article class="list-row"><div><strong>${escapeHTML(item.objective)}</strong><small>${escapeHTML(item.intent)} · ${escapeHTML(item.complexity)} · ${escapeHTML(item.status)}</small></div><span class="status-tag ${item.status==='completed'?'ok':'warn'}">${Math.round(Number(item.quality_score||0)*100)}%</span></article>`).join(''):'<div class="empty-state">Las decisiones aparecerán al conversar o ejecutar misiones.</div>'}</div></section>`;
     $('#nexusDiagnostics')?.addEventListener('click',()=>openView('system'));
+    $('#v93SavePreferences')?.addEventListener('click',async()=>{
+      const button=$('#v93SavePreferences');button.disabled=true;button.textContent='Guardando…';
+      const saved=await saveV93Settings({
+        persona:$('#v93Persona').value,
+        locale:$('#v93Locale').value,
+        auto_speak:$('#v93AutoSpeak').checked,
+        voice_enabled:true
+      });
+      if(saved){els.personaSelect.value=state.settings.persona;toast('Experiencia actualizada');}
+      button.disabled=false;button.textContent='Guardar experiencia';
+    });
+    $('#v93CreateProject')?.addEventListener('click',async()=>{
+      const name=$('#v93ProjectName').value.trim();
+      if(!name)return toast('Escribe el nombre del proyecto.');
+      const button=$('#v93CreateProject');button.disabled=true;button.textContent='Creando…';
+      try{
+        await request('/api/v93/projects',{method:'POST',body:JSON.stringify({
+          session_id:backendSessionId(),name,
+          description:$('#v93ProjectDescription').value.trim(),
+          instructions:$('#v93ProjectInstructions').value.trim(),color:'cyan'
+        })});
+        state.activeProject=name;local.setItem(KEYS.project,name);
+        await loadPersonalOS();toast('Proyecto creado y activado');renderNexus();
+      }catch(error){toast(explainError(error));button.disabled=false;button.textContent='Crear proyecto';}
+    });
     $('#v82MigrationPreview')?.addEventListener('click',async()=>{
       const button=$('#v82MigrationPreview'),output=$('#v82FoundationResult');button.disabled=true;button.textContent='Analizando…';
       try{
@@ -1003,7 +1176,7 @@
       const objective=$('#nexusObjective').value.trim(); if(!objective)return toast('Escribe un objetivo concreto.');
       const button=execute?$('#runNexusPlan'):$('#previewNexusPlan'); button.disabled=true; button.textContent=execute?'Iniciando…':'Planificando…';
       try{
-        const data=await request(execute?'/api/intelligence/execute':'/api/intelligence/plan',{method:'POST',body:JSON.stringify({session_id:backendSessionId(),objective,mode:$('#nexusMode').value,project_name:'General',title:'Misión JARVIS'})},{timeoutMs:30000});
+        const data=await request(execute?'/api/intelligence/execute':'/api/intelligence/plan',{method:'POST',body:JSON.stringify({session_id:backendSessionId(),objective,mode:$('#nexusMode').value,project_name:state.activeProject,title:'Misión JARVIS'})},{timeoutMs:30000});
         const plan=data.plan||{}; $('#nexusPlanResult').hidden=false; $('#nexusPlanResult').innerHTML=`<strong>${escapeHTML(plan.complexity||'low')} · ${Number(plan.steps?.length||0)} etapas</strong><p>Tiempo objetivo: ${Number(plan.budget?.time_seconds||0)} s · rutas: ${(plan.route||[]).map(item=>escapeHTML(item.provider)).join(' → ')||'herramientas locales'}</p>`;
         if(execute){toast('Misión iniciada con checkpoints');setTimeout(()=>openView('missions'),650);}
       }catch(error){toast(explainError(error));}finally{button.disabled=false;button.textContent=execute?'Ejecutar':'Ver plan';}
@@ -1055,7 +1228,7 @@
       const objective = $('#missionObjective').value.trim(); if (!objective) return;
       const button=$('#createMission'); button.disabled=true; button.textContent='Creando…';
       try {
-        await request('/api/intelligence/execute', { method:'POST', body:JSON.stringify({ session_id:backendSessionId(), objective, mode:$('#missionMode').value, project_name:'General', title:'Misión JARVIS' }) }, { timeoutMs:30000 });
+        await request('/api/intelligence/execute', { method:'POST', body:JSON.stringify({ session_id:backendSessionId(), objective, mode:$('#missionMode').value, project_name:state.activeProject, title:'Misión JARVIS' }) }, { timeoutMs:30000 });
         toast('Misión iniciada con presupuesto y checkpoints'); renderMissions();
       } catch(error) { toast(explainError(error)); button.disabled=false; button.textContent='Iniciar misión'; }
     });
@@ -1241,7 +1414,7 @@
   function startVoiceInput() {
     const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
     if (!Recognition) return toast('El dictado no está disponible en este navegador.');
-    const recognition=new Recognition(); recognition.lang='es-HN'; recognition.interimResults=false;
+    const recognition=new Recognition(); recognition.lang=state.settings.locale||'es-HN'; recognition.interimResults=false;
     recognition.onstart=()=>{ els.voiceBtn.classList.add('listening'); els.voiceBtn.setAttribute('aria-label','Escuchando; pulsa para detener'); };
     recognition.onresult=event=>{ els.messageInput.value=`${els.messageInput.value} ${event.results[0][0].transcript}`.trim(); autoResize(); };
     recognition.onerror=()=>toast('No fue posible utilizar el micrófono.');
@@ -1256,7 +1429,7 @@
 
   function registerServiceWorker() {
     if (!('serviceWorker' in navigator) || location.protocol === 'file:') return;
-    navigator.serviceWorker.register('./service-worker.js?v=82.0').catch(()=>{});
+    navigator.serviceWorker.register('./service-worker.js?v=93.0').catch(()=>{});
   }
 })();
 

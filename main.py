@@ -72,6 +72,9 @@ from jarvis_core import (
     V76_STAGES,
     DataFoundation,
     EmbeddingService,
+    PersonalIntelligenceOS,
+    PERSONAS,
+    V93_STAGES,
     append_source_list,
     compact_messages,
     disk_status,
@@ -113,8 +116,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger("jarvis")
 
-APP_VERSION = "82.0.0"
-APP_EDITION = "Personal Intelligence OS"
+APP_VERSION = "93.0.0"
+APP_EDITION = "Unified Personal Intelligence"
 
 DB_FILE = os.getenv("JARVIS_DB_FILE", "jarvis_memory.db").strip() or "jarvis_memory.db"
 BASE_DIR = Path(__file__).resolve().parent
@@ -309,6 +312,7 @@ data_foundation = DataFoundation(
     embeddings=embedding_service,
     persistent_declared=PERSISTENT_STORAGE_DECLARED,
 )
+personal_os = PersonalIntelligenceOS(data_foundation)
 
 
 def _provider_models(names: List[str], provider: str) -> List[ProviderModel]:
@@ -657,6 +661,39 @@ def _maintenance_cycle() -> Dict[str, Any]:
             dispatched_automations += 1
         except Exception as exc:
             automation_store.mark_error(item["id"], safe_error_text(exc))
+    dispatched_monitors = 0
+    for monitor in personal_os.claim_due_monitors(20):
+        try:
+            sid = safe_session_id(str(monitor.get("session_id") or "default_session"))
+            query = (
+                "MONITOR PROGRAMADO JARVIS\n"
+                f"Título: {monitor.get('title')}\n"
+                f"Proyecto: {monitor.get('project_name') or 'General'}\n"
+                f"Investigación: {monitor.get('query')}\n\n"
+                "Busca información reciente, contrasta fuentes, indica cambios desde la ejecución "
+                "anterior y termina con un resumen accionable."
+            )
+            if str(monitor.get("channel") or "") == "telegram" and sid.startswith("telegram:"):
+                chat_id = sid.split(":", 1)[1]
+                result = _run_channel_mission(sid, query, "telegram")
+                match = re.search(r"^ID:\s*(\S+)", result, re.MULTILINE)
+                if match:
+                    telegram_preferences.link_mission(match.group(1), chat_id)
+                telegram_channel.send_text(
+                    chat_id,
+                    f"Monitor iniciado: {monitor.get('title')}\n\n{result}",
+                    reply_markup=_telegram_menu_markup(),
+                )
+            else:
+                job_id = _create_job_record(
+                    sid,
+                    f"Monitor: {monitor.get('title')}",
+                    query,
+                )
+                _submit_job(job_id)
+            dispatched_monitors += 1
+        except Exception:
+            logger.warning("No se pudo despachar el monitor %s", monitor.get("id"), exc_info=True)
     telegram_notifications = 0
     terminal_states = {"completed", "failed", "cancelled", "rejected"}
     if telegram_channel.configured:
@@ -686,6 +723,7 @@ def _maintenance_cycle() -> Dict[str, Any]:
         "wal_checkpoint": checkpoint,
         "recovered_jobs": recovered,
         "dispatched_automations": dispatched_automations,
+        "dispatched_monitors": dispatched_monitors,
         "telegram_notifications": telegram_notifications,
     }
 
@@ -719,10 +757,11 @@ async def lifespan(_: FastAPI):
     init_db()
     try:
         data_foundation.init_schema()
+        personal_os.init_schema()
     except Exception:
         # The legacy SQLite core remains available if an optional PostgreSQL
         # service is misconfigured. The deep health endpoint reports the cause.
-        logger.exception("La capa de datos v82 no pudo inicializarse; continúa el núcleo compatible.")
+        logger.exception("La capa de datos v93 no pudo inicializarse; continúa el núcleo compatible.")
     owner_bootstrap = {"created": False, "configured": bool(OWNER_EMAIL and OWNER_NAME and OWNER_PASSWORD)}
     if owner_bootstrap["configured"] and identity_store.user_count() == 0:
         try:
@@ -741,7 +780,7 @@ async def lifespan(_: FastAPI):
     recovered_workflows = _recover_interrupted_workflows()
     recovered_channels = _recover_channel_events()
     logger.info(
-        "J.A.R.V.I.S. v82 iniciado | public_mode=%s | redis=%s | owner_bootstrap=%s | jobs_recuperados=%s | workflows_recuperados=%s | canales_recuperados=%s",
+        "J.A.R.V.I.S. v93 iniciado | public_mode=%s | redis=%s | owner_bootstrap=%s | jobs_recuperados=%s | workflows_recuperados=%s | canales_recuperados=%s",
         PUBLIC_MODE,
         bool(REDIS_URL),
         owner_bootstrap.get("created", False),
@@ -754,11 +793,11 @@ async def lifespan(_: FastAPI):
     JOB_EXECUTOR.shutdown(wait=False, cancel_futures=True)
     provider_gateway.close()
     data_foundation.close()
-    logger.info("J.A.R.V.I.S. v82 detenido")
+    logger.info("J.A.R.V.I.S. v93 detenido")
 
 
 app = FastAPI(
-    title=f"J.A.R.V.I.S. {APP_EDITION} v82",
+    title=f"J.A.R.V.I.S. {APP_EDITION} v93",
     version=APP_VERSION,
     lifespan=lifespan,
 )
@@ -926,6 +965,7 @@ class ChatInput(BaseModel):
     files: List[ArchivoInput] = Field(default_factory=list)
     mode: str = "auto"
     project_name: str = "General"
+    persona: str = ""
     request_id: Optional[str] = None
 
 
@@ -1221,6 +1261,38 @@ class V82TaskInput(BaseModel):
 
 class V82MigrationInput(BaseModel):
     dry_run: bool = True
+
+
+class V93SettingsInput(BaseModel):
+    session_id: str = "default_session"
+    persona: str = Field(default="balanced", pattern="^(balanced|precise|analytical|teacher|creative|executive)$")
+    voice_enabled: bool = True
+    auto_speak: bool = False
+    voice_name: str = Field(default="alloy", max_length=40)
+    voice_rate: float = Field(default=1.0, ge=0.7, le=1.4)
+    locale: str = Field(default="es-HN", max_length=20)
+
+
+class V93ProjectInput(BaseModel):
+    session_id: str = "default_session"
+    name: str = Field(min_length=1, max_length=120)
+    description: str = Field(default="", max_length=2000)
+    instructions: str = Field(default="", max_length=8000)
+    color: str = Field(default="cyan", max_length=30)
+
+
+class V93MonitorInput(BaseModel):
+    session_id: str = "default_session"
+    title: str = Field(min_length=1, max_length=300)
+    query: str = Field(min_length=1, max_length=12000)
+    cadence: str = Field(pattern="^(daily|weekly|every_[1-9][0-9]*_hours)$")
+    project_name: str = Field(default="General", max_length=120)
+    channel: str = Field(default="telegram", pattern="^(telegram|web)$")
+
+
+class V93MonitorStatusInput(BaseModel):
+    session_id: str = "default_session"
+    status: str = Field(pattern="^(active|paused|cancelled)$")
 
 
 # -----------------------------------------------------------------------------
@@ -2541,7 +2613,22 @@ def construir_prompt_sistema(
     if mode not in {"auto", "fast", "research", "math", "writing"}:
         mode = "auto"
     intent = (intent or "general").strip().lower()[:40]
-    del session_id
+    response_profile = ""
+    project_instructions = ""
+    try:
+        response_profile = personal_os.response_guidance(safe_session_id(session_id))
+        project_context = personal_os.project_context(
+            safe_session_id(session_id), project_name, ""
+        )
+        project = project_context.get("project") or {}
+        if project.get("instructions"):
+            project_instructions = (
+                "\nINSTRUCCIONES DEL PROYECTO\n"
+                + str(project["instructions"])[:8000]
+            )
+    except Exception:
+        logger.debug("No se pudo cargar el contexto personal v93", exc_info=True)
+        response_profile = PERSONAS["balanced"]["guidance"]
 
     return f"""
 Eres J.A.R.V.I.S., un asistente inteligente, operativo y accesible para cualquier persona.
@@ -2549,9 +2636,16 @@ Hora local de Honduras: {now.strftime('%Y-%m-%d %H:%M')}.
 Proyecto activo: {project_name}.
 Modo solicitado: {mode}.
 Intención detectada: {intent}.
+{response_profile}
+{project_instructions}
 
 REGLAS OPERATIVAS
-- Responde en español claro, directo y verificable.
+- Responde como un asistente conversacional de máxima utilidad: entiende la intención, resuelve primero
+  lo solicitado y adapta extensión, tono y estructura al contexto.
+- Responde en español claro, natural, directo y verificable, salvo que el usuario pida otro idioma.
+- Empieza por el resultado o la conclusión. Explica el proceso solo cuando aporte valor.
+- Si faltan datos no críticos, avanza con supuestos explícitos. Pregunta únicamente cuando una decisión
+  del usuario cambie materialmente el resultado.
 - Usa herramientas cuando mejoren exactitud o actualidad; no afirmes que las usaste si no se ejecutaron.
 - No menciones nombres internos de funciones salvo que el usuario solicite detalles técnicos.
 - No inventes datos, resultados, fuentes ni capacidades.
@@ -4052,6 +4146,7 @@ def _channel_help(channel: str) -> str:
         "• /tasks — consultar misiones recientes\n"
         "• /stop ID — cancelar una misión\n"
         "• /voice on|off — activar o desactivar respuestas de voz\n"
+        "• /style — ver o cambiar el perfil de respuesta\n"
         "• /export — descargar la conversación\n\n"
         "Las acciones externas o sensibles siguen requiriendo confirmación."
     )
@@ -4068,6 +4163,7 @@ def _telegram_menu_markup() -> Dict[str, Any]:
                 {"text": "📋 Misiones", "callback_data": "cmd:tasks"},
                 {"text": "🔊 Voz", "callback_data": "cmd:voice"},
             ],
+            [{"text": "🎛 Perfil de respuesta", "callback_data": "cmd:style"}],
             [{"text": "📤 Exportar conversación", "callback_data": "cmd:export"}],
         ]
     }
@@ -4105,7 +4201,7 @@ def _telegram_command(chat_id: str, session_id: str, text: str) -> Optional[Dict
     lowered = raw.lower()
     callback_map = {
         "cmd:new": "/new", "cmd:status": "/status", "cmd:tasks": "/tasks",
-        "cmd:voice": "/voice status", "cmd:export": "/export",
+        "cmd:voice": "/voice status", "cmd:style": "/style", "cmd:export": "/export",
     }
     raw = callback_map.get(lowered, raw)
     lowered = raw.lower()
@@ -4113,6 +4209,27 @@ def _telegram_command(chat_id: str, session_id: str, text: str) -> Optional[Dict
         return {"text": _channel_help("telegram"), "reply_markup": _telegram_menu_markup()}
     if lowered == "/tasks":
         return {"text": _telegram_tasks(session_id), "reply_markup": _telegram_menu_markup()}
+    if lowered.startswith("/style"):
+        value = lowered[len("/style"):].strip()
+        if not value:
+            current = personal_os.settings(session_id)["persona"]
+            options = ", ".join(PERSONAS)
+            return {
+                "text": (
+                    f"Perfil actual: {PERSONAS[current]['label']}.\n"
+                    f"Opciones: {options}\n\n"
+                    "Ejemplo: /style analytical"
+                )
+            }
+        if value not in PERSONAS:
+            return {"text": "Perfil no reconocido. Usa /style para ver las opciones."}
+        saved = personal_os.save_settings(session_id, {"persona": value})
+        return {
+            "text": (
+                f"Perfil cambiado a {PERSONAS[saved['persona']]['label']}. "
+                f"{PERSONAS[saved['persona']]['description']}"
+            )
+        }
     if lowered.startswith("/voice"):
         value = lowered[len("/voice"):].strip()
         if value in {"on", "activar", "si", "sí"}:
@@ -4498,7 +4615,7 @@ def channels_status(request: Request):
         "preferences": telegram_preferences.status(),
         "webhooks": {"telegram": "/api/channels/telegram/webhook"},
         "commands": {
-            "telegram": ["/menu", "/status", "/new", "/mission objetivo", "/tasks", "/stop ID", "/voice on|off", "/export"],
+            "telegram": ["/menu", "/status", "/new", "/mission objetivo", "/tasks", "/stop ID", "/voice on|off", "/style", "/export"],
         },
     }
 
@@ -4515,6 +4632,7 @@ def telegram_register_webhook(data: TelegramWebhookSetupInput, request: Request)
             {"command": "mission", "description": "Crear una misión autónoma"},
             {"command": "tasks", "description": "Consultar misiones recientes"},
             {"command": "voice", "description": "Configurar respuestas de voz"},
+            {"command": "style", "description": "Elegir el perfil de respuesta"},
             {"command": "export", "description": "Exportar la conversación"},
         ])
         identity = _identity_for_request(request)
@@ -4672,6 +4790,11 @@ async def consultar_jarvis(data: ChatInput, request: Request):
     )[:160]
     enforce_request_guard(request)
     sid = safe_session_id(data.session_id)
+    if data.persona:
+        try:
+            personal_os.save_settings(sid, {"persona": data.persona})
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
     replay = request_result_get(request_id, sid)
     if replay is not None:
         return replay
@@ -4814,6 +4937,16 @@ async def consultar_jarvis(data: ChatInput, request: Request):
             "budget": intelligence_summary.get("budget", {}),
             "recovery": intelligence_summary.get("recovery", []),
         }
+        try:
+            result["quality_v93"] = await asyncio.to_thread(
+                personal_os.evaluate_response,
+                sid,
+                prompt,
+                result["reply"],
+                {"verified": bool(result.get("verified"))},
+            )
+        except Exception:
+            logger.debug("No se pudo registrar la evaluación v93", exc_info=True)
         response_payload = {"status": "degraded" if result.get("degraded") else "success", **result}
         await asyncio.to_thread(request_result_set, request_id, sid, response_payload)
         record_telemetry("chat:request", "success", (time.perf_counter() - started_at) * 1000, request_id=request_id, session_id=sid, detail=result.get("route", ""))
@@ -6776,7 +6909,7 @@ def dashboard(session_id: str):
         "models": provider_status(),
         "providers": resilience_provider_status(),
         "database": {"ok": True, "path": DB_FILE},
-        "features": ["personal_intelligence_os_v82", "postgresql_data_foundation", "sqlite_fallback", "conversation_mirroring", "semantic_memory_v82", "durable_maintenance_tasks", "legacy_data_migration", "refined_experience_v77", "owner_bootstrap_recovery", "persistence_diagnostics", "unified_experience_v76", "global_command_palette", "context_workspace", "persistent_ui_preferences", "supervised_improvement_advisor", "gemini_google_search_grounding", "google_programmable_search", "bounded_public_page_ingestion", "traceable_research_library", "web_semantic_indexing", "multimodal_web_chat", "voice_transcription", "auditable_action_center", "approved_action_execution", "persistent_operations_ledger", "continuous_quality_suite", "executable_workflows", "persistent_workflow_steps", "approval_inbox", "evidence_ledger", "hybrid_semantic_memory", "deep_research_pipeline", "persistent_automations", "optional_mcp_client", "isolated_code_lab", "evaluation_core", "execution_planner", "resolution_trace", "local_verifier", "autonomous_agent", "smart_intent_router", "multi_provider_router", "anthropic_messages_api", "provider_capability_matrix", "optional_quality_council", "structured_tool_registry", "professional_mission_orchestrator", "specialist_team_selection", "quality_gates", "tool_calling", "persistent_background_jobs", "pause_resume_cancel", "multi_level_cache", "singleflight_deduplication", "circuit_breakers", "context_compaction", "performance_telemetry", "deep_health_checks", "project_workspaces", "memory", "documents", "reminders", "knowledge_search", "self_check"],
+        "features": ["unified_personal_intelligence_v93", "response_personas", "project_contexts", "voice_browser_fallback", "telegram_voice_and_style", "response_quality_tracking", "research_monitors", "personal_data_export", "personal_intelligence_os_v82", "postgresql_data_foundation", "sqlite_fallback", "conversation_mirroring", "semantic_memory_v82", "durable_maintenance_tasks", "legacy_data_migration", "refined_experience_v77", "owner_bootstrap_recovery", "persistence_diagnostics", "unified_experience_v76", "global_command_palette", "context_workspace", "persistent_ui_preferences", "supervised_improvement_advisor", "gemini_google_search_grounding", "google_programmable_search", "bounded_public_page_ingestion", "traceable_research_library", "web_semantic_indexing", "multimodal_web_chat", "voice_transcription", "auditable_action_center", "approved_action_execution", "persistent_operations_ledger", "continuous_quality_suite", "executable_workflows", "persistent_workflow_steps", "approval_inbox", "evidence_ledger", "hybrid_semantic_memory", "deep_research_pipeline", "persistent_automations", "optional_mcp_client", "isolated_code_lab", "evaluation_core", "execution_planner", "resolution_trace", "local_verifier", "autonomous_agent", "smart_intent_router", "multi_provider_router", "anthropic_messages_api", "provider_capability_matrix", "optional_quality_council", "structured_tool_registry", "professional_mission_orchestrator", "specialist_team_selection", "quality_gates", "tool_calling", "persistent_background_jobs", "pause_resume_cancel", "multi_level_cache", "singleflight_deduplication", "circuit_breakers", "context_compaction", "performance_telemetry", "deep_health_checks", "project_workspaces", "memory", "documents", "reminders", "knowledge_search", "self_check"],
         "runtime": runtime.snapshot(),
         "jobs_health": _job_health(),
     }
@@ -6803,6 +6936,15 @@ def self_check():
     checks["static_ui"] = {"ok": INDEX_FILE.exists()}
     checks["identity_persistence"] = {"ok": True, **persistence_status()}
     checks["data_foundation_v82"] = {"ok": bool(data_foundation.status().get("connected")), **data_foundation.status()}
+    try:
+        v93_core = personal_os.status("self_check")
+        checks["personal_intelligence_v93"] = {
+            "ok": bool(v93_core.get("foundation", {}).get("connected")),
+            "projects": v93_core.get("projects", {}),
+            "personas": len(v93_core.get("personas", [])),
+        }
+    except Exception as exc:
+        checks["personal_intelligence_v93"] = {"ok": False, "detail": safe_error_text(exc)}
     checks["groq_key"] = {"ok": bool(GROQ_API_KEY), "required_for": "proveedor principal"}
     checks["multi_provider_gateway"] = {"ok": bool(provider_gateway.configured_names()), "optional": True, "configured": provider_gateway.configured_names()}
     checks["resilient_search"] = {"ok": True, "attempts": WEB_SEARCH_ATTEMPTS, "max_results": WEB_SEARCH_RESULTS}
@@ -6841,6 +6983,14 @@ def capabilities():
         "requests_per_minute": REQUESTS_PER_MINUTE,
         "tools": list(TOOL_FUNCTIONS.keys()),
         "features": [
+            "unified_personal_intelligence_v93",
+            "response_personas",
+            "project_contexts",
+            "voice_browser_fallback",
+            "telegram_voice_and_style",
+            "response_quality_tracking",
+            "research_monitors",
+            "personal_data_export",
             "personal_intelligence_os_v82",
             "postgresql_data_foundation",
             "sqlite_fallback",
@@ -7130,6 +7280,7 @@ def health_deep():
         "autonomy": {"counts": autonomy_store.counts("")},
         "semantic_memory": semantic_index.status(""),
         "data_foundation_v82": data_foundation.status(),
+        "personal_intelligence_v93": personal_os.status("health"),
         "automations": automation_store.counts(),
         "mcp": mcp_manager.status(),
         "code_lab": code_lab.status(),
@@ -7224,6 +7375,180 @@ def health():
         },
         "health_endpoints": ["/api/health/live", "/api/health/ready", "/api/health/deep"],
     }
+
+
+@app.get("/api/v93/status")
+def v93_status(request: Request, session_id: str = "default_session"):
+    enforce_request_guard(request)
+    sid = safe_session_id(session_id)
+    status = personal_os.status(sid)
+    return {
+        "status": "ok" if status.get("foundation", {}).get("connected") else "degraded",
+        **status,
+        "app_version": APP_VERSION,
+        "voice": {
+            **telegram_media_ai.status(),
+            "browser_fallback": True,
+            "telegram": telegram_channel.configured,
+        },
+        "providers": provider_gateway.configured_names(),
+    }
+
+
+@app.get("/api/v93/personas")
+def v93_personas(request: Request):
+    enforce_request_guard(request)
+    return {"status": "ok", "personas": personal_os.personas()}
+
+
+@app.get("/api/v93/settings")
+def v93_settings(request: Request, session_id: str = "default_session"):
+    enforce_request_guard(request)
+    return {
+        "status": "ok",
+        "settings": personal_os.settings(safe_session_id(session_id)),
+    }
+
+
+@app.put("/api/v93/settings")
+def v93_settings_save(data: V93SettingsInput, request: Request):
+    enforce_request_guard(request)
+    try:
+        settings = personal_os.save_settings(
+            safe_session_id(data.session_id),
+            data.model_dump(exclude={"session_id"}),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"status": "saved", "settings": settings}
+
+
+@app.get("/api/v93/projects")
+def v93_projects(request: Request, session_id: str = "default_session"):
+    enforce_request_guard(request)
+    return {
+        "status": "ok",
+        "projects": personal_os.list_projects(safe_session_id(session_id)),
+    }
+
+
+@app.post("/api/v93/projects")
+def v93_project_create(data: V93ProjectInput, request: Request):
+    enforce_request_guard(request)
+    try:
+        project = personal_os.create_project(
+            safe_session_id(data.session_id),
+            data.name,
+            data.description,
+            data.instructions,
+            data.color,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"status": "created", "project": project}
+
+
+@app.delete("/api/v93/projects/{project_id}")
+def v93_project_delete(
+    project_id: str,
+    request: Request,
+    session_id: str = "default_session",
+):
+    enforce_request_guard(request)
+    if not personal_os.delete_project(safe_session_id(session_id), project_id):
+        raise HTTPException(status_code=404, detail="Proyecto no encontrado o protegido.")
+    return {"status": "deleted", "id": project_id}
+
+
+@app.get("/api/v93/projects/context")
+def v93_project_context(
+    request: Request,
+    session_id: str = "default_session",
+    project_name: str = "General",
+    query: str = "",
+):
+    enforce_request_guard(request)
+    return {
+        "status": "ok",
+        **personal_os.project_context(
+            safe_session_id(session_id),
+            project_name.strip()[:120] or "General",
+            query.strip()[:12000],
+        ),
+    }
+
+
+@app.get("/api/v93/monitors")
+def v93_monitors(request: Request, session_id: str = "default_session"):
+    enforce_request_guard(request)
+    return {
+        "status": "ok",
+        "monitors": personal_os.list_monitors(safe_session_id(session_id)),
+    }
+
+
+@app.post("/api/v93/monitors")
+def v93_monitor_create(data: V93MonitorInput, request: Request):
+    enforce_request_guard(request)
+    try:
+        monitor = personal_os.create_monitor(
+            safe_session_id(data.session_id),
+            data.title,
+            data.query,
+            data.cadence,
+            project_name=data.project_name,
+            channel=data.channel,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"status": "created", "monitor": monitor}
+
+
+@app.put("/api/v93/monitors/{monitor_id}")
+def v93_monitor_update(
+    monitor_id: str,
+    data: V93MonitorStatusInput,
+    request: Request,
+):
+    enforce_request_guard(request)
+    try:
+        monitor = personal_os.set_monitor_status(
+            safe_session_id(data.session_id), monitor_id, data.status
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if not monitor:
+        raise HTTPException(status_code=404, detail="Monitor no encontrado.")
+    return {"status": "saved", "monitor": monitor}
+
+
+@app.get("/api/v93/quality")
+def v93_quality(
+    request: Request,
+    session_id: str = "default_session",
+    limit: int = 100,
+):
+    enforce_request_guard(request)
+    return {
+        "status": "ok",
+        "quality": personal_os.quality_summary(
+            safe_session_id(session_id), max(1, min(int(limit), 500))
+        ),
+    }
+
+
+@app.get("/api/v93/export")
+def v93_export(request: Request, session_id: str = "default_session"):
+    enforce_request_guard(request)
+    sid = safe_session_id(session_id)
+    snapshot = personal_os.export_snapshot(sid)
+    return JSONResponse(
+        snapshot,
+        headers={
+            "Content-Disposition": f'attachment; filename="jarvis-v93-{sid[-24:]}.json"',
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 @app.get("/api/v82/status")
