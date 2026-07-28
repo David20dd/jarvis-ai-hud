@@ -21,6 +21,12 @@ from .v65 import (
     ResearchLibrary,
 )
 from .v66 import AdaptiveDecisionEngine, AdaptiveLearningStore, AnswerQualityGate, append_source_list
+from .v76 import (
+    CommandRouter,
+    ImprovementAdvisor,
+    UnifiedExperienceStore,
+    V76_STAGES,
+)
 
 __all__ = [
     "RuntimeSupport", "compact_messages", "disk_status", "ToolDefinition", "ToolRegistry",
@@ -32,4 +38,5 @@ __all__ = [
     "ActionCenter", "GeminiGroundedSearchClient", "GoogleSearchClient", "OperationsLedger", "PublicPageFetcher",
     "QualitySuite", "ResearchLibrary",
     "AdaptiveDecisionEngine", "AdaptiveLearningStore", "AnswerQualityGate", "append_source_list",
+    "CommandRouter", "ImprovementAdvisor", "UnifiedExperienceStore", "V76_STAGES",
 ]

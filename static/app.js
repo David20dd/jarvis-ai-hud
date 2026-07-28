@@ -1,4 +1,4 @@
-(() => {
+﻿(() => {
   'use strict';
 
   const $ = (selector, root = document) => root.querySelector(selector);
@@ -743,7 +743,7 @@
 
   const PANEL_INFO = {
     knowledge:['CONOCIMIENTO','Biblioteca y memoria'], missions:['AUTONOMÍA','Misiones'],
-    nexus:['CONTROL','Nexus v65'], channels:['TELEGRAM','Asistente móvil'],
+    nexus:['CONTROL','Nexus v76'], channels:['TELEGRAM','Asistente móvil'],
     library:['CONOCIMIENTO','Biblioteca'], memory:['CONTEXTO','Memoria'], system:['ESTADO','Diagnóstico del núcleo']
   };
 
@@ -924,7 +924,7 @@
     const pendingActions=actions.filter(item=>item.status==='pending_approval');
     const latestQuality=operations.latest||{};
     els.panelContent.innerHTML=`
-      <div class="nexus-hero panel-card"><div><span class="card-kicker">ADAPTIVE INTELLIGENCE · v66</span><h3>Inteligencia, evidencia y acción bajo tu control</h3><p>JARVIS decide cuándo consultar memoria, documentos o internet; verifica actualidad y mantiene las acciones sensibles bajo aprobación.</p></div><button class="soft-btn" id="nexusDiagnostics">Diagnóstico</button></div>
+      <div class="nexus-hero panel-card"><div><span class="card-kicker">UNIFIED EXPERIENCE · v76</span><h3>Inteligencia, evidencia y acción bajo tu control</h3><p>JARVIS decide cuándo consultar memoria, documentos o internet; verifica actualidad y mantiene las acciones sensibles bajo aprobación.</p></div><button class="soft-btn" id="nexusDiagnostics">Diagnóstico</button></div>
       <div class="panel-grid nexus-metrics">
         <article class="panel-card metric-card"><span class="card-kicker">PROVEEDORES</span><strong class="metric">${providers.length}</strong><p>${providers.length?providers.map(escapeHTML).join(' · '):'Modo local disponible'}</p></article>
         <article class="panel-card metric-card"><span class="card-kicker">DECISIONES</span><strong class="metric">${Object.values(intelligence.decisions||{}).reduce((a,b)=>a+Number(b||0),0)}</strong><p>Rutas registradas por el planificador.</p></article>
@@ -1175,6 +1175,7 @@
 
   function registerServiceWorker() {
     if (!('serviceWorker' in navigator) || location.protocol === 'file:') return;
-    navigator.serviceWorker.register('./service-worker.js?v=65.1').catch(()=>{});
+    navigator.serviceWorker.register('./service-worker.js?v=76.0').catch(()=>{});
   }
 })();
+

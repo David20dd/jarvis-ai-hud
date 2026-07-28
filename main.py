@@ -65,6 +65,10 @@ from jarvis_core import (
     AdaptiveDecisionEngine,
     AdaptiveLearningStore,
     AnswerQualityGate,
+    CommandRouter,
+    ImprovementAdvisor,
+    UnifiedExperienceStore,
+    V76_STAGES,
     append_source_list,
     compact_messages,
     disk_status,
@@ -106,8 +110,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger("jarvis")
 
-APP_VERSION = "66.0.0"
-APP_EDITION = "Adaptive Intelligence"
+APP_VERSION = "76.0.0"
+APP_EDITION = "Unified Experience"
 
 DB_FILE = os.getenv("JARVIS_DB_FILE", "jarvis_memory.db").strip() or "jarvis_memory.db"
 BASE_DIR = Path(__file__).resolve().parent
@@ -248,6 +252,7 @@ quality_suite = QualitySuite()
 adaptive_engine = AdaptiveDecisionEngine()
 adaptive_learning = AdaptiveLearningStore(DB_FILE)
 adaptive_quality_gate = AnswerQualityGate()
+experience_store = UnifiedExperienceStore(DB_FILE)
 
 
 def _provider_models(names: List[str], provider: str) -> List[ProviderModel]:
@@ -523,6 +528,7 @@ def init_db() -> None:
     action_center.init_schema()
     operations_ledger.init_schema()
     adaptive_learning.init_schema()
+    experience_store.init_schema()
 
 
 def _safe_wal_checkpoint() -> str:
@@ -661,7 +667,7 @@ async def lifespan(_: FastAPI):
     recovered_workflows = _recover_interrupted_workflows()
     recovered_channels = _recover_channel_events()
     logger.info(
-        "J.A.R.V.I.S. v65 iniciado | public_mode=%s | redis=%s | jobs_recuperados=%s | workflows_recuperados=%s | canales_recuperados=%s",
+        "J.A.R.V.I.S. v76 iniciado | public_mode=%s | redis=%s | jobs_recuperados=%s | workflows_recuperados=%s | canales_recuperados=%s",
         PUBLIC_MODE,
         bool(REDIS_URL),
         recovered,
@@ -672,11 +678,11 @@ async def lifespan(_: FastAPI):
     _stop_maintenance()
     JOB_EXECUTOR.shutdown(wait=False, cancel_futures=True)
     provider_gateway.close()
-    logger.info("J.A.R.V.I.S. v65 detenido")
+    logger.info("J.A.R.V.I.S. v76 detenido")
 
 
 app = FastAPI(
-    title=f"J.A.R.V.I.S. {APP_EDITION} v65",
+    title=f"J.A.R.V.I.S. {APP_EDITION} v76",
     version=APP_VERSION,
     lifespan=lifespan,
 )
@@ -921,6 +927,34 @@ class AdaptiveDecisionInput(BaseModel):
     message: str = Field(min_length=1, max_length=30000)
     mode: str = "auto"
     project_name: str = "General"
+
+
+class ExperiencePreferencesInput(BaseModel):
+    session_id: str = "default_session"
+    theme: str = Field(default="dark", pattern="^(dark|oled|contrast)$")
+    density: str = Field(default="comfortable", pattern="^(compact|comfortable)$")
+    context_panel: bool = True
+    reduce_motion: bool = False
+    focus_mode: bool = False
+
+
+class ExperienceEventInput(BaseModel):
+    session_id: str = "default_session"
+    event_type: str = Field(default="workspace", max_length=80)
+    title: str = Field(min_length=1, max_length=240)
+    detail: Dict[str, Any] = Field(default_factory=dict)
+    status: str = Field(default="info", pattern="^(info|working|success|warning|failed)$")
+
+
+class ExperienceCommandInput(BaseModel):
+    session_id: str = "default_session"
+    query: str = Field(default="", max_length=300)
+    limit: int = Field(default=12, ge=1, le=20)
+
+
+class ImprovementAnalyzeInput(BaseModel):
+    session_id: str = "default_session"
+    persist: bool = False
 
 
 class WorkflowInput(BaseModel):
@@ -6265,6 +6299,215 @@ def resilience_status(session_id: str = "default_session", limit: int = 12):
     }
 
 
+def _v76_stage_status() -> List[Dict[str, Any]]:
+    voice_status = telegram_media_ai.status()
+    telegram_status = telegram_channel.status()
+    code_status = code_lab.status()
+    result: List[Dict[str, Any]] = []
+    for stage in V76_STAGES:
+        item = dict(stage)
+        version = int(item["version"])
+        item["state"] = "available"
+        item["configured"] = True
+        item["dependency"] = ""
+        if version == 71 and not (voice_status.get("transcription") or voice_status.get("speech")):
+            item.update(
+                state="configuration_required",
+                configured=False,
+                dependency="Configura una ruta de transcripción o voz para habilitar audio generativo.",
+            )
+        elif version == 72 and not telegram_status.get("configured"):
+            item.update(
+                state="configuration_required",
+                configured=False,
+                dependency="Configura TELEGRAM_BOT_TOKEN y el webhook autorizado.",
+            )
+        elif version == 74 and not code_status.get("enabled"):
+            item.update(
+                state="safety_locked",
+                configured=False,
+                dependency="Habilita JARVIS_CODE_LAB_ENABLED solo en un host con aislamiento.",
+            )
+        result.append(item)
+    return result
+
+
+@app.get("/api/v67/status", include_in_schema=False)
+@app.get("/api/v68/status", include_in_schema=False)
+@app.get("/api/v69/status", include_in_schema=False)
+@app.get("/api/v70/status", include_in_schema=False)
+@app.get("/api/v71/status", include_in_schema=False)
+@app.get("/api/v72/status", include_in_schema=False)
+@app.get("/api/v73/status", include_in_schema=False)
+@app.get("/api/v74/status", include_in_schema=False)
+@app.get("/api/v75/status", include_in_schema=False)
+@app.get("/api/v76/status")
+def v76_status(session_id: str = "default_session"):
+    sid = safe_session_id(session_id)
+    stages = _v76_stage_status()
+    configured = sum(1 for item in stages if item.get("configured"))
+    return {
+        "status": "ok",
+        "version": APP_VERSION,
+        "edition": APP_EDITION,
+        "stages": stages,
+        "available_stages": configured,
+        "total_stages": len(stages),
+        "experience": experience_store.status(sid),
+        "safety": {
+            "external_writes_require_approval": True,
+            "self_deployment": False,
+            "bounded_improvement_only": True,
+        },
+    }
+
+
+@app.get("/api/v76/preferences")
+def v76_preferences(session_id: str = "default_session"):
+    return {
+        "status": "ok",
+        "version": APP_VERSION,
+        "preferences": experience_store.preferences(safe_session_id(session_id)),
+    }
+
+
+@app.put("/api/v76/preferences")
+def save_v76_preferences(data: ExperiencePreferencesInput, request: Request):
+    enforce_request_guard(request)
+    sid = safe_session_id(data.session_id)
+    payload = data.model_dump(exclude={"session_id"})
+    preferences = experience_store.save_preferences(sid, payload)
+    experience_store.record_event(
+        sid,
+        "experience",
+        "Preferencias visuales actualizadas",
+        {"theme": preferences["theme"], "density": preferences["density"]},
+        "success",
+    )
+    return {"status": "saved", "preferences": preferences}
+
+
+@app.post("/api/v76/events")
+def record_v76_event(data: ExperienceEventInput, request: Request):
+    enforce_request_guard(request)
+    event = experience_store.record_event(
+        safe_session_id(data.session_id),
+        data.event_type,
+        data.title,
+        data.detail,
+        data.status,
+    )
+    return {"status": "recorded", "event": event}
+
+
+@app.get("/api/v76/timeline")
+def v76_timeline(session_id: str = "default_session", limit: int = 40):
+    return {
+        "status": "ok",
+        "events": experience_store.timeline(safe_session_id(session_id), limit),
+    }
+
+
+@app.post("/api/v76/commands")
+def v76_commands(data: ExperienceCommandInput):
+    return {
+        "status": "ok",
+        "query": data.query,
+        "commands": CommandRouter.suggest(data.query, data.limit),
+        "zero_tokens": True,
+    }
+
+
+@app.get("/api/v76/context")
+def v76_context(session_id: str = "default_session"):
+    sid = safe_session_id(session_id)
+    with db_connection() as conn:
+        job_rows = conn.execute(
+            """
+            SELECT id,title,status,progress,updated_at
+            FROM jobs WHERE session_id = ?
+            ORDER BY updated_at DESC LIMIT 8
+            """,
+            (sid,),
+        ).fetchall()
+        count_row = conn.execute(
+            """
+            SELECT
+                (SELECT COUNT(*) FROM memories WHERE session_id = ?) memories,
+                (SELECT COUNT(*) FROM documents WHERE session_id = ?) documents,
+                (SELECT COUNT(*) FROM reminders WHERE session_id = ? AND status IN ('scheduled','due')) reminders,
+                (SELECT COUNT(*) FROM activity_log WHERE session_id = ? AND status = 'failed' AND created_at >= ?) errors_24h,
+                (SELECT COUNT(*) FROM response_cache WHERE session_id = ? AND expires_at >= ?) cached_responses,
+                (SELECT COUNT(*) FROM usage_log WHERE session_id = ? AND created_at >= ?) requests_24h
+            """,
+            (sid, sid, sid, sid, time.time() - 86400, sid, time.time(), sid, time.time() - 86400),
+        ).fetchone()
+    deep = health_deep()
+    health_payload = json.loads(bytes(deep.body).decode("utf-8")) if isinstance(deep, JSONResponse) else deep
+    return {
+        "status": "ok",
+        "version": APP_VERSION,
+        "summary": dict(count_row) if count_row else {},
+        "health": {
+            "status": health_payload.get("status", "unknown"),
+            "open_circuits": len(health_payload.get("open_circuits", [])),
+        },
+        "adaptive": adaptive_learning.status(sid, 6),
+        "artifacts": unified_store.list_artifacts(sid, 8),
+        "research": research_library.list(sid, 8),
+        "jobs": [dict(row) for row in job_rows],
+        "workflows": autonomy_store.list_workflows(sid, 8),
+        "approvals": autonomy_store.pending_approvals(sid, 8),
+        "timeline": experience_store.timeline(sid, 12),
+    }
+
+
+@app.post("/api/v76/improvement/analyze")
+def v76_improvement_analyze(data: ImprovementAnalyzeInput, request: Request):
+    enforce_request_guard(request)
+    sid = safe_session_id(data.session_id)
+    context = v76_context(sid)
+    summary = context.get("summary", {})
+    snapshot = {
+        "health": context.get("health", {}).get("status", "unknown"),
+        "open_circuits": context.get("health", {}).get("open_circuits", 0),
+        "errors_24h": summary.get("errors_24h", 0),
+        "cached_responses": summary.get("cached_responses", 0),
+        "requests_24h": summary.get("requests_24h", 0),
+    }
+    analysis = ImprovementAdvisor.analyze(snapshot)
+    proposal = None
+    if data.persist:
+        top = analysis["recommendations"][0]
+        proposal = experience_store.propose_improvement(
+            sid,
+            top["title"],
+            [{"snapshot": snapshot, "reason": top["reason"]}],
+            [item["action"] for item in analysis["recommendations"]],
+            "medium" if top["priority"] == "high" else "low",
+        )
+        experience_store.record_event(
+            sid,
+            "improvement",
+            "Propuesta de mejora preparada",
+            {"proposal_id": proposal["id"]},
+            "success",
+        )
+    return {
+        **analysis,
+        "proposal": proposal,
+        "note": "JARVIS no modifica código, secretos, permisos ni producción automáticamente.",
+    }
+
+
+@app.get("/api/v76/improvement/proposals")
+def v76_improvement_proposals(session_id: str = "default_session", limit: int = 20):
+    return {
+        "status": "ok",
+        "proposals": experience_store.proposals(safe_session_id(session_id), limit),
+    }
+
+
 @app.get("/api/adaptive/status")
 def adaptive_status(session_id: str = "default_session", limit: int = 12):
     sid = safe_session_id(session_id)
@@ -6338,7 +6581,7 @@ def dashboard(session_id: str):
         "models": provider_status(),
         "providers": resilience_provider_status(),
         "database": {"ok": True, "path": DB_FILE},
-        "features": ["gemini_google_search_grounding", "google_programmable_search", "bounded_public_page_ingestion", "traceable_research_library", "web_semantic_indexing", "multimodal_web_chat", "voice_transcription", "auditable_action_center", "approved_action_execution", "persistent_operations_ledger", "continuous_quality_suite", "executable_workflows", "persistent_workflow_steps", "approval_inbox", "evidence_ledger", "hybrid_semantic_memory", "deep_research_pipeline", "persistent_automations", "optional_mcp_client", "isolated_code_lab", "evaluation_core", "execution_planner", "resolution_trace", "local_verifier", "autonomous_agent", "smart_intent_router", "multi_provider_router", "anthropic_messages_api", "provider_capability_matrix", "optional_quality_council", "structured_tool_registry", "professional_mission_orchestrator", "specialist_team_selection", "quality_gates", "tool_calling", "persistent_background_jobs", "pause_resume_cancel", "multi_level_cache", "singleflight_deduplication", "circuit_breakers", "context_compaction", "performance_telemetry", "deep_health_checks", "project_workspaces", "memory", "documents", "reminders", "knowledge_search", "self_check"],
+        "features": ["unified_experience_v76", "global_command_palette", "context_workspace", "persistent_ui_preferences", "supervised_improvement_advisor", "gemini_google_search_grounding", "google_programmable_search", "bounded_public_page_ingestion", "traceable_research_library", "web_semantic_indexing", "multimodal_web_chat", "voice_transcription", "auditable_action_center", "approved_action_execution", "persistent_operations_ledger", "continuous_quality_suite", "executable_workflows", "persistent_workflow_steps", "approval_inbox", "evidence_ledger", "hybrid_semantic_memory", "deep_research_pipeline", "persistent_automations", "optional_mcp_client", "isolated_code_lab", "evaluation_core", "execution_planner", "resolution_trace", "local_verifier", "autonomous_agent", "smart_intent_router", "multi_provider_router", "anthropic_messages_api", "provider_capability_matrix", "optional_quality_council", "structured_tool_registry", "professional_mission_orchestrator", "specialist_team_selection", "quality_gates", "tool_calling", "persistent_background_jobs", "pause_resume_cancel", "multi_level_cache", "singleflight_deduplication", "circuit_breakers", "context_compaction", "performance_telemetry", "deep_health_checks", "project_workspaces", "memory", "documents", "reminders", "knowledge_search", "self_check"],
         "runtime": runtime.snapshot(),
         "jobs_health": _job_health(),
     }
@@ -6375,6 +6618,7 @@ def self_check():
         checks["automation_store"] = {"ok": True, "counts": automation_store.counts()}
         checks["evaluation_store"] = {"ok": True, "runs": evaluation_store.report(1).get("runs", 0)}
         checks["unified_intelligence"] = {"ok": True, **unified_store.status("self_check")}
+        checks["unified_experience"] = {"ok": True, **experience_store.status("self_check")}
     except Exception as exc:
         checks["v47_data_core"] = {"ok": False, "detail": safe_error_text(exc)}
     checks["mcp"] = {"ok": True, "optional": True, **mcp_manager.status(False)}
@@ -6495,6 +6739,12 @@ def capabilities():
             "approved_action_execution",
             "persistent_operations_ledger",
             "continuous_quality_suite",
+            "unified_experience_v76",
+            "global_command_palette",
+            "context_workspace",
+            "persistent_ui_preferences",
+            "execution_timeline_ui",
+            "supervised_improvement_advisor",
         ],
         "channels": {
             "telegram": telegram_channel.status(),
