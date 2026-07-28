@@ -27,7 +27,7 @@ def test_persistence_status_is_public_and_secret_free():
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["version"] == "77.0.0"
+    assert payload["version"] == "82.0.0"
     assert payload["engine"] == "sqlite"
     assert payload["storage_mode"] in {"persistent", "ephemeral_or_unverified"}
     assert "password" not in str(payload).lower()
@@ -38,11 +38,11 @@ def test_v77_frontend_contract_and_cache():
     css = Path("static/v77.css").read_text(encoding="utf-8")
     worker = Path("service-worker.js").read_text(encoding="utf-8")
 
-    assert "Refined Experience · v77" in html
-    assert "./static/v77.css?v=77.0" in html
+    assert "Personal Intelligence OS · v82" in html
+    assert "./static/v77.css?v=82.0" in html
     assert ".conversation" in css and "max-width: none !important" in css
     assert "grid-template-columns: minmax(0, 1fr)" in css
-    assert "jarvis-refined-experience-v77-1" in worker
+    assert "jarvis-personal-intelligence-v82-1" in worker
 
 
 def test_health_reports_persistence_state():

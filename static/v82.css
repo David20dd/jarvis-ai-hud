@@ -1,0 +1,240 @@
+/* J.A.R.V.I.S. v82 — Personal Intelligence OS
+   Final visual layer. It preserves the five-space navigation and keeps all
+   advanced controls inside Conocimiento/Nexus instead of crowding the shell. */
+
+:root {
+  --v82-panel: color-mix(in srgb, var(--v77-surface, #10151c) 94%, #152739 6%);
+  --v82-panel-soft: color-mix(in srgb, var(--v77-surface-raised, #151b24) 92%, #1a3850 8%);
+  --v82-line: rgba(128, 210, 245, .14);
+  --v82-line-strong: rgba(111, 216, 255, .28);
+  --v82-cyan: #72dcff;
+  --v82-violet: #9b8dff;
+  --v82-green: #72e7ae;
+}
+
+/* The application shell remains calm and predictable at every viewport. */
+.workspace,
+.view,
+.panel-view,
+.panel-content {
+  min-width: 0;
+}
+
+.topbar {
+  backdrop-filter: blur(20px) saturate(130%);
+  -webkit-backdrop-filter: blur(20px) saturate(130%);
+}
+
+.workspace-context,
+.topbar-actions,
+.conversation,
+.composer-wrap {
+  min-width: 0;
+}
+
+.welcome h1 {
+  text-wrap: balance;
+}
+
+.welcome > p:not(.eyebrow) {
+  text-wrap: pretty;
+}
+
+.panel-content {
+  scrollbar-gutter: stable;
+}
+
+.panel-card {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, .018), transparent 48%),
+    var(--v82-panel);
+}
+
+.nexus-hero {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.nexus-hero::after {
+  content: "";
+  position: absolute;
+  width: 280px;
+  aspect-ratio: 1;
+  right: -90px;
+  top: -150px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(103, 216, 255, .13), transparent 68%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+.v82-foundation {
+  padding: 18px;
+  border: 1px solid var(--v82-line);
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 8% 0, rgba(99, 207, 255, .075), transparent 34%),
+    linear-gradient(180deg, rgba(14, 24, 34, .78), rgba(10, 15, 21, .46));
+}
+
+.v82-foundation .panel-section-head {
+  margin: 0 0 14px;
+}
+
+.v82-foundation-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.v82-foundation-card {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: start;
+  gap: 11px;
+  min-height: 122px;
+  padding: 15px;
+  border-color: var(--v82-line);
+  box-shadow: none;
+}
+
+.foundation-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--v82-line-strong);
+  border-radius: 12px;
+  color: var(--v82-cyan);
+  background: rgba(66, 186, 231, .07);
+}
+
+.foundation-icon .icon {
+  width: 18px;
+  height: 18px;
+}
+
+.v82-foundation-card small {
+  display: block;
+  overflow: hidden;
+  color: var(--v77-muted, #788491);
+  font-size: 9px;
+  font-weight: 760;
+  letter-spacing: .13em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.v82-foundation-card strong {
+  display: block;
+  overflow: hidden;
+  margin-top: 7px;
+  color: var(--v77-text, #f3f6f9);
+  font-size: clamp(18px, 2vw, 25px);
+  line-height: 1.05;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.v82-foundation-card p {
+  margin: 7px 0 0;
+  color: var(--v77-muted, #788491);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.v82-foundation-actions {
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.v82-memory-lab {
+  border-color: var(--v82-line);
+  background:
+    linear-gradient(135deg, rgba(102, 216, 255, .055), transparent 38%),
+    var(--v82-panel);
+}
+
+.v82-memory-lab > p {
+  max-width: 760px;
+}
+
+.semantic-memory-results {
+  margin-top: 12px;
+}
+
+.semantic-result {
+  align-items: center;
+}
+
+.semantic-result strong {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/* Controls are clear, aligned and touch-safe without becoming visually heavy. */
+.v82-foundation .soft-btn,
+.v82-memory-lab .primary-btn {
+  min-height: 40px;
+}
+
+.status-tag.ok {
+  border-color: rgba(114, 231, 174, .22);
+}
+
+@media (max-width: 1180px) {
+  .v82-foundation-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .v82-foundation {
+    padding: 14px;
+    border-radius: 18px;
+  }
+
+  .v82-foundation-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .v82-foundation-card {
+    min-height: 0;
+    grid-template-columns: 36px minmax(0, 1fr);
+  }
+
+  .v82-foundation-card strong {
+    font-size: 20px;
+  }
+
+  .v82-foundation-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .v82-foundation-actions > button,
+  .v82-memory-lab .research-controls > * {
+    width: 100%;
+  }
+}
+
+@media (max-width: 420px) {
+  .panel-content {
+    padding-inline: 12px !important;
+  }
+
+  .v82-foundation .panel-section-head {
+    align-items: flex-start;
+    gap: 8px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nexus-hero::after {
+    display: none;
+  }
+}
+

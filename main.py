@@ -70,6 +70,8 @@ from jarvis_core import (
     ImprovementAdvisor,
     UnifiedExperienceStore,
     V76_STAGES,
+    DataFoundation,
+    EmbeddingService,
     append_source_list,
     compact_messages,
     disk_status,
@@ -111,8 +113,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger("jarvis")
 
-APP_VERSION = "77.0.0"
-APP_EDITION = "Refined Experience"
+APP_VERSION = "82.0.0"
+APP_EDITION = "Personal Intelligence OS"
 
 DB_FILE = os.getenv("JARVIS_DB_FILE", "jarvis_memory.db").strip() or "jarvis_memory.db"
 BASE_DIR = Path(__file__).resolve().parent
@@ -206,6 +208,10 @@ RESEARCH_PAGE_MAX_BYTES = max(100_000, min(int(os.getenv("JARVIS_RESEARCH_PAGE_M
 ADAPTIVE_RETRIEVAL_ENABLED = os.getenv("JARVIS_ADAPTIVE_RETRIEVAL", "true").strip().lower() not in {"0", "false", "no", "off"}
 ADAPTIVE_MEMORY_LIMIT = max(1, min(int(os.getenv("JARVIS_ADAPTIVE_MEMORY_LIMIT", "5")), 12))
 ADAPTIVE_WEB_SOURCE_LIMIT = max(4, min(int(os.getenv("JARVIS_ADAPTIVE_WEB_SOURCE_LIMIT", "8")), 12))
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
+EMBEDDING_PROVIDER = os.getenv("JARVIS_EMBEDDING_PROVIDER", "local").strip().lower()
+EMBEDDING_MODEL = os.getenv("JARVIS_EMBEDDING_MODEL", "text-embedding-3-small").strip()
+EMBEDDING_DIMENSIONS = max(64, min(int(os.getenv("JARVIS_EMBEDDING_DIMENSIONS", "256")), 3072))
 
 runtime = RuntimeSupport(
     redis_url=REDIS_URL,
@@ -260,8 +266,13 @@ def persistence_status() -> Dict[str, Any]:
         warnings.append(
             "No hay restauración automática de la cuenta propietaria para una base vacía."
         )
+    if not DATABASE_URL:
+        warnings.append(
+            "DATABASE_URL no está configurada; la capa v82 usa SQLite compatible."
+        )
     return {
         "engine": "sqlite",
+        "v82_engine": "postgresql" if DATABASE_URL else "sqlite",
         "persistent": persistent,
         "storage_mode": "persistent" if persistent else "ephemeral_or_unverified",
         "database_name": resolved.name,
@@ -284,6 +295,20 @@ adaptive_engine = AdaptiveDecisionEngine()
 adaptive_learning = AdaptiveLearningStore(DB_FILE)
 adaptive_quality_gate = AnswerQualityGate()
 experience_store = UnifiedExperienceStore(DB_FILE)
+embedding_service = EmbeddingService(
+    EMBEDDING_PROVIDER,
+    api_key=OPENAI_API_KEY,
+    base_url=OPENAI_BASE_URL,
+    model=EMBEDDING_MODEL,
+    dimensions=EMBEDDING_DIMENSIONS,
+    timeout_seconds=min(PROVIDER_TIMEOUT_SECONDS, 30),
+)
+data_foundation = DataFoundation(
+    database_url=DATABASE_URL,
+    sqlite_file=DB_FILE,
+    embeddings=embedding_service,
+    persistent_declared=PERSISTENT_STORAGE_DECLARED,
+)
 
 
 def _provider_models(names: List[str], provider: str) -> List[ProviderModel]:
@@ -692,6 +717,12 @@ def _stop_maintenance() -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
+    try:
+        data_foundation.init_schema()
+    except Exception:
+        # The legacy SQLite core remains available if an optional PostgreSQL
+        # service is misconfigured. The deep health endpoint reports the cause.
+        logger.exception("La capa de datos v82 no pudo inicializarse; continúa el núcleo compatible.")
     owner_bootstrap = {"created": False, "configured": bool(OWNER_EMAIL and OWNER_NAME and OWNER_PASSWORD)}
     if owner_bootstrap["configured"] and identity_store.user_count() == 0:
         try:
@@ -710,7 +741,7 @@ async def lifespan(_: FastAPI):
     recovered_workflows = _recover_interrupted_workflows()
     recovered_channels = _recover_channel_events()
     logger.info(
-        "J.A.R.V.I.S. v77 iniciado | public_mode=%s | redis=%s | owner_bootstrap=%s | jobs_recuperados=%s | workflows_recuperados=%s | canales_recuperados=%s",
+        "J.A.R.V.I.S. v82 iniciado | public_mode=%s | redis=%s | owner_bootstrap=%s | jobs_recuperados=%s | workflows_recuperados=%s | canales_recuperados=%s",
         PUBLIC_MODE,
         bool(REDIS_URL),
         owner_bootstrap.get("created", False),
@@ -722,11 +753,12 @@ async def lifespan(_: FastAPI):
     _stop_maintenance()
     JOB_EXECUTOR.shutdown(wait=False, cancel_futures=True)
     provider_gateway.close()
-    logger.info("J.A.R.V.I.S. v77 detenido")
+    data_foundation.close()
+    logger.info("J.A.R.V.I.S. v82 detenido")
 
 
 app = FastAPI(
-    title=f"J.A.R.V.I.S. {APP_EDITION} v77",
+    title=f"J.A.R.V.I.S. {APP_EDITION} v82",
     version=APP_VERSION,
     lifespan=lifespan,
 )
@@ -1157,6 +1189,38 @@ class IntegrationPrepareInput(BaseModel):
 
 class VoiceSpeechInput(BaseModel):
     text: str = Field(min_length=1, max_length=4000)
+
+
+class V82MemoryInput(BaseModel):
+    session_id: str = "default_session"
+    content: str = Field(min_length=1, max_length=30000)
+    project_name: str = Field(default="General", max_length=120)
+    memory_type: str = Field(default="fact", max_length=60)
+    source: str = Field(default="user", max_length=120)
+    importance: int = Field(default=3, ge=1, le=5)
+    confidence: float = Field(default=0.75, ge=0, le=1)
+    expires_at: float = Field(default=0, ge=0)
+
+
+class V82MemorySearchInput(BaseModel):
+    session_id: str = "default_session"
+    query: str = Field(min_length=1, max_length=12000)
+    project_name: str = Field(default="", max_length=120)
+    limit: int = Field(default=8, ge=1, le=50)
+
+
+class V82TaskInput(BaseModel):
+    session_id: str = "default_session"
+    task_type: str = Field(default="health_snapshot", pattern="^(health_snapshot|memory_consolidation)$")
+    title: str = Field(default="Mantenimiento inteligente", min_length=1, max_length=300)
+    payload: Dict[str, Any] = Field(default_factory=dict)
+    priority: int = Field(default=5, ge=1, le=10)
+    max_attempts: int = Field(default=3, ge=1, le=10)
+    run_now: bool = True
+
+
+class V82MigrationInput(BaseModel):
+    dry_run: bool = True
 
 
 # -----------------------------------------------------------------------------
@@ -4686,6 +4750,31 @@ async def consultar_jarvis(data: ChatInput, request: Request):
 
         await asyncio.to_thread(guardar_mensaje_db, sid, "user", prompt)
         await asyncio.to_thread(guardar_mensaje_db, sid, "assistant", result["reply"])
+        try:
+            await asyncio.to_thread(
+                data_foundation.append_message,
+                sid,
+                "user",
+                prompt,
+                project_name=project_name,
+                metadata={"request_id": request_id, "mode": requested_mode},
+            )
+            await asyncio.to_thread(
+                data_foundation.append_message,
+                sid,
+                "assistant",
+                result["reply"],
+                project_name=project_name,
+                metadata={
+                    "request_id": request_id,
+                    "route": result.get("route", result.get("mode", "")),
+                    "verified": bool(result.get("verified")),
+                },
+            )
+        except Exception:
+            # Mirroring is additive. A temporary PostgreSQL failure must never
+            # prevent the user from receiving the already generated answer.
+            logger.warning("No se pudo reflejar la conversación en Data Foundation v82.", exc_info=True)
         log_activity(
             sid,
             "response",
@@ -4759,6 +4848,25 @@ async def consultar_jarvis(data: ChatInput, request: Request):
                 "recovery": intelligence_summary.get("recovery", ["local_tools"]),
             },
         }
+        try:
+            await asyncio.to_thread(
+                data_foundation.append_message,
+                sid,
+                "user",
+                prompt,
+                project_name=project_name,
+                metadata={"request_id": request_id, "recovered": True},
+            )
+            await asyncio.to_thread(
+                data_foundation.append_message,
+                sid,
+                "assistant",
+                content["reply"],
+                project_name=project_name,
+                metadata={"request_id": request_id, "route": content["route"], "recovered": True},
+            )
+        except Exception:
+            logger.warning("No se pudo reflejar la respuesta recuperada en Data Foundation v82.", exc_info=True)
         if intelligence_decision_id:
             await asyncio.to_thread(
                 unified_store.record_outcome, intelligence_decision_id, "recovered", 0.45,
@@ -6668,7 +6776,7 @@ def dashboard(session_id: str):
         "models": provider_status(),
         "providers": resilience_provider_status(),
         "database": {"ok": True, "path": DB_FILE},
-        "features": ["refined_experience_v77", "owner_bootstrap_recovery", "persistence_diagnostics", "unified_experience_v76", "global_command_palette", "context_workspace", "persistent_ui_preferences", "supervised_improvement_advisor", "gemini_google_search_grounding", "google_programmable_search", "bounded_public_page_ingestion", "traceable_research_library", "web_semantic_indexing", "multimodal_web_chat", "voice_transcription", "auditable_action_center", "approved_action_execution", "persistent_operations_ledger", "continuous_quality_suite", "executable_workflows", "persistent_workflow_steps", "approval_inbox", "evidence_ledger", "hybrid_semantic_memory", "deep_research_pipeline", "persistent_automations", "optional_mcp_client", "isolated_code_lab", "evaluation_core", "execution_planner", "resolution_trace", "local_verifier", "autonomous_agent", "smart_intent_router", "multi_provider_router", "anthropic_messages_api", "provider_capability_matrix", "optional_quality_council", "structured_tool_registry", "professional_mission_orchestrator", "specialist_team_selection", "quality_gates", "tool_calling", "persistent_background_jobs", "pause_resume_cancel", "multi_level_cache", "singleflight_deduplication", "circuit_breakers", "context_compaction", "performance_telemetry", "deep_health_checks", "project_workspaces", "memory", "documents", "reminders", "knowledge_search", "self_check"],
+        "features": ["personal_intelligence_os_v82", "postgresql_data_foundation", "sqlite_fallback", "conversation_mirroring", "semantic_memory_v82", "durable_maintenance_tasks", "legacy_data_migration", "refined_experience_v77", "owner_bootstrap_recovery", "persistence_diagnostics", "unified_experience_v76", "global_command_palette", "context_workspace", "persistent_ui_preferences", "supervised_improvement_advisor", "gemini_google_search_grounding", "google_programmable_search", "bounded_public_page_ingestion", "traceable_research_library", "web_semantic_indexing", "multimodal_web_chat", "voice_transcription", "auditable_action_center", "approved_action_execution", "persistent_operations_ledger", "continuous_quality_suite", "executable_workflows", "persistent_workflow_steps", "approval_inbox", "evidence_ledger", "hybrid_semantic_memory", "deep_research_pipeline", "persistent_automations", "optional_mcp_client", "isolated_code_lab", "evaluation_core", "execution_planner", "resolution_trace", "local_verifier", "autonomous_agent", "smart_intent_router", "multi_provider_router", "anthropic_messages_api", "provider_capability_matrix", "optional_quality_council", "structured_tool_registry", "professional_mission_orchestrator", "specialist_team_selection", "quality_gates", "tool_calling", "persistent_background_jobs", "pause_resume_cancel", "multi_level_cache", "singleflight_deduplication", "circuit_breakers", "context_compaction", "performance_telemetry", "deep_health_checks", "project_workspaces", "memory", "documents", "reminders", "knowledge_search", "self_check"],
         "runtime": runtime.snapshot(),
         "jobs_health": _job_health(),
     }
@@ -6694,6 +6802,7 @@ def self_check():
         checks["sympy"] = {"ok": False, "detail": safe_error_text(exc)}
     checks["static_ui"] = {"ok": INDEX_FILE.exists()}
     checks["identity_persistence"] = {"ok": True, **persistence_status()}
+    checks["data_foundation_v82"] = {"ok": bool(data_foundation.status().get("connected")), **data_foundation.status()}
     checks["groq_key"] = {"ok": bool(GROQ_API_KEY), "required_for": "proveedor principal"}
     checks["multi_provider_gateway"] = {"ok": bool(provider_gateway.configured_names()), "optional": True, "configured": provider_gateway.configured_names()}
     checks["resilient_search"] = {"ok": True, "attempts": WEB_SEARCH_ATTEMPTS, "max_results": WEB_SEARCH_RESULTS}
@@ -6732,6 +6841,13 @@ def capabilities():
         "requests_per_minute": REQUESTS_PER_MINUTE,
         "tools": list(TOOL_FUNCTIONS.keys()),
         "features": [
+            "personal_intelligence_os_v82",
+            "postgresql_data_foundation",
+            "sqlite_fallback",
+            "conversation_mirroring",
+            "semantic_memory_v82",
+            "durable_maintenance_tasks",
+            "legacy_data_migration",
             "refined_experience_v77",
             "owner_bootstrap_recovery",
             "persistence_diagnostics",
@@ -7013,6 +7129,7 @@ def health_deep():
         "open_circuits": open_circuits,
         "autonomy": {"counts": autonomy_store.counts("")},
         "semantic_memory": semantic_index.status(""),
+        "data_foundation_v82": data_foundation.status(),
         "automations": automation_store.counts(),
         "mcp": mcp_manager.status(),
         "code_lab": code_lab.status(),
@@ -7106,6 +7223,157 @@ def health():
             "jobs": _job_health(),
         },
         "health_endpoints": ["/api/health/live", "/api/health/ready", "/api/health/deep"],
+    }
+
+
+@app.get("/api/v82/status")
+def v82_status(request: Request, session_id: str = "default_session"):
+    enforce_request_guard(request)
+    sid = safe_session_id(session_id)
+    foundation = data_foundation.status()
+    durable_tasks = data_foundation.list_tasks(sid, limit=25) if foundation.get("connected") else []
+    return {
+        "status": "ok" if foundation.get("connected") else "degraded",
+        "version": APP_VERSION,
+        "edition": APP_EDITION,
+        "foundation": foundation,
+        "redis": runtime.redis.ping(),
+        "legacy_persistence": persistence_status(),
+        "durable_tasks": {
+            "total": len(durable_tasks),
+            "queued": sum(item.get("status") == "queued" for item in durable_tasks),
+            "running": sum(item.get("status") == "running" for item in durable_tasks),
+            "completed": sum(item.get("status") == "completed" for item in durable_tasks),
+            "failed": sum(item.get("status") == "failed" for item in durable_tasks),
+        },
+        "capabilities": [
+            "postgresql_optional",
+            "sqlite_fallback",
+            "hybrid_memory",
+            "durable_tasks",
+            "legacy_migration",
+            "conversation_mirroring",
+        ],
+    }
+
+
+@app.get("/api/v82/memory")
+def v82_memory_list(
+    request: Request,
+    session_id: str = "default_session",
+    project_name: str = "",
+    limit: int = 50,
+):
+    enforce_request_guard(request)
+    return {
+        "status": "ok",
+        "memories": data_foundation.list_memories(
+            safe_session_id(session_id),
+            project_name=project_name.strip()[:120],
+            limit=max(1, min(int(limit), 200)),
+        ),
+        "embedding": embedding_service.status(),
+    }
+
+
+@app.post("/api/v82/memory")
+def v82_memory_save(data: V82MemoryInput, request: Request):
+    enforce_request_guard(request)
+    memory = data_foundation.save_memory(
+        safe_session_id(data.session_id),
+        data.content,
+        project_name=data.project_name.strip()[:120] or "General",
+        memory_type=data.memory_type.strip()[:60] or "fact",
+        source=data.source.strip()[:120] or "user",
+        importance=data.importance,
+        confidence=data.confidence,
+        expires_at=data.expires_at,
+    )
+    return {"status": "created", "memory": memory}
+
+
+@app.post("/api/v82/memory/search")
+def v82_memory_search(data: V82MemorySearchInput, request: Request):
+    enforce_request_guard(request)
+    return {
+        "status": "ok",
+        "query": data.query,
+        "results": data_foundation.search_memory(
+            safe_session_id(data.session_id),
+            data.query,
+            project_name=data.project_name.strip()[:120],
+            limit=data.limit,
+        ),
+        "strategy": "hybrid_semantic_lexical",
+        "embedding": embedding_service.status(),
+    }
+
+
+@app.delete("/api/v82/memory/{memory_id}")
+def v82_memory_delete(memory_id: str, request: Request, session_id: str = "default_session"):
+    enforce_request_guard(request)
+    deleted = data_foundation.delete_memory(safe_session_id(session_id), memory_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Recuerdo no encontrado.")
+    return {"status": "deleted", "id": memory_id}
+
+
+@app.get("/api/v82/tasks")
+def v82_tasks(request: Request, session_id: str = "default_session", limit: int = 50):
+    enforce_request_guard(request)
+    return {
+        "status": "ok",
+        "tasks": data_foundation.list_tasks(safe_session_id(session_id), limit=max(1, min(int(limit), 200))),
+    }
+
+
+@app.post("/api/v82/tasks")
+def v82_task_create(data: V82TaskInput, request: Request, background_tasks: BackgroundTasks):
+    enforce_request_guard(request)
+    sid = safe_session_id(data.session_id)
+    task = data_foundation.enqueue_task(
+        sid,
+        data.task_type,
+        data.title,
+        payload=data.payload,
+        priority=data.priority,
+        max_attempts=data.max_attempts,
+    )
+    if data.run_now:
+        background_tasks.add_task(data_foundation.run_maintenance_task, sid, task["id"])
+    return {"status": "queued", "task": task, "run_now": data.run_now}
+
+
+@app.post("/api/v82/tasks/{task_id}/run")
+def v82_task_run(task_id: str, request: Request, session_id: str = "default_session"):
+    enforce_request_guard(request)
+    try:
+        return {
+            "status": "ok",
+            "task": data_foundation.run_maintenance_task(safe_session_id(session_id), task_id),
+        }
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/api/v82/tasks/{task_id}/cancel")
+def v82_task_cancel(task_id: str, request: Request, session_id: str = "default_session"):
+    enforce_request_guard(request)
+    cancelled = data_foundation.cancel_task(safe_session_id(session_id), task_id)
+    if not cancelled:
+        raise HTTPException(status_code=409, detail="La tarea ya no puede cancelarse.")
+    return {"status": "cancelled", "id": task_id}
+
+
+@app.post("/api/v82/migrate")
+def v82_migrate(data: V82MigrationInput, request: Request):
+    enforce_request_guard(request)
+    identity = getattr(request.state, "identity", None)
+    if not data.dry_run and AUTH_REQUIRED and str((identity or {}).get("role") or "") != "owner":
+        raise HTTPException(status_code=403, detail="Solo la cuenta propietaria puede ejecutar la migración.")
+    return {
+        "status": "preview" if data.dry_run else "completed",
+        "migration": data_foundation.migrate_from_legacy(DB_FILE, dry_run=data.dry_run),
     }
 
 

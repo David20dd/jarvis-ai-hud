@@ -27,6 +27,7 @@ from .v76 import (
     UnifiedExperienceStore,
     V76_STAGES,
 )
+from .v82 import DataFoundation, EmbeddingService, SCHEMA_VERSION
 
 __all__ = [
     "RuntimeSupport", "compact_messages", "disk_status", "ToolDefinition", "ToolRegistry",
@@ -39,4 +40,5 @@ __all__ = [
     "QualitySuite", "ResearchLibrary",
     "AdaptiveDecisionEngine", "AdaptiveLearningStore", "AnswerQualityGate", "append_source_list",
     "CommandRouter", "ImprovementAdvisor", "UnifiedExperienceStore", "V76_STAGES",
+    "DataFoundation", "EmbeddingService", "SCHEMA_VERSION",
 ]

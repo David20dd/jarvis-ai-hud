@@ -744,7 +744,7 @@
 
   const PANEL_INFO = {
     knowledge:['CONOCIMIENTO','Biblioteca y memoria'], missions:['AUTONOMÍA','Misiones'],
-    nexus:['CONTROL','Nexus v77'], channels:['TELEGRAM','Asistente móvil'],
+    nexus:['CONTROL','Nexus v82'], channels:['TELEGRAM','Asistente móvil'],
     library:['CONOCIMIENTO','Biblioteca'], memory:['CONTEXTO','Memoria'], system:['ESTADO','Diagnóstico del núcleo']
   };
 
@@ -838,6 +838,14 @@
           <div class="research-result" id="researchResult" hidden></div>
         </article>
       </section>
+      <section class="panel-section">
+        <article class="panel-card v82-memory-lab">
+          <div class="panel-section-head"><div><span class="card-kicker">MEMORIA HÍBRIDA · v82</span><h3>Encontrar contexto por significado</h3></div><span class="status-tag">semántica + texto</span></div>
+          <p>Busca decisiones, preferencias y conocimiento aunque no recuerdes las palabras exactas. La ruta local mantiene esta función disponible sin enviar tus recuerdos a un proveedor externo.</p>
+          <div class="research-controls"><input class="text-input" id="semanticMemoryQuery" placeholder="¿Qué recuerdas sobre este proyecto?"/><button class="primary-btn" id="semanticMemorySearch">Buscar memoria</button></div>
+          <div class="semantic-memory-results" id="semanticMemoryResults" hidden></div>
+        </article>
+      </section>
       <section class="panel-section knowledge-actions">
         <article class="panel-card">
           <div class="panel-section-head"><div><span class="card-kicker">CAPTURAR</span><h3>Agregar conocimiento</h3></div></div>
@@ -865,6 +873,18 @@
         toast('Investigación guardada en la memoria semántica');
       } catch(error) { output.innerHTML=`<div class="empty-state error-state">${escapeHTML(explainError(error))}</div>`; }
       finally { button.disabled=false; button.textContent='Investigar'; }
+    });
+    $('#semanticMemorySearch')?.addEventListener('click', async () => {
+      const query=$('#semanticMemoryQuery').value.trim();
+      if(!query)return toast('Escribe algo que quieras recuperar.');
+      const button=$('#semanticMemorySearch'), output=$('#semanticMemoryResults');
+      button.disabled=true;button.textContent='Buscando…';output.hidden=false;output.innerHTML='<div class="empty-state">Relacionando recuerdos y contexto…</div>';
+      try{
+        const data=await request('/api/v82/memory/search',{method:'POST',body:JSON.stringify({session_id:backendSessionId(),query,project_name:'',limit:8})});
+        const items=data.results||[];
+        output.innerHTML=items.length?`<div class="list-stack">${items.map(item=>`<article class="list-row semantic-result"><div><strong>${escapeHTML(item.content)}</strong><small>${escapeHTML(item.memory_type||'memoria')} · coincidencia ${Math.round(Number(item.score||0)*100)}%</small></div><span class="status-tag">${escapeHTML(item.project_name||'General')}</span></article>`).join('')}</div>`:'<div class="empty-state">No encontré un recuerdo relacionado todavía.</div>';
+      }catch(error){output.innerHTML=`<div class="empty-state error-state">${escapeHTML(explainError(error))}</div>`;}
+      finally{button.disabled=false;button.textContent='Buscar memoria';}
     });
     $('#saveFact')?.addEventListener('click', async () => {
       const subject=$('#factSubject').value.trim(), object_text=$('#factObject').value.trim();
@@ -916,16 +936,29 @@
       request(`/api/artifacts?session_id=${sid}&limit=12`), request(`/api/automations?session_id=${sid}&limit=12`),
       request(`/api/intelligence/decisions?session_id=${sid}&limit=8`),
       request(`/api/actions?session_id=${sid}&limit=20`), request(`/api/operations/v65?session_id=${sid}`),
-      request(`/api/adaptive/status?session_id=${sid}&limit=8`)
+      request(`/api/adaptive/status?session_id=${sid}&limit=8`),
+      request(`/api/v82/status?session_id=${sid}`)
     ]);
     const core=valueOf(results[0]), integrations=valueOf(results[1]).integrations||[], artifacts=valueOf(results[2]).artifacts||[];
     const automations=valueOf(results[3]).automations||[], decisions=valueOf(results[4]).decisions||[];
     const actions=valueOf(results[5]).actions||[], operations=valueOf(results[6]), adaptive=valueOf(results[7]);
+    const v82=valueOf(results[8]), foundation=v82.foundation||{}, foundationCounts=foundation.counts||{};
     const providers=core.providers?.configured||[], intelligence=core.intelligence||{};
     const pendingActions=actions.filter(item=>item.status==='pending_approval');
     const latestQuality=operations.latest||{};
     els.panelContent.innerHTML=`
-      <div class="nexus-hero panel-card"><div><span class="card-kicker">REFINED EXPERIENCE · v77</span><h3>Inteligencia, evidencia y acción bajo tu control</h3><p>JARVIS decide cuándo consultar memoria, documentos o internet; verifica actualidad y mantiene las acciones sensibles bajo aprobación.</p></div><button class="soft-btn" id="nexusDiagnostics">Diagnóstico</button></div>
+      <div class="nexus-hero panel-card"><div><span class="card-kicker">PERSONAL INTELLIGENCE OS · v82</span><h3>Inteligencia, evidencia y acción bajo tu control</h3><p>JARVIS decide cuándo consultar memoria, documentos o internet; verifica actualidad y mantiene las acciones sensibles bajo aprobación.</p></div><button class="soft-btn" id="nexusDiagnostics">Diagnóstico</button></div>
+      <section class="panel-section v82-foundation">
+        <div class="panel-section-head"><div><span class="card-kicker">DATA FOUNDATION</span><h3>Tu información permanece disponible</h3></div><span class="status-tag ${foundation.connected?'ok':'warn'}">${foundation.connected?'Conectada':'Modo compatible'}</span></div>
+        <div class="v82-foundation-grid">
+          <article class="panel-card v82-foundation-card"><span class="foundation-icon"><svg class="icon"><use href="#i-cpu"></use></svg></span><div><small>ALMACENAMIENTO</small><strong>${escapeHTML(foundation.driver||'sqlite')}</strong><p>${foundation.durable?'Persistencia confirmada':'Activa con respaldo local'}</p></div></article>
+          <article class="panel-card v82-foundation-card"><span class="foundation-icon"><svg class="icon"><use href="#i-knowledge"></use></svg></span><div><small>MEMORIA</small><strong>${Number(foundationCounts.memories||0)}</strong><p>${escapeHTML(foundation.embedding?.provider||'local')} · ${Number(foundation.embedding?.dimensions||0)} dimensiones</p></div></article>
+          <article class="panel-card v82-foundation-card"><span class="foundation-icon"><svg class="icon"><use href="#i-chat"></use></svg></span><div><small>MENSAJES REFLEJADOS</small><strong>${Number(foundationCounts.messages||0)}</strong><p>Conversaciones protegidas por sesión</p></div></article>
+          <article class="panel-card v82-foundation-card"><span class="foundation-icon"><svg class="icon"><use href="#i-target"></use></svg></span><div><small>TAREAS DURABLES</small><strong>${Number(v82.durable_tasks?.total||0)}</strong><p>${Number(v82.durable_tasks?.queued||0)} en espera</p></div></article>
+        </div>
+        <div class="button-row v82-foundation-actions"><button class="soft-btn" id="v82MigrationPreview">Analizar migración</button><button class="soft-btn" id="v82ConsolidateMemory">Optimizar memoria</button></div>
+        <div class="plan-result" id="v82FoundationResult" hidden></div>
+      </section>
       <div class="panel-grid nexus-metrics">
         <article class="panel-card metric-card"><span class="card-kicker">PROVEEDORES</span><strong class="metric">${providers.length}</strong><p>${providers.length?providers.map(escapeHTML).join(' · '):'Modo local disponible'}</p></article>
         <article class="panel-card metric-card"><span class="card-kicker">DECISIONES</span><strong class="metric">${Object.values(intelligence.decisions||{}).reduce((a,b)=>a+Number(b||0),0)}</strong><p>Rutas registradas por el planificador.</p></article>
@@ -940,6 +973,32 @@
       <section class="panel-section"><div class="panel-section-head"><h3>Resultados interactivos</h3><button class="soft-btn" id="newArtifact">Crear lista</button></div><div class="artifact-grid">${artifacts.length?artifacts.map(renderArtifactCard).join(''):'<div class="empty-state">Crea tablas, gráficas, listas y cronogramas seguros.</div>'}</div></section>
       <section class="panel-section"><div class="panel-section-head"><h3>Decisiones recientes</h3><span class="status-tag">${decisions.length}</span></div><div class="list-stack">${decisions.length?decisions.map(item=>`<article class="list-row"><div><strong>${escapeHTML(item.objective)}</strong><small>${escapeHTML(item.intent)} · ${escapeHTML(item.complexity)} · ${escapeHTML(item.status)}</small></div><span class="status-tag ${item.status==='completed'?'ok':'warn'}">${Math.round(Number(item.quality_score||0)*100)}%</span></article>`).join(''):'<div class="empty-state">Las decisiones aparecerán al conversar o ejecutar misiones.</div>'}</div></section>`;
     $('#nexusDiagnostics')?.addEventListener('click',()=>openView('system'));
+    $('#v82MigrationPreview')?.addEventListener('click',async()=>{
+      const button=$('#v82MigrationPreview'),output=$('#v82FoundationResult');button.disabled=true;button.textContent='Analizando…';
+      try{
+        const data=await request('/api/v82/migrate',{method:'POST',body:JSON.stringify({dry_run:true})});
+        const migration=data.migration||{},count=Number(migration.importable||0),target=String(migration.target||foundation.driver||'sqlite');
+        output.hidden=false;
+        output.innerHTML=`<strong>${count} registros pendientes</strong><p>${!migration.available?'No se encontró una base heredada para migrar.':count?`Destino: ${escapeHTML(target)}. Revisa el conteo y confirma la copia segura.`:'La base está disponible y no contiene registros pendientes; no se duplicará información.'}</p>${migration.available&&count?'<button class="primary-btn mini-btn" id="v82RunMigration">Migrar ahora</button>':''}`;
+        $('#v82RunMigration')?.addEventListener('click',async()=>{
+          if(!window.confirm(`¿Migrar ${count} registros heredados a ${target}? La operación es idempotente y no volverá a copiar registros ya importados.`))return;
+          const runButton=$('#v82RunMigration');runButton.disabled=true;runButton.textContent='Migrando…';
+          try{
+            const completed=await request('/api/v82/migrate',{method:'POST',body:JSON.stringify({dry_run:false})},{timeoutMs:90000});
+            const imported=completed.migration?.imported||{};
+            output.innerHTML=`<strong>Migración completada</strong><p>${Number(imported.messages||0)} mensajes y ${Number(imported.memories||0)} recuerdos importados. Los registros ya migrados fueron omitidos.</p>`;
+            toast('Datos heredados migrados correctamente');
+            setTimeout(renderNexus,900);
+          }catch(error){toast(explainError(error));runButton.disabled=false;runButton.textContent='Migrar ahora';}
+        });
+      }
+      catch(error){toast(explainError(error));}finally{button.disabled=false;button.textContent='Analizar migración';}
+    });
+    $('#v82ConsolidateMemory')?.addEventListener('click',async()=>{
+      const button=$('#v82ConsolidateMemory');button.disabled=true;button.textContent='Optimizando…';
+      try{await request('/api/v82/tasks',{method:'POST',body:JSON.stringify({session_id:backendSessionId(),task_type:'memory_consolidation',title:'Consolidar memoria',run_now:true})});toast('Optimización iniciada en segundo plano');setTimeout(renderNexus,900);}
+      catch(error){toast(explainError(error));button.disabled=false;button.textContent='Optimizar memoria';}
+    });
     const runPlan=async execute=>{
       const objective=$('#nexusObjective').value.trim(); if(!objective)return toast('Escribe un objetivo concreto.');
       const button=execute?$('#runNexusPlan'):$('#previewNexusPlan'); button.disabled=true; button.textContent=execute?'Iniciando…':'Planificando…';
@@ -1197,7 +1256,7 @@
 
   function registerServiceWorker() {
     if (!('serviceWorker' in navigator) || location.protocol === 'file:') return;
-    navigator.serviceWorker.register('./service-worker.js?v=77.0').catch(()=>{});
+    navigator.serviceWorker.register('./service-worker.js?v=82.0').catch(()=>{});
   }
 })();
 

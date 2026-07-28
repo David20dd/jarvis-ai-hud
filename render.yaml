@@ -19,7 +19,7 @@ services:
       - key: JARVIS_ACCESS_KEY
         sync: false
       - key: JARVIS_ALLOWED_ORIGINS
-        value: "*"
+        value: https://david20dd.github.io
       - key: JARVIS_REQUESTS_PER_MINUTE
         value: "20"
       - key: JARVIS_DIRECT_ROUTES
@@ -32,6 +32,16 @@ services:
         value: "3600"
       - key: JARVIS_DB_FILE
         value: jarvis_memory.db
+      - key: DATABASE_URL
+        fromDatabase:
+          name: jarvis-v82-postgres
+          property: connectionString
+      - key: JARVIS_EMBEDDING_PROVIDER
+        value: local
+      - key: JARVIS_EMBEDDING_MODEL
+        value: text-embedding-3-small
+      - key: JARVIS_EMBEDDING_DIMENSIONS
+        value: "256"
       - key: JARVIS_AUTH_REQUIRED
         value: "true"
       - key: JARVIS_REGISTRATION_ENABLED
@@ -178,3 +188,9 @@ services:
         sync: false
       - key: NOTION_TOKEN
         sync: false
+
+databases:
+  - name: jarvis-v82-postgres
+    plan: free
+    databaseName: jarvis
+    user: jarvis
