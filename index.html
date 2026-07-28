@@ -4,15 +4,16 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#0a0f15" />
-  <meta name="description" content="J.A.R.V.I.S. v76: conversación, investigación, memoria, misiones autónomas, resultados interactivos y recuperación confiable." />
-  <title>J.A.R.V.I.S. — Unified Experience v76</title>
-  <link rel="icon" href="./static/favicon-v46.svg?v=76.0" type="image/svg+xml" />
-  <link rel="manifest" href="./static/manifest.webmanifest?v=76.0" />
-  <link rel="stylesheet" href="./static/styles.css?v=76.0" />
-  <link rel="stylesheet" href="./static/v76.css?v=76.0" />
-  <script defer src="./static/config.js?v=76.0"></script>
-  <script defer src="./static/app.js?v=76.0"></script>
-  <script defer src="./static/v76.js?v=76.0"></script>
+  <meta name="description" content="J.A.R.V.I.S. v77: una experiencia personal, clara y confiable para conversar, investigar, analizar y ejecutar misiones." />
+  <title>J.A.R.V.I.S. — Refined Experience v77</title>
+  <link rel="icon" href="./static/favicon-v46.svg?v=77.0" type="image/svg+xml" />
+  <link rel="manifest" href="./static/manifest.webmanifest?v=77.0" />
+  <link rel="stylesheet" href="./static/styles.css?v=77.0" />
+  <link rel="stylesheet" href="./static/v76.css?v=77.0" />
+  <link rel="stylesheet" href="./static/v77.css?v=77.0" />
+  <script defer src="./static/config.js?v=77.0"></script>
+  <script defer src="./static/app.js?v=77.0"></script>
+  <script defer src="./static/v76.js?v=77.0"></script>
 </head>
 <body>
   <a class="skip-link" href="#messageInput">Saltar al mensaje</a>
@@ -55,7 +56,7 @@
       <header class="sidebar-head">
         <button class="brand" id="brandBtn" aria-label="Ir al chat">
           <span class="brand-reactor"><img src="./static/jarvis-reactor-v46.svg" alt="" /></span>
-          <span><strong>J.A.R.V.I.S.</strong><small>Unified Experience · v76</small></span>
+          <span><strong>J.A.R.V.I.S.</strong><small>Refined Experience · v77</small></span>
         </button>
         <button class="icon-btn sidebar-close" id="sidebarClose" aria-label="Cerrar menú"><svg class="icon"><use href="#i-x"></use></svg></button>
       </header>
@@ -198,10 +199,11 @@
       <p class="eyebrow">ACCESO PERSONAL</p>
       <h2 id="authTitle">Conecta tu núcleo</h2>
       <p id="authCopy">Inicia sesión para utilizar las funciones privadas.</p>
-      <div class="auth-tabs"><button type="button" class="active" data-auth-tab="login">Iniciar sesión</button><button type="button" data-auth-tab="register" id="registerTab">Crear cuenta</button></div>
+      <div class="auth-tabs"><button type="button" class="active" data-auth-tab="login">Iniciar sesión</button><button type="button" data-auth-tab="register" id="registerTab">Crear cuenta</button><button type="button" data-auth-tab="recovery" id="recoveryTab">Recuperar acceso</button></div>
       <div class="field" id="nameField" hidden><label for="authName">Nombre</label><input id="authName" autocomplete="name" /></div>
       <div class="field"><label for="authEmail">Correo</label><input id="authEmail" type="email" autocomplete="username" required /></div>
       <div class="field"><label for="authPassword">Contraseña</label><input id="authPassword" type="password" autocomplete="current-password" required /></div>
+      <div class="field" id="recoveryKeyField" hidden><label for="authRecoveryKey">Clave privada de recuperación</label><input id="authRecoveryKey" type="password" autocomplete="off" /><small>Es el valor de JARVIS_ACCESS_KEY guardado en Render. Nunca se almacena en el navegador.</small></div>
       <p class="form-error" id="authError" hidden></p>
       <button class="primary-btn wide" id="authSubmit" value="default">Continuar</button>
       <small class="privacy-note">El token permanece solo en esta sesión. Las claves de IA nunca se guardan en el navegador.</small>

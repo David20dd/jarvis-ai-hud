@@ -45,8 +45,9 @@
     fileInput: $('#fileInput'), attachments: $('#attachments'), voiceBtn: $('#voiceBtn'),
     panelBack: $('#panelBack'), panelEyebrow: $('#panelEyebrow'), panelTitle: $('#panelTitle'), panelContent: $('#panelContent'), panelRefresh: $('#panelRefresh'),
     accountBtn: $('#accountBtn'), accountName: $('#accountName'), accountState: $('#accountState'), avatar: $('#avatar'),
-    authModal: $('#authModal'), authForm: $('#authForm'), authTitle: $('#authTitle'), authCopy: $('#authCopy'), registerTab: $('#registerTab'),
-    nameField: $('#nameField'), authName: $('#authName'), authEmail: $('#authEmail'), authPassword: $('#authPassword'), authError: $('#authError'), authSubmit: $('#authSubmit'),
+    authModal: $('#authModal'), authForm: $('#authForm'), authTitle: $('#authTitle'), authCopy: $('#authCopy'), registerTab: $('#registerTab'), recoveryTab: $('#recoveryTab'),
+    nameField: $('#nameField'), authName: $('#authName'), authEmail: $('#authEmail'), authPassword: $('#authPassword'),
+    recoveryKeyField: $('#recoveryKeyField'), authRecoveryKey: $('#authRecoveryKey'), authError: $('#authError'), authSubmit: $('#authSubmit'),
     connectionModal: $('#connectionModal'), connectionExplanation: $('#connectionExplanation'), apiBaseInput: $('#apiBaseInput'),
     resetConnection: $('#resetConnection'), saveConnection: $('#saveConnection'), connectionResult: $('#connectionResult'), toast: $('#toast')
   };
@@ -287,7 +288,7 @@
 
   function explainError(error) {
     if (!navigator.onLine) return 'El dispositivo no tiene conexión a internet.';
-    if (error?.status === 401) return 'El núcleo requiere iniciar sesión.';
+    if (error?.status === 401) return String(error?.message || 'Correo o contraseña incorrectos.').slice(0, 220);
     if (error?.status === 403) return 'El dominio o la cuenta no tienen autorización.';
     if (error?.status === 404) return 'La URL no corresponde al backend de JARVIS.';
     if ([502,503,504].includes(error?.status)) return 'Render está iniciando o el servicio no pudo arrancar.';
@@ -743,7 +744,7 @@
 
   const PANEL_INFO = {
     knowledge:['CONOCIMIENTO','Biblioteca y memoria'], missions:['AUTONOMÍA','Misiones'],
-    nexus:['CONTROL','Nexus v76'], channels:['TELEGRAM','Asistente móvil'],
+    nexus:['CONTROL','Nexus v77'], channels:['TELEGRAM','Asistente móvil'],
     library:['CONOCIMIENTO','Biblioteca'], memory:['CONTEXTO','Memoria'], system:['ESTADO','Diagnóstico del núcleo']
   };
 
@@ -924,7 +925,7 @@
     const pendingActions=actions.filter(item=>item.status==='pending_approval');
     const latestQuality=operations.latest||{};
     els.panelContent.innerHTML=`
-      <div class="nexus-hero panel-card"><div><span class="card-kicker">UNIFIED EXPERIENCE · v76</span><h3>Inteligencia, evidencia y acción bajo tu control</h3><p>JARVIS decide cuándo consultar memoria, documentos o internet; verifica actualidad y mantiene las acciones sensibles bajo aprobación.</p></div><button class="soft-btn" id="nexusDiagnostics">Diagnóstico</button></div>
+      <div class="nexus-hero panel-card"><div><span class="card-kicker">REFINED EXPERIENCE · v77</span><h3>Inteligencia, evidencia y acción bajo tu control</h3><p>JARVIS decide cuándo consultar memoria, documentos o internet; verifica actualidad y mantiene las acciones sensibles bajo aprobación.</p></div><button class="soft-btn" id="nexusDiagnostics">Diagnóstico</button></div>
       <div class="panel-grid nexus-metrics">
         <article class="panel-card metric-card"><span class="card-kicker">PROVEEDORES</span><strong class="metric">${providers.length}</strong><p>${providers.length?providers.map(escapeHTML).join(' · '):'Modo local disponible'}</p></article>
         <article class="panel-card metric-card"><span class="card-kicker">DECISIONES</span><strong class="metric">${Object.values(intelligence.decisions||{}).reduce((a,b)=>a+Number(b||0),0)}</strong><p>Rutas registradas por el planificador.</p></article>
@@ -1077,6 +1078,7 @@
       }
       if (state.token) clearSession();
       els.registerTab.hidden = !data.registration_enabled;
+      els.recoveryTab.hidden = !data.owner_recovery_enabled;
       setAuthMode(data.first_user_pending && data.registration_enabled ? 'register' : 'login');
       els.authCopy.textContent = data.first_user_pending ? 'Crea la primera cuenta propietaria para activar JARVIS.' : 'Inicia sesión para utilizar las funciones privadas.';
       if (!els.authModal.open) els.authModal.showModal();
@@ -1090,27 +1092,47 @@
     state.authMode = mode;
     $$('[data-auth-tab]').forEach(button => button.classList.toggle('active', button.dataset.authTab === mode));
     els.nameField.hidden = mode !== 'register';
-    els.authTitle.textContent = mode === 'register' ? 'Crea tu cuenta propietaria' : 'Bienvenido de nuevo';
-    els.authSubmit.textContent = mode === 'register' ? 'Crear cuenta y conectar' : 'Iniciar sesión';
-    els.authPassword.autocomplete = mode === 'register' ? 'new-password' : 'current-password';
+    els.recoveryKeyField.hidden = mode !== 'recovery';
+    els.authRecoveryKey.required = mode === 'recovery';
+    if (mode === 'register') {
+      els.authTitle.textContent = 'Crea tu cuenta propietaria';
+      els.authCopy.textContent = 'Registra la primera cuenta protegida de JARVIS.';
+      els.authSubmit.textContent = 'Crear cuenta y conectar';
+    } else if (mode === 'recovery') {
+      els.authTitle.textContent = 'Recupera tu acceso';
+      els.authCopy.textContent = 'Define una contraseña nueva utilizando la clave privada guardada en Render.';
+      els.authSubmit.textContent = 'Restablecer y conectar';
+    } else {
+      els.authTitle.textContent = 'Bienvenido de nuevo';
+      els.authCopy.textContent = 'Inicia sesión para utilizar las funciones privadas.';
+      els.authSubmit.textContent = 'Iniciar sesión';
+    }
+    els.authPassword.autocomplete = mode === 'login' ? 'current-password' : 'new-password';
     els.authError.hidden = true;
   }
 
   async function submitAuth(event) {
     event.preventDefault();
     const email=els.authEmail.value.trim(), password=els.authPassword.value;
-    const payload = state.authMode === 'register' ? { display_name:els.authName.value.trim(), email, password } : { email, password };
+    const recovering = state.authMode === 'recovery';
+    const payload = state.authMode === 'register'
+      ? { display_name:els.authName.value.trim(), email, password }
+      : recovering ? { email, new_password:password } : { email, password };
+    const headers = recovering ? { 'X-Jarvis-Recovery-Key': els.authRecoveryKey.value } : {};
     els.authSubmit.disabled = true; els.authSubmit.textContent = 'Conectando…'; els.authError.hidden = true;
     try {
-      const result = await request(state.authMode === 'register' ? '/api/auth/register' : '/api/auth/login', { method:'POST', body:JSON.stringify(payload) }, { timeoutMs:20000 });
+      const endpoint = state.authMode === 'register' ? '/api/auth/register' : recovering ? '/api/auth/recover-owner' : '/api/auth/login';
+      const result = await request(endpoint, { method:'POST', headers, body:JSON.stringify(payload) }, { timeoutMs:20000 });
       state.token=result.token || ''; state.user=result.user || null; state.auth.authenticated=true;
       session.setItem(KEYS.token,state.token); saveUser(); updateAccountUI();
+      els.authPassword.value=''; els.authRecoveryKey.value='';
       els.authModal.close(); setStatus('Núcleo operativo','online'); toast('Cuenta conectada');
       startNotificationPolling();
     } catch(error) {
       els.authError.textContent = explainError(error); els.authError.hidden=false;
     } finally {
-      els.authSubmit.disabled=false; els.authSubmit.textContent=state.authMode==='register'?'Crear cuenta y conectar':'Iniciar sesión';
+      els.authSubmit.disabled=false;
+      els.authSubmit.textContent=state.authMode==='register'?'Crear cuenta y conectar':state.authMode==='recovery'?'Restablecer y conectar':'Iniciar sesión';
     }
   }
 
@@ -1175,7 +1197,7 @@
 
   function registerServiceWorker() {
     if (!('serviceWorker' in navigator) || location.protocol === 'file:') return;
-    navigator.serviceWorker.register('./service-worker.js?v=76.0').catch(()=>{});
+    navigator.serviceWorker.register('./service-worker.js?v=77.0').catch(()=>{});
   }
 })();
 

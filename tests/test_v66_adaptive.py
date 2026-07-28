@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import tempfile
 from pathlib import Path
@@ -98,7 +98,7 @@ def test_adaptive_preview_does_not_execute_search():
 def test_adaptive_status_exposes_safety_boundaries():
     with TestClient(main.app) as client:
         payload = client.get("/api/adaptive/status", params={"session_id": "adaptive-status"}).json()
-        assert payload["version"] == "76.0.0"
+        assert payload["version"] == "77.0.0"
         assert payload["policy"]["evaluates_every_request"] is True
         assert payload["safety"]["deploys_automatically"] is False
 
@@ -185,5 +185,5 @@ def test_frontend_exposes_adaptive_evidence_without_new_primary_navigation():
     html = Path("index.html").read_text(encoding="utf-8")
     assert "Criterio y evidencia" in app_js
     assert "/api/adaptive/status" in app_js
-    assert "Unified Experience · v76" in html
+    assert "Refined Experience · v77" in html
 

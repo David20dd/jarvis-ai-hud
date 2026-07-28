@@ -38,6 +38,14 @@ services:
         value: "false"
       - key: JARVIS_AUTH_SESSION_DAYS
         value: "30"
+      - key: JARVIS_OWNER_EMAIL
+        sync: false
+      - key: JARVIS_OWNER_NAME
+        sync: false
+      - key: JARVIS_OWNER_PASSWORD
+        sync: false
+      - key: JARVIS_PERSISTENT_STORAGE
+        value: "false"
       - key: JARVIS_MAX_RESOLUTION_ATTEMPTS
         value: "5"
       - key: JARVIS_WEB_SEARCH_ATTEMPTS

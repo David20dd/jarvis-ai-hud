@@ -60,13 +60,13 @@ def test_v76_status_and_compatibility_routes():
         status = client.get("/api/v76/status", params={"session_id": "v76-status"})
         assert status.status_code == 200
         payload = status.json()
-        assert payload["version"] == "76.0.0"
+        assert payload["version"] == "77.0.0"
         assert payload["total_stages"] == 10
         assert payload["safety"]["self_deployment"] is False
         for version in (67, 70, 72, 75):
             response = client.get(f"/api/v{version}/status", params={"session_id": "compat"})
             assert response.status_code == 200
-            assert response.json()["version"] == "76.0.0"
+            assert response.json()["version"] == "77.0.0"
 
 
 def test_v76_preferences_api_round_trip():
@@ -93,7 +93,7 @@ def test_v76_context_returns_real_collections():
         response = client.get("/api/v76/context", params={"session_id": "v76-context"})
         assert response.status_code == 200
         payload = response.json()
-        assert payload["version"] == "76.0.0"
+        assert payload["version"] == "77.0.0"
         assert isinstance(payload["artifacts"], list)
         assert isinstance(payload["research"], list)
         assert isinstance(payload["jobs"], list)
@@ -122,9 +122,9 @@ def test_v76_frontend_contract_is_present():
     script = Path("static/v76.js").read_text(encoding="utf-8")
     css = Path("static/v76.css").read_text(encoding="utf-8")
     worker = Path("service-worker.js").read_text(encoding="utf-8")
-    assert "Unified Experience · v76" in html
+    assert "Refined Experience · v77" in html
     assert 'id="v76CommandPalette"' in html
     assert 'id="v76ContextDrawer"' in html
     assert "/api/v76/context" in script
     assert "v76-context-drawer" in css
-    assert "jarvis-unified-experience-v76-1" in worker
+    assert "jarvis-refined-experience-v77-1" in worker

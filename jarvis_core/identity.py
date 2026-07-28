@@ -100,6 +100,33 @@ class IdentityStore:
         with self._connect() as conn:
             return int(conn.execute("SELECT COUNT(*) FROM identity_users").fetchone()[0])
 
+    def ensure_owner(self, email: str, password: str, display_name: str) -> Dict[str, Any]:
+        """Create the private owner exactly once when the identity store is empty.
+
+        This is intended for ephemeral hosting where a deployment can recreate
+        an empty SQLite database. The password is hashed by ``register`` and is
+        never persisted or returned in clear text.
+        """
+        if self.user_count() > 0:
+            return {"created": False, "reason": "identity_store_not_empty"}
+        try:
+            user = self.register(email, password, display_name, role="admin")
+        except ValueError:
+            # Two startup processes may race. If either one created an account,
+            # the store is already safe and no second owner must be inserted.
+            if self.user_count() > 0:
+                return {"created": False, "reason": "created_concurrently"}
+            raise
+        return {
+            "created": True,
+            "user": {
+                "id": user.get("id", ""),
+                "email": user.get("email", ""),
+                "display_name": user.get("display_name", ""),
+                "role": user.get("role", ""),
+            },
+        }
+
     def register(self, email: str, password: str, display_name: str, *, role: str = "user") -> Dict[str, Any]:
         email = (email or "").strip().lower()
         display_name = re.sub(r"\s+", " ", display_name or "").strip()[:120]
@@ -166,6 +193,43 @@ class IdentityStore:
             conn.execute("UPDATE identity_users SET last_login_at = ?, updated_at = ? WHERE id = ?", (now, now, row["id"]))
         self.audit(row["id"], "identity.login", "session", "success")
         return {"token": token, "expires_at": now + self.session_seconds, "user": self.get_user(row["id"])}
+
+    def reset_owner_password(self, email: str, new_password: str) -> Dict[str, Any]:
+        """Reset the active administrator password and revoke previous sessions.
+
+        Authorization is deliberately handled by the API layer so this storage
+        method never receives or persists the recovery key.
+        """
+        email = (email or "").strip().lower()
+        self.validate_password(new_password)
+        salt, digest = _password_hash(new_password)
+        now = time.time()
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT id, role, status FROM identity_users WHERE email = ?",
+                (email,),
+            ).fetchone()
+            if row is None or row["role"] != "admin" or row["status"] != "active":
+                self.audit("", "identity.recover", "account", "failed", "Cuenta propietaria no encontrada")
+                raise PermissionError("No fue posible verificar la cuenta propietaria.")
+            conn.execute(
+                """
+                UPDATE identity_users
+                SET password_salt = ?, password_hash = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (salt, digest, now, row["id"]),
+            )
+            conn.execute(
+                """
+                UPDATE identity_sessions
+                SET revoked_at = ?
+                WHERE user_id = ? AND revoked_at = 0
+                """,
+                (now, row["id"]),
+            )
+        self.audit(row["id"], "identity.recover", "account", "success")
+        return self.get_user(row["id"]) or {}
 
     def authenticate(self, token: str, *, touch: bool = True) -> Optional[Dict[str, Any]]:
         if not token:

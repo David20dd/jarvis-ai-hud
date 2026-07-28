@@ -6,6 +6,7 @@ import base64
 import io
 import json
 import hashlib
+import hmac
 import logging
 import math
 import os
@@ -110,8 +111,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger("jarvis")
 
-APP_VERSION = "76.0.0"
-APP_EDITION = "Unified Experience"
+APP_VERSION = "77.0.0"
+APP_EDITION = "Refined Experience"
 
 DB_FILE = os.getenv("JARVIS_DB_FILE", "jarvis_memory.db").strip() or "jarvis_memory.db"
 BASE_DIR = Path(__file__).resolve().parent
@@ -182,6 +183,10 @@ MCP_SERVERS_JSON = os.getenv("JARVIS_MCP_SERVERS_JSON", "").strip()
 AUTH_REQUIRED = os.getenv("JARVIS_AUTH_REQUIRED", "false").strip().lower() not in {"0", "false", "no", "off"}
 REGISTRATION_ENABLED = os.getenv("JARVIS_REGISTRATION_ENABLED", "false").strip().lower() not in {"0", "false", "no", "off"}
 AUTH_SESSION_DAYS = max(1, min(int(os.getenv("JARVIS_AUTH_SESSION_DAYS", "30")), 90))
+OWNER_EMAIL = os.getenv("JARVIS_OWNER_EMAIL", "").strip().lower()
+OWNER_NAME = os.getenv("JARVIS_OWNER_NAME", "").strip()
+OWNER_PASSWORD = os.getenv("JARVIS_OWNER_PASSWORD", "")
+PERSISTENT_STORAGE_DECLARED = os.getenv("JARVIS_PERSISTENT_STORAGE", "false").strip().lower() in {"1", "true", "yes", "on"}
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 TELEGRAM_WEBHOOK_SECRET = os.getenv("TELEGRAM_WEBHOOK_SECRET", "").strip()
 TELEGRAM_ALLOWED_CHAT_IDS = os.getenv("TELEGRAM_ALLOWED_CHAT_IDS", "").strip()
@@ -237,6 +242,32 @@ telegram_media_ai = TelegramMediaAI(
     timeout_seconds=max(PROVIDER_TIMEOUT_SECONDS, 60),
 )
 unified_store = UnifiedIntelligenceStore(DB_FILE)
+
+
+def persistence_status() -> Dict[str, Any]:
+    """Return a secret-free description of the current storage guarantees."""
+    resolved = Path(DB_FILE).expanduser().resolve()
+    normalized = str(resolved).replace("\\", "/").lower()
+    render_disk_path = normalized == "/var/data" or normalized.startswith("/var/data/")
+    persistent = bool(PERSISTENT_STORAGE_DECLARED or render_disk_path)
+    owner_bootstrap_configured = bool(OWNER_EMAIL and OWNER_NAME and OWNER_PASSWORD)
+    warnings: List[str] = []
+    if not persistent:
+        warnings.append(
+            "La base SQLite puede reiniciarse al desplegar en un host con disco efímero."
+        )
+    if AUTH_REQUIRED and not owner_bootstrap_configured:
+        warnings.append(
+            "No hay restauración automática de la cuenta propietaria para una base vacía."
+        )
+    return {
+        "engine": "sqlite",
+        "persistent": persistent,
+        "storage_mode": "persistent" if persistent else "ephemeral_or_unverified",
+        "database_name": resolved.name,
+        "owner_bootstrap_configured": owner_bootstrap_configured,
+        "warnings": warnings,
+    }
 intelligence_planner = IntelligencePlanner()
 integration_registry = IntegrationRegistry(dict(os.environ))
 google_search_client = GoogleSearchClient(GOOGLE_SEARCH_API_KEY, GOOGLE_SEARCH_ENGINE_ID, min(PROVIDER_TIMEOUT_SECONDS, 30))
@@ -661,15 +692,28 @@ def _stop_maintenance() -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
+    owner_bootstrap = {"created": False, "configured": bool(OWNER_EMAIL and OWNER_NAME and OWNER_PASSWORD)}
+    if owner_bootstrap["configured"] and identity_store.user_count() == 0:
+        try:
+            owner_bootstrap = {
+                **identity_store.ensure_owner(OWNER_EMAIL, OWNER_PASSWORD, OWNER_NAME),
+                "configured": True,
+            }
+            if owner_bootstrap.get("created"):
+                logger.warning("Se restauró la cuenta propietaria en una base de datos vacía.")
+        except Exception:
+            # Never include the password or other environment values in logs.
+            logger.exception("No se pudo restaurar la cuenta propietaria configurada.")
     _ensure_job_executor()
     _start_maintenance()
     recovered = _recover_interrupted_jobs()
     recovered_workflows = _recover_interrupted_workflows()
     recovered_channels = _recover_channel_events()
     logger.info(
-        "J.A.R.V.I.S. v76 iniciado | public_mode=%s | redis=%s | jobs_recuperados=%s | workflows_recuperados=%s | canales_recuperados=%s",
+        "J.A.R.V.I.S. v77 iniciado | public_mode=%s | redis=%s | owner_bootstrap=%s | jobs_recuperados=%s | workflows_recuperados=%s | canales_recuperados=%s",
         PUBLIC_MODE,
         bool(REDIS_URL),
+        owner_bootstrap.get("created", False),
         recovered,
         recovered_workflows,
         recovered_channels,
@@ -678,11 +722,11 @@ async def lifespan(_: FastAPI):
     _stop_maintenance()
     JOB_EXECUTOR.shutdown(wait=False, cancel_futures=True)
     provider_gateway.close()
-    logger.info("J.A.R.V.I.S. v76 detenido")
+    logger.info("J.A.R.V.I.S. v77 detenido")
 
 
 app = FastAPI(
-    title=f"J.A.R.V.I.S. {APP_EDITION} v76",
+    title=f"J.A.R.V.I.S. {APP_EDITION} v77",
     version=APP_VERSION,
     lifespan=lifespan,
 )
@@ -742,6 +786,7 @@ AUTH_PUBLIC_PATHS = {
     "/api/auth/status",
     "/api/auth/register",
     "/api/auth/login",
+    "/api/persistence/status",
     "/api/channels/telegram/webhook",
 }
 
@@ -1058,6 +1103,11 @@ class RegisterInput(BaseModel):
 class LoginInput(BaseModel):
     email: str = Field(min_length=5, max_length=320)
     password: str = Field(min_length=1, max_length=256)
+
+
+class OwnerRecoveryInput(BaseModel):
+    email: str = Field(min_length=5, max_length=320)
+    new_password: str = Field(min_length=12, max_length=256)
 
 
 class TelegramWebhookSetupInput(BaseModel):
@@ -4271,10 +4321,17 @@ def auth_status(request: Request):
         "auth_required": AUTH_REQUIRED,
         "registration_enabled": REGISTRATION_ENABLED or count == 0,
         "first_user_pending": count == 0,
+        "owner_recovery_enabled": bool(JARVIS_ACCESS_KEY) and count > 0,
         "authenticated": bool(identity),
         "user": identity,
         "identity": identity_store.status(),
+        "persistence": persistence_status(),
     }
+
+
+@app.get("/api/persistence/status")
+def api_persistence_status():
+    return {"status": "ok", "version": APP_VERSION, **persistence_status()}
 
 
 @app.post("/api/auth/register")
@@ -4312,6 +4369,36 @@ def auth_login(data: LoginInput, request: Request):
             ip_hint=_request_ip(request),
         )
         return {"status": "success", **session}
+    except PermissionError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+
+@app.post("/api/auth/recover-owner")
+def auth_recover_owner(data: OwnerRecoveryInput, request: Request):
+    """Recover the owner account with the private Render access key.
+
+    The recovery key is accepted only in a header, is never returned, and is
+    compared in constant time. All existing sessions are revoked before a new
+    one is created.
+    """
+    _enforce_rate_limit(request)
+    if not JARVIS_ACCESS_KEY:
+        raise HTTPException(status_code=503, detail="La recuperación de propietario no está configurada.")
+    supplied = request.headers.get("X-Jarvis-Recovery-Key", "")
+    if not supplied or not hmac.compare_digest(supplied, JARVIS_ACCESS_KEY):
+        identity_store.audit("", "identity.recover", "account", "failed", "Clave de recuperación inválida")
+        raise HTTPException(status_code=401, detail="La clave privada de recuperación no es válida.")
+    try:
+        identity_store.reset_owner_password(data.email, data.new_password)
+        session = identity_store.login(
+            data.email,
+            data.new_password,
+            user_agent=request.headers.get("user-agent", ""),
+            ip_hint=_request_ip(request),
+        )
+        return {"status": "success", **session, "recovered": True}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except PermissionError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
 
@@ -6581,7 +6668,7 @@ def dashboard(session_id: str):
         "models": provider_status(),
         "providers": resilience_provider_status(),
         "database": {"ok": True, "path": DB_FILE},
-        "features": ["unified_experience_v76", "global_command_palette", "context_workspace", "persistent_ui_preferences", "supervised_improvement_advisor", "gemini_google_search_grounding", "google_programmable_search", "bounded_public_page_ingestion", "traceable_research_library", "web_semantic_indexing", "multimodal_web_chat", "voice_transcription", "auditable_action_center", "approved_action_execution", "persistent_operations_ledger", "continuous_quality_suite", "executable_workflows", "persistent_workflow_steps", "approval_inbox", "evidence_ledger", "hybrid_semantic_memory", "deep_research_pipeline", "persistent_automations", "optional_mcp_client", "isolated_code_lab", "evaluation_core", "execution_planner", "resolution_trace", "local_verifier", "autonomous_agent", "smart_intent_router", "multi_provider_router", "anthropic_messages_api", "provider_capability_matrix", "optional_quality_council", "structured_tool_registry", "professional_mission_orchestrator", "specialist_team_selection", "quality_gates", "tool_calling", "persistent_background_jobs", "pause_resume_cancel", "multi_level_cache", "singleflight_deduplication", "circuit_breakers", "context_compaction", "performance_telemetry", "deep_health_checks", "project_workspaces", "memory", "documents", "reminders", "knowledge_search", "self_check"],
+        "features": ["refined_experience_v77", "owner_bootstrap_recovery", "persistence_diagnostics", "unified_experience_v76", "global_command_palette", "context_workspace", "persistent_ui_preferences", "supervised_improvement_advisor", "gemini_google_search_grounding", "google_programmable_search", "bounded_public_page_ingestion", "traceable_research_library", "web_semantic_indexing", "multimodal_web_chat", "voice_transcription", "auditable_action_center", "approved_action_execution", "persistent_operations_ledger", "continuous_quality_suite", "executable_workflows", "persistent_workflow_steps", "approval_inbox", "evidence_ledger", "hybrid_semantic_memory", "deep_research_pipeline", "persistent_automations", "optional_mcp_client", "isolated_code_lab", "evaluation_core", "execution_planner", "resolution_trace", "local_verifier", "autonomous_agent", "smart_intent_router", "multi_provider_router", "anthropic_messages_api", "provider_capability_matrix", "optional_quality_council", "structured_tool_registry", "professional_mission_orchestrator", "specialist_team_selection", "quality_gates", "tool_calling", "persistent_background_jobs", "pause_resume_cancel", "multi_level_cache", "singleflight_deduplication", "circuit_breakers", "context_compaction", "performance_telemetry", "deep_health_checks", "project_workspaces", "memory", "documents", "reminders", "knowledge_search", "self_check"],
         "runtime": runtime.snapshot(),
         "jobs_health": _job_health(),
     }
@@ -6606,6 +6693,7 @@ def self_check():
     except Exception as exc:
         checks["sympy"] = {"ok": False, "detail": safe_error_text(exc)}
     checks["static_ui"] = {"ok": INDEX_FILE.exists()}
+    checks["identity_persistence"] = {"ok": True, **persistence_status()}
     checks["groq_key"] = {"ok": bool(GROQ_API_KEY), "required_for": "proveedor principal"}
     checks["multi_provider_gateway"] = {"ok": bool(provider_gateway.configured_names()), "optional": True, "configured": provider_gateway.configured_names()}
     checks["resilient_search"] = {"ok": True, "attempts": WEB_SEARCH_ATTEMPTS, "max_results": WEB_SEARCH_RESULTS}
@@ -6644,6 +6732,9 @@ def capabilities():
         "requests_per_minute": REQUESTS_PER_MINUTE,
         "tools": list(TOOL_FUNCTIONS.keys()),
         "features": [
+            "refined_experience_v77",
+            "owner_bootstrap_recovery",
+            "persistence_diagnostics",
             "tool_calling",
             "multi_model_fallback",
             "multi_provider_fallback",
@@ -6872,6 +6963,7 @@ def health_live():
 @app.get("/api/health/ready")
 def health_ready():
     database = _database_probe()
+    persistence = persistence_status()
     static_ok = INDEX_FILE.exists() and STATIC_DIR.exists()
     ready = bool(database.get("ok") and static_ok)
     return JSONResponse(
@@ -6880,6 +6972,7 @@ def health_ready():
             "status": "ready" if ready else "not_ready",
         "version": APP_VERSION,
             "database": database,
+            "persistence": persistence,
             "static_ui": {"ok": static_ok},
             "generative_route_configured": bool(
                 provider_gateway.configured_names()
@@ -6910,6 +7003,7 @@ def health_deep():
         "status": status,
         "version": APP_VERSION,
         "database": database,
+        "persistence": persistence_status(),
         "redis": redis,
         "disk": disk,
         "jobs": jobs,
@@ -7000,6 +7094,7 @@ def health():
         "secondary_provider_configured": bool([name for name in provider_gateway.configured_names() if name != "groq"]),
         "database_ok": database_ok,
         "database_error": database_error,
+        "persistence": persistence_status(),
         "model": GROQ_MODEL,
         "models": provider_status(),
         "providers": resilience_provider_status(),
