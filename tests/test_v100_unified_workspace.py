@@ -88,7 +88,7 @@ def test_v100_api_workspace_status_and_crud():
         )
 
     assert status.status_code == 200
-    assert status.json()["version"] == "100.0.0"
+    assert status.json()["version"] == "101.0.0"
     assert len(status.json()["stages"]) == 7
     assert route.json()["decision"]["strategy"] == "document_intelligence"
     assert created.status_code == 200
@@ -123,16 +123,16 @@ def test_v100_frontend_contract_and_cache():
     worker = Path("service-worker.js").read_text(encoding="utf-8")
     manifest = json.loads(Path("static/manifest.webmanifest").read_text(encoding="utf-8"))
 
-    assert "Unified Intelligence · v100" in html
+    assert "Reliable Intelligence · v101" in html
     assert 'id="v100SlashMenu"' in html
     assert 'id="v100WorkspaceDrawer"' in html
-    assert "./static/v100.css?v=100.0" in html
-    assert "./static/v100.js?v=100.0" in html
+    assert "./static/v100.css?v=101.0" in html
+    assert "./static/v100.js?v=101.0" in html
     assert "streamRequest" in app and "/api/jarvis/stream" in app
     assert "data-edit-message" in app and "data-branch-message" in app
     assert "jarvis:save-canvas" in app
     assert "/api/v100/workspace" in v100_js
     assert ".v100-workspace-drawer" in css
     assert "@media (max-width: 390px)" in css
-    assert "jarvis-unified-workspace-v100-1" in worker
-    assert "v100" in manifest["name"].lower()
+    assert "jarvis-reliable-intelligence-v101-1" in worker
+    assert "v101" in manifest["name"].lower()

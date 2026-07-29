@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import sqlite3
 import time
@@ -109,7 +109,7 @@ def test_v82_api_contract():
         migration = client.post("/api/v82/migrate", json={"dry_run": True})
 
     assert status.status_code == 200
-    assert status.json()["version"] == "100.0.0"
+    assert status.json()["version"] == "101.0.0"
     assert status.json()["foundation"]["connected"] is True
     assert saved.status_code == 200
     assert search.status_code == 200
@@ -125,11 +125,11 @@ def test_v82_frontend_contract():
     css = Path("static/v82.css").read_text(encoding="utf-8")
     worker = Path("service-worker.js").read_text(encoding="utf-8")
 
-    assert "Unified Intelligence · v100" in html
-    assert "./static/v82.css?v=100.0" in html
+    assert "Reliable Intelligence · v101" in html
+    assert "./static/v82.css?v=101.0" in html
     assert "/api/v82/status" in app
     assert "/api/v82/memory/search" in app
     assert ".v82-foundation-grid" in css
     assert "@media (max-width: 720px)" in css
-    assert "jarvis-unified-workspace-v100-1" in worker
+    assert "jarvis-reliable-intelligence-v101-1" in worker
 

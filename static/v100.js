@@ -350,7 +350,7 @@
     try {
       const query = new URLSearchParams({ session_id:window.JARVIS_APP.backendSessionId() });
       const data = await api(`/api/v100/status?${query}`, {}, 18000);
-      document.body.dataset.jarvisVersion = data.version || '100.0.0';
+      document.body.dataset.jarvisVersion = data.version || '101.0.0';
       document.body.classList.toggle('v100-degraded', data.status !== 'ok');
     } catch {
       document.body.classList.add('v100-degraded');
@@ -361,4 +361,3 @@
     return window.JARVIS_APP.request(path, options, { attempts:1, timeoutMs });
   }
 })();
-

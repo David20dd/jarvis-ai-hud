@@ -1054,7 +1054,7 @@
 
   const PANEL_INFO = {
     knowledge:['CONOCIMIENTO','Biblioteca y memoria'], missions:['AUTONOMÍA','Misiones'],
-    nexus:['CONTROL','Nexus v93'], channels:['TELEGRAM','Asistente móvil'],
+    nexus:['CONTROL','Nexus v101'], channels:['TELEGRAM','Asistente móvil'],
     library:['CONOCIMIENTO','Biblioteca'], memory:['CONTEXTO','Memoria'], system:['ESTADO','Diagnóstico del núcleo']
   };
 
@@ -1259,7 +1259,7 @@
     const pendingActions=actions.filter(item=>item.status==='pending_approval');
     const latestQuality=operations.latest||{};
     els.panelContent.innerHTML=`
-      <div class="nexus-hero panel-card"><div><span class="card-kicker">UNIFIED PERSONAL INTELLIGENCE · v93</span><h3>Una inteligencia personal que entiende el contexto</h3><p>JARVIS combina perfiles de respuesta, proyectos, memoria, voz, investigación y ejecución segura sin saturar la experiencia.</p></div><button class="soft-btn" id="nexusDiagnostics">Diagnóstico</button></div>
+      <div class="nexus-hero panel-card"><div><span class="card-kicker">RELIABLE PERSONAL INTELLIGENCE · v101</span><h3>Una inteligencia personal que entiende y verifica</h3><p>JARVIS combina contexto, memoria, investigación, herramientas y mejora supervisada sin saturar la experiencia.</p></div><button class="soft-btn" id="nexusDiagnostics">Diagnóstico</button></div>
       <section class="panel-section v93-preferences">
         <div class="panel-section-head"><div><span class="card-kicker">EXPERIENCIA PERSONAL</span><h3>Respuesta y voz</h3></div><span class="status-tag ok">${Math.round(Number(v93Quality.average_score||0)*100)}% calidad</span></div>
         <div class="v93-preference-grid">
@@ -1609,7 +1609,7 @@
 
   function registerServiceWorker() {
     if (!('serviceWorker' in navigator) || location.protocol === 'file:') return;
-    navigator.serviceWorker.register('./service-worker.js?v=100.0').catch(()=>{});
+    navigator.serviceWorker.register('./service-worker.js?v=101.0').catch(()=>{});
   }
 
   window.JARVIS_APP = {

@@ -1,7 +1,7 @@
 {
-  "name": "J.A.R.V.I.S. Unified Intelligence Workspace v100",
+  "name": "J.A.R.V.I.S. Reliable Intelligence v101",
   "short_name": "JARVIS",
-  "description": "Espacio de inteligencia multimodelo con conversación, Canvas, investigación verificable, memoria, voz, automatización y Telegram.",
+  "description": "Conversación, Canvas, investigación, memoria, voz y mejora supervisada en una experiencia confiable.",
   "start_url": "../",
   "scope": "../",
   "display": "standalone",

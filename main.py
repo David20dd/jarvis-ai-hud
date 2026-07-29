@@ -77,6 +77,8 @@ from jarvis_core import (
     V93_STAGES,
     UnifiedWorkspace,
     V100_STAGES,
+    ReliabilityCore,
+    V101_STAGES,
     append_source_list,
     compact_messages,
     disk_status,
@@ -118,8 +120,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger("jarvis")
 
-APP_VERSION = "100.0.0"
-APP_EDITION = "Unified Intelligence Workspace"
+APP_VERSION = "101.0.0"
+APP_EDITION = "Reliable Intelligence"
 
 DB_FILE = os.getenv("JARVIS_DB_FILE", "jarvis_memory.db").strip() or "jarvis_memory.db"
 BASE_DIR = Path(__file__).resolve().parent
@@ -316,6 +318,7 @@ data_foundation = DataFoundation(
 )
 personal_os = PersonalIntelligenceOS(data_foundation)
 unified_workspace = UnifiedWorkspace(data_foundation)
+reliability_core = ReliabilityCore(data_foundation)
 
 
 def _provider_models(names: List[str], provider: str) -> List[ProviderModel]:
@@ -762,6 +765,7 @@ async def lifespan(_: FastAPI):
         data_foundation.init_schema()
         personal_os.init_schema()
         unified_workspace.init_schema()
+        reliability_core.init_schema()
     except Exception:
         # The legacy SQLite core remains available if an optional PostgreSQL
         # service is misconfigured. The deep health endpoint reports the cause.
@@ -802,7 +806,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(
-    title=f"J.A.R.V.I.S. {APP_EDITION} v100",
+    title=f"J.A.R.V.I.S. {APP_EDITION} v101",
     version=APP_VERSION,
     lifespan=lifespan,
 )
@@ -908,6 +912,7 @@ async def request_observability(request: Request, call_next):
     request.state.request_id = request_id
     status = "success"
     detail = ""
+    response_status = 0
     try:
         path = request.url.path.rstrip("/") or "/"
         is_public_api = (
@@ -928,8 +933,10 @@ async def request_observability(request: Request, call_next):
             response.headers["Cache-Control"] = "no-store"
             return response
         response = await call_next(request)
+        response_status = int(response.status_code)
         if response.status_code >= 500:
             status = "error"
+            detail = f"HTTP {response.status_code}"
         elif response.status_code >= 400:
             status = "cancelled" if response.status_code == 499 else "error"
         response.headers["X-Request-ID"] = request_id
@@ -952,6 +959,18 @@ async def request_observability(request: Request, call_next):
     finally:
         duration = (time.perf_counter() - started) * 1000
         record_telemetry(f"http:{request.method}:{request.url.path}", status, duration, request_id=request_id, detail=detail)
+        if status == "error" and request.url.path.startswith("/api/") and response_status not in {401, 403, 404, 422}:
+            try:
+                reliability_core.record_issue(
+                    safe_session_id(request.query_params.get("session_id", "system")),
+                    category="runtime",
+                    title=f"Fallo HTTP en {request.method} {request.url.path}",
+                    detail=detail or f"HTTP {response_status or 500}",
+                    severity="high" if response_status >= 500 or response_status == 0 else "medium",
+                    context={"request_id": request_id, "status_code": response_status},
+                )
+            except Exception:
+                logger.debug("No se pudo registrar la incidencia v101", exc_info=True)
 
 
 # -----------------------------------------------------------------------------
@@ -1324,6 +1343,30 @@ class V100RouteInput(BaseModel):
     message: str = Field(min_length=1, max_length=30000)
     mode: str = Field(default="auto", max_length=40)
     has_files: bool = False
+
+
+class V101IssueInput(BaseModel):
+    session_id: str = "default_session"
+    category: str = Field(default="frontend", min_length=1, max_length=80)
+    title: str = Field(min_length=1, max_length=300)
+    detail: str = Field(default="", max_length=4000)
+    severity: str = Field(default="medium", pattern="^(info|low|medium|high|critical)$")
+    context: Dict[str, Any] = Field(default_factory=dict)
+
+
+class V101IssueStatusInput(BaseModel):
+    session_id: str = "default_session"
+    status: str = Field(pattern="^(open|monitoring|resolved|ignored)$")
+
+
+class V101DiagnosticsInput(BaseModel):
+    session_id: str = "default_session"
+    hours: int = Field(default=24, ge=1, le=720)
+
+
+class V101ProposalDecisionInput(BaseModel):
+    session_id: str = "default_session"
+    decision: str = Field(pattern="^(reviewed|approved|rejected)$")
 
 
 # -----------------------------------------------------------------------------
@@ -6990,6 +7033,15 @@ def self_check():
         }
     except Exception as exc:
         checks["unified_workspace_v100"] = {"ok": False, "detail": safe_error_text(exc)}
+    try:
+        v101_core = reliability_core.status("self_check")
+        checks["reliability_core_v101"] = {
+            "ok": bool(v101_core.get("connected")),
+            "supervised": bool(v101_core.get("supervised")),
+            "autonomous_production_changes": bool(v101_core.get("autonomous_production_changes")),
+        }
+    except Exception as exc:
+        checks["reliability_core_v101"] = {"ok": False, "detail": safe_error_text(exc)}
     checks["groq_key"] = {"ok": bool(GROQ_API_KEY), "required_for": "proveedor principal"}
     checks["multi_provider_gateway"] = {"ok": bool(provider_gateway.configured_names()), "optional": True, "configured": provider_gateway.configured_names()}
     checks["resilient_search"] = {"ok": True, "attempts": WEB_SEARCH_ATTEMPTS, "max_results": WEB_SEARCH_RESULTS}
@@ -7028,6 +7080,14 @@ def capabilities():
         "requests_per_minute": REQUESTS_PER_MINUTE,
         "tools": list(TOOL_FUNCTIONS.keys()),
         "features": [
+            "reliability_self_improvement_v101",
+            "persistent_error_fingerprints",
+            "quality_regression_detection",
+            "supervised_change_proposals",
+            "human_approval_required",
+            "planned_rollback",
+            "frontend_error_reporting",
+            "visual_regression_ready",
             "unified_intelligence_workspace_v100",
             "conversation_streaming_with_fallback",
             "message_edit_and_branch",
@@ -7177,6 +7237,7 @@ def capabilities():
             "redis_configured": bool(REDIS_URL),
         },
         "v100": unified_workspace.status("capabilities"),
+        "v101": reliability_core.status("capabilities"),
     }
 
 
@@ -7554,6 +7615,161 @@ def v100_workspace_delete(
     if not unified_workspace.delete_item(safe_session_id(session_id), item_id):
         raise HTTPException(status_code=404, detail="Elemento no encontrado.")
     return {"status": "deleted", "id": item_id}
+
+
+@app.get("/api/v101/status")
+def v101_status(request: Request, session_id: str = "default_session"):
+    enforce_request_guard(request)
+    sid = safe_session_id(session_id)
+    status = reliability_core.status(sid)
+    return {
+        "status": "ok" if status.get("connected") else "degraded",
+        "version": APP_VERSION,
+        "edition": APP_EDITION,
+        "reliability": status,
+        "stages": V101_STAGES,
+        "test_matrix": {
+            "recovery": ["429", "timeout", "5xx", "invalid_json", "offline"],
+            "responsive": ["360x800", "390x844", "820x1180", "1440x900", "1920x1080"],
+            "security": ["xss", "ssrf", "idor", "cors", "rate_limit", "secret_scan"],
+            "quality": ["math", "tools", "sources", "memory", "documents", "fallback"],
+        },
+        "guardrails": {
+            "observe": True,
+            "classify": True,
+            "propose": True,
+            "modify_source": False,
+            "deploy": False,
+            "human_approval_required": True,
+        },
+    }
+
+
+@app.post("/api/v101/issues/report")
+def v101_issue_report(data: V101IssueInput, request: Request):
+    enforce_request_guard(request)
+    issue = reliability_core.record_issue(
+        safe_session_id(data.session_id),
+        category=data.category,
+        title=data.title,
+        detail=data.detail,
+        severity=data.severity,
+        context=data.context,
+    )
+    return {"status": "recorded", "issue": issue}
+
+
+@app.get("/api/v101/issues")
+def v101_issues(
+    request: Request,
+    session_id: str = "default_session",
+    status: str = "",
+    limit: int = 100,
+):
+    enforce_request_guard(request)
+    try:
+        items = reliability_core.list_issues(
+            safe_session_id(session_id),
+            status=status,
+            limit=limit,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"status": "ok", "issues": items}
+
+
+@app.put("/api/v101/issues/{issue_id}")
+def v101_issue_update(
+    issue_id: str,
+    data: V101IssueStatusInput,
+    request: Request,
+):
+    enforce_request_guard(request)
+    try:
+        item = reliability_core.update_issue(
+            safe_session_id(data.session_id),
+            issue_id,
+            data.status,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"status": "saved", "issue": item}
+
+
+@app.post("/api/v101/diagnostics/run")
+def v101_diagnostics_run(data: V101DiagnosticsInput, request: Request):
+    enforce_request_guard(request)
+    sid = safe_session_id(data.session_id)
+    self_check_payload = self_check()
+    quality = reliability_core.record_quality_run(
+        sid,
+        dict(self_check_payload.get("checks") or {}),
+    )
+    performance_payload = performance(sid, data.hours)
+    analysis = reliability_core.analyze(
+        sid,
+        operations=list(performance_payload.get("operations") or []),
+        recent=list(performance_payload.get("recent") or []),
+    )
+    return {
+        "status": "ok" if quality.get("status") == "healthy" else "degraded",
+        "quality": quality,
+        "analysis": analysis,
+        "reliability": reliability_core.status(sid),
+    }
+
+
+@app.get("/api/v101/quality")
+def v101_quality(
+    request: Request,
+    session_id: str = "default_session",
+    limit: int = 20,
+):
+    enforce_request_guard(request)
+    return {
+        "status": "ok",
+        "runs": reliability_core.quality_history(safe_session_id(session_id), limit),
+    }
+
+
+@app.get("/api/v101/improvements/proposals")
+def v101_proposals(
+    request: Request,
+    session_id: str = "default_session",
+    limit: int = 50,
+):
+    enforce_request_guard(request)
+    return {
+        "status": "ok",
+        "proposals": reliability_core.list_proposals(safe_session_id(session_id), limit),
+    }
+
+
+@app.post("/api/v101/improvements/proposals/{proposal_id}/decision")
+def v101_proposal_decision(
+    proposal_id: str,
+    data: V101ProposalDecisionInput,
+    request: Request,
+):
+    enforce_request_guard(request)
+    try:
+        proposal = reliability_core.review_proposal(
+            safe_session_id(data.session_id),
+            proposal_id,
+            data.decision,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {
+        "status": "saved",
+        "proposal": proposal,
+        "executed": False,
+        "detail": "La decisión no modifica código ni despliega producción.",
+    }
 
 
 @app.get("/api/v93/status")
