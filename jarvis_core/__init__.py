@@ -29,6 +29,7 @@ from .v76 import (
 )
 from .v82 import DataFoundation, EmbeddingService, SCHEMA_VERSION
 from .v93 import PersonalIntelligenceOS, PERSONAS, V93_STAGES, V93_VERSION
+from .v100 import UnifiedWorkspace, V100_STAGES, V100_VERSION, WORKSPACE_KINDS
 
 __all__ = [
     "RuntimeSupport", "compact_messages", "disk_status", "ToolDefinition", "ToolRegistry",
@@ -43,4 +44,5 @@ __all__ = [
     "CommandRouter", "ImprovementAdvisor", "UnifiedExperienceStore", "V76_STAGES",
     "DataFoundation", "EmbeddingService", "SCHEMA_VERSION",
     "PersonalIntelligenceOS", "PERSONAS", "V93_STAGES", "V93_VERSION",
+    "UnifiedWorkspace", "V100_STAGES", "V100_VERSION", "WORKSPACE_KINDS",
 ]

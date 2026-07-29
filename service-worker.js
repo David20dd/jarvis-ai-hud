@@ -1,17 +1,19 @@
-const CACHE_NAME = 'jarvis-unified-intelligence-v93-1';
+const CACHE_NAME = 'jarvis-unified-workspace-v100-1';
 const APP_SHELL = [
   './',
   './index.html',
   './404.html',
-  './static/styles.css?v=93.0',
-  './static/v76.css?v=93.0',
-  './static/v77.css?v=93.0',
-  './static/v82.css?v=93.0',
-  './static/v93.css?v=93.0',
-  './static/app.js?v=93.0',
-  './static/v76.js?v=93.0',
-  './static/config.js?v=93.0',
-  './static/manifest.webmanifest?v=93.0',
+  './static/styles.css?v=100.0',
+  './static/v76.css?v=100.0',
+  './static/v77.css?v=100.0',
+  './static/v82.css?v=100.0',
+  './static/v93.css?v=100.0',
+  './static/v100.css?v=100.0',
+  './static/app.js?v=100.0',
+  './static/v76.js?v=100.0',
+  './static/v100.js?v=100.0',
+  './static/config.js?v=100.0',
+  './static/manifest.webmanifest?v=100.0',
   './static/favicon-v46.svg',
   './static/jarvis-reactor-v46.svg'
 ];

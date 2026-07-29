@@ -75,6 +75,8 @@ from jarvis_core import (
     PersonalIntelligenceOS,
     PERSONAS,
     V93_STAGES,
+    UnifiedWorkspace,
+    V100_STAGES,
     append_source_list,
     compact_messages,
     disk_status,
@@ -116,8 +118,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger("jarvis")
 
-APP_VERSION = "93.0.0"
-APP_EDITION = "Unified Personal Intelligence"
+APP_VERSION = "100.0.0"
+APP_EDITION = "Unified Intelligence Workspace"
 
 DB_FILE = os.getenv("JARVIS_DB_FILE", "jarvis_memory.db").strip() or "jarvis_memory.db"
 BASE_DIR = Path(__file__).resolve().parent
@@ -313,6 +315,7 @@ data_foundation = DataFoundation(
     persistent_declared=PERSISTENT_STORAGE_DECLARED,
 )
 personal_os = PersonalIntelligenceOS(data_foundation)
+unified_workspace = UnifiedWorkspace(data_foundation)
 
 
 def _provider_models(names: List[str], provider: str) -> List[ProviderModel]:
@@ -758,6 +761,7 @@ async def lifespan(_: FastAPI):
     try:
         data_foundation.init_schema()
         personal_os.init_schema()
+        unified_workspace.init_schema()
     except Exception:
         # The legacy SQLite core remains available if an optional PostgreSQL
         # service is misconfigured. The deep health endpoint reports the cause.
@@ -780,7 +784,8 @@ async def lifespan(_: FastAPI):
     recovered_workflows = _recover_interrupted_workflows()
     recovered_channels = _recover_channel_events()
     logger.info(
-        "J.A.R.V.I.S. v93 iniciado | public_mode=%s | redis=%s | owner_bootstrap=%s | jobs_recuperados=%s | workflows_recuperados=%s | canales_recuperados=%s",
+        "J.A.R.V.I.S. v%s iniciado | public_mode=%s | redis=%s | owner_bootstrap=%s | jobs_recuperados=%s | workflows_recuperados=%s | canales_recuperados=%s",
+        APP_VERSION,
         PUBLIC_MODE,
         bool(REDIS_URL),
         owner_bootstrap.get("created", False),
@@ -793,11 +798,11 @@ async def lifespan(_: FastAPI):
     JOB_EXECUTOR.shutdown(wait=False, cancel_futures=True)
     provider_gateway.close()
     data_foundation.close()
-    logger.info("J.A.R.V.I.S. v93 detenido")
+    logger.info("J.A.R.V.I.S. v%s detenido", APP_VERSION)
 
 
 app = FastAPI(
-    title=f"J.A.R.V.I.S. {APP_EDITION} v93",
+    title=f"J.A.R.V.I.S. {APP_EDITION} v100",
     version=APP_VERSION,
     lifespan=lifespan,
 )
@@ -1293,6 +1298,32 @@ class V93MonitorInput(BaseModel):
 class V93MonitorStatusInput(BaseModel):
     session_id: str = "default_session"
     status: str = Field(pattern="^(active|paused|cancelled)$")
+
+
+class V100WorkspaceInput(BaseModel):
+    session_id: str = "default_session"
+    title: str = Field(min_length=1, max_length=300)
+    content: str = Field(min_length=1, max_length=200000)
+    kind: str = Field(default="document", pattern="^(document|note|code|table|checklist|canvas)$")
+    project_name: str = Field(default="General", max_length=120)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    pinned: bool = False
+
+
+class V100WorkspaceUpdateInput(BaseModel):
+    session_id: str = "default_session"
+    title: Optional[str] = Field(default=None, min_length=1, max_length=300)
+    content: Optional[str] = Field(default=None, min_length=1, max_length=200000)
+    kind: Optional[str] = Field(default=None, pattern="^(document|note|code|table|checklist|canvas)$")
+    project_name: Optional[str] = Field(default=None, max_length=120)
+    metadata: Optional[Dict[str, Any]] = None
+    pinned: Optional[bool] = None
+
+
+class V100RouteInput(BaseModel):
+    message: str = Field(min_length=1, max_length=30000)
+    mode: str = Field(default="auto", max_length=40)
+    has_files: bool = False
 
 
 # -----------------------------------------------------------------------------
@@ -4947,6 +4978,11 @@ async def consultar_jarvis(data: ChatInput, request: Request):
             )
         except Exception:
             logger.debug("No se pudo registrar la evaluación v93", exc_info=True)
+        result["workspace_v100"] = UnifiedWorkspace.route_preview(
+            prompt,
+            requested_mode,
+            bool(data.files),
+        )
         response_payload = {"status": "degraded" if result.get("degraded") else "success", **result}
         await asyncio.to_thread(request_result_set, request_id, sid, response_payload)
         record_telemetry("chat:request", "success", (time.perf_counter() - started_at) * 1000, request_id=request_id, session_id=sid, detail=result.get("route", ""))
@@ -6945,6 +6981,15 @@ def self_check():
         }
     except Exception as exc:
         checks["personal_intelligence_v93"] = {"ok": False, "detail": safe_error_text(exc)}
+    try:
+        v100_core = unified_workspace.status("self_check")
+        checks["unified_workspace_v100"] = {
+            "ok": bool(v100_core.get("connected")),
+            "workspace_items": v100_core.get("workspace_items", 0),
+            "stages": len(v100_core.get("stages", [])),
+        }
+    except Exception as exc:
+        checks["unified_workspace_v100"] = {"ok": False, "detail": safe_error_text(exc)}
     checks["groq_key"] = {"ok": bool(GROQ_API_KEY), "required_for": "proveedor principal"}
     checks["multi_provider_gateway"] = {"ok": bool(provider_gateway.configured_names()), "optional": True, "configured": provider_gateway.configured_names()}
     checks["resilient_search"] = {"ok": True, "attempts": WEB_SEARCH_ATTEMPTS, "max_results": WEB_SEARCH_RESULTS}
@@ -6983,6 +7028,14 @@ def capabilities():
         "requests_per_minute": REQUESTS_PER_MINUTE,
         "tools": list(TOOL_FUNCTIONS.keys()),
         "features": [
+            "unified_intelligence_workspace_v100",
+            "conversation_streaming_with_fallback",
+            "message_edit_and_branch",
+            "slash_commands",
+            "persistent_canvas",
+            "drag_drop_multimodal",
+            "response_feedback_controls",
+            "conversation_first_responsive_ui",
             "unified_personal_intelligence_v93",
             "response_personas",
             "project_contexts",
@@ -7123,6 +7176,7 @@ def capabilities():
             "job_max_attempts": JOB_MAX_ATTEMPTS,
             "redis_configured": bool(REDIS_URL),
         },
+        "v100": unified_workspace.status("capabilities"),
     }
 
 
@@ -7375,6 +7429,131 @@ def health():
         },
         "health_endpoints": ["/api/health/live", "/api/health/ready", "/api/health/deep"],
     }
+
+
+@app.get("/api/v100/status")
+def v100_status(request: Request, session_id: str = "default_session"):
+    enforce_request_guard(request)
+    sid = safe_session_id(session_id)
+    workspace_status = unified_workspace.status(sid)
+    voice = telegram_media_ai.status()
+    return {
+        "status": "ok" if workspace_status.get("connected") else "degraded",
+        "version": APP_VERSION,
+        "edition": APP_EDITION,
+        "workspace": workspace_status,
+        "stages": V100_STAGES,
+        "capabilities": {
+            "conversation_workspace": True,
+            "canvas": workspace_status.get("connected", False),
+            "deep_research": True,
+            "voice_input": bool(voice.get("transcription")),
+            "voice_output": bool(voice.get("speech")),
+            "browser_voice_fallback": True,
+            "telegram": telegram_channel.configured,
+            "automation": True,
+            "quality_control": True,
+            "multi_provider": bool(provider_gateway.configured_names()),
+        },
+        "providers": provider_gateway.configured_names(),
+    }
+
+
+@app.post("/api/v100/route")
+def v100_route_preview(data: V100RouteInput, request: Request):
+    enforce_request_guard(request)
+    return {
+        "status": "ok",
+        "decision": UnifiedWorkspace.route_preview(data.message, data.mode, data.has_files),
+    }
+
+
+@app.get("/api/v100/briefing")
+def v100_briefing(
+    request: Request,
+    session_id: str = "default_session",
+    project_name: str = "General",
+):
+    enforce_request_guard(request)
+    return {
+        "status": "ok",
+        "briefing": unified_workspace.briefing(
+            safe_session_id(session_id),
+            re.sub(r"\s+", " ", project_name).strip()[:120] or "General",
+        ),
+    }
+
+
+@app.get("/api/v100/workspace")
+def v100_workspace_list(
+    request: Request,
+    session_id: str = "default_session",
+    project_name: str = "",
+    kind: str = "",
+    limit: int = 80,
+):
+    enforce_request_guard(request)
+    try:
+        items = unified_workspace.list_items(
+            safe_session_id(session_id),
+            project_name=project_name.strip()[:120],
+            kind=kind.strip().lower(),
+            limit=limit,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"status": "ok", "items": items}
+
+
+@app.post("/api/v100/workspace")
+def v100_workspace_create(data: V100WorkspaceInput, request: Request):
+    enforce_request_guard(request)
+    try:
+        item = unified_workspace.create_item(
+            safe_session_id(data.session_id),
+            title=data.title,
+            content=data.content,
+            kind=data.kind,
+            project_name=data.project_name,
+            metadata=data.metadata,
+            pinned=data.pinned,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"status": "created", "item": item}
+
+
+@app.put("/api/v100/workspace/{item_id}")
+def v100_workspace_update(
+    item_id: str,
+    data: V100WorkspaceUpdateInput,
+    request: Request,
+):
+    enforce_request_guard(request)
+    values = data.model_dump(exclude={"session_id"}, exclude_none=True)
+    try:
+        item = unified_workspace.update_item(
+            safe_session_id(data.session_id),
+            item_id,
+            values,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"status": "saved", "item": item}
+
+
+@app.delete("/api/v100/workspace/{item_id}")
+def v100_workspace_delete(
+    item_id: str,
+    request: Request,
+    session_id: str = "default_session",
+):
+    enforce_request_guard(request)
+    if not unified_workspace.delete_item(safe_session_id(session_id), item_id):
+        raise HTTPException(status_code=404, detail="Elemento no encontrado.")
+    return {"status": "deleted", "id": item_id}
 
 
 @app.get("/api/v93/status")

@@ -1,4 +1,4 @@
-import json
+﻿import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -37,7 +37,7 @@ def test_v93_status_personas_settings_and_projects():
 
     assert status.status_code == 200
     assert status.json()["version"] == 93
-    assert status.json()["app_version"] == "93.0.0"
+    assert status.json()["app_version"] == "100.0.0"
     assert len(personas.json()["personas"]) == 6
     assert settings.json()["settings"]["persona"] == "analytical"
     assert settings.json()["settings"]["auto_speak"] is True
@@ -102,18 +102,18 @@ def test_v93_frontend_contract_and_assets():
     worker = Path("service-worker.js").read_text(encoding="utf-8")
     manifest = json.loads(Path("static/manifest.webmanifest").read_text(encoding="utf-8"))
 
-    assert "Unified Personal Intelligence · v93" in html
+    assert "Unified Intelligence · v100" in html
     assert 'id="projectSelect"' in html
     assert 'id="personaSelect"' in html
-    assert "./static/v93.css?v=93.0" in html
+    assert "./static/v93.css?v=100.0" in html
     assert "browserSpeech" in app and "speechSynthesis" in app
     assert "project_name:state.activeProject" in app
     assert "persona:state.settings.persona" in app
     assert "/api/v93/settings" in app and "/api/v93/projects" in app
     assert ".project-switcher" in css
     assert "@media (max-width: 390px)" in css
-    assert "jarvis-unified-intelligence-v93-1" in worker
-    assert "v93" in manifest["name"].lower()
+    assert "jarvis-unified-workspace-v100-1" in worker
+    assert "v100" in manifest["name"].lower()
 
 
 def test_telegram_style_command_and_voice_status():
@@ -123,3 +123,4 @@ def test_telegram_style_command_and_voice_status():
     assert "Tutor" in changed["text"]
     assert "Tutor" in current["text"]
     assert {"speech", "transcription", "vision"} <= set(main.telegram_media_ai.status())
+

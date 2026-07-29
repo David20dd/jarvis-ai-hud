@@ -1,4 +1,4 @@
-from pathlib import Path
+﻿from pathlib import Path
 
 from fastapi.testclient import TestClient
 
@@ -27,7 +27,7 @@ def test_persistence_status_is_public_and_secret_free():
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["version"] == "93.0.0"
+    assert payload["version"] == "100.0.0"
     assert payload["engine"] == "sqlite"
     assert payload["storage_mode"] in {"persistent", "ephemeral_or_unverified"}
     assert "password" not in str(payload).lower()
@@ -38,11 +38,11 @@ def test_v77_frontend_contract_and_cache():
     css = Path("static/v77.css").read_text(encoding="utf-8")
     worker = Path("service-worker.js").read_text(encoding="utf-8")
 
-    assert "Unified Personal Intelligence · v93" in html
-    assert "./static/v77.css?v=93.0" in html
+    assert "Unified Intelligence · v100" in html
+    assert "./static/v77.css?v=100.0" in html
     assert ".conversation" in css and "max-width: none !important" in css
     assert "grid-template-columns: minmax(0, 1fr)" in css
-    assert "jarvis-unified-intelligence-v93-1" in worker
+    assert "jarvis-unified-workspace-v100-1" in worker
 
 
 def test_health_reports_persistence_state():
@@ -53,3 +53,4 @@ def test_health_reports_persistence_state():
     assert ready.status_code == 200
     assert "persistence" in ready.json()
     assert "persistence" in health.json()
+

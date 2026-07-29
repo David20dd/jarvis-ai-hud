@@ -85,7 +85,8 @@
     toastTimer: null,
     phaseTimer: null,
     chatMenuTarget: '',
-    chatMenuTrigger: null
+    chatMenuTrigger: null,
+    editingMessageIndex: -1
   };
   local.setItem(KEYS.client, state.clientId);
 
@@ -269,6 +270,73 @@
       await sleep(Math.min(800 * attempt, 1800));
     }
     throw lastError || new ApiError('No fue posible conectar con el núcleo.');
+  }
+
+  async function streamRequest(path, payload, signal, onProgress) {
+    const controller = new AbortController();
+    const forwardAbort = () => controller.abort();
+    if (signal) {
+      if (signal.aborted) throw new DOMException('Solicitud cancelada', 'AbortError');
+      signal.addEventListener('abort', forwardAbort, { once:true });
+    }
+    let idleTimer;
+    const resetIdleTimer = () => {
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => controller.abort('idle_timeout'), 90000);
+    };
+    resetIdleTimer();
+    try {
+      const headers = new Headers({'Content-Type':'application/json', 'Accept':'application/x-ndjson'});
+      if (state.token) headers.set('Authorization', `Bearer ${state.token}`);
+      const response = await fetch(apiUrl(path), {
+        method:'POST',
+        headers,
+        body:JSON.stringify(payload),
+        signal:controller.signal,
+        credentials:'omit'
+      });
+      if (!response.ok) {
+        const raw = await response.text();
+        let data = {};
+        try { data = raw ? JSON.parse(raw) : {}; } catch {}
+        throw new ApiError(data.detail || data.reply || `Error HTTP ${response.status}`, response.status, data);
+      }
+      if (!response.body?.getReader) throw new ApiError('El navegador no admite respuesta progresiva.');
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let finalData = null;
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        resetIdleTimer();
+        buffer += decoder.decode(value, { stream:true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          let event;
+          try { event = JSON.parse(line); } catch { continue; }
+          if (event.type === 'progress') onProgress?.(String(event.stage || 'Trabajando…'));
+          if (event.type === 'final') finalData = event.data || {};
+        }
+      }
+      if (buffer.trim()) {
+        try {
+          const event = JSON.parse(buffer);
+          if (event.type === 'final') finalData = event.data || {};
+        } catch {}
+      }
+      if (!finalData) throw new ApiError('La respuesta progresiva terminó sin resultado.');
+      return finalData;
+    } catch (error) {
+      if (signal?.aborted) throw new DOMException('Solicitud cancelada', 'AbortError');
+      if (error?.name === 'AbortError') throw new ApiError('El núcleo tardó demasiado en completar la respuesta.');
+      throw error;
+    } finally {
+      clearTimeout(idleTimer);
+      signal?.removeEventListener('abort', forwardAbort);
+    }
   }
 
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -547,7 +615,11 @@
     els.messages.innerHTML = chat.messages.map(renderMessageHTML).join('');
     els.contextTitle.textContent = chat.title || 'Nueva conversación';
     els.contextSubtitle.textContent = chat.messages.length ? `${chat.messages.length} mensajes · ${state.mode === 'auto' ? 'Modo automático' : state.mode}` : 'Chat general';
-    scrollBottom(false);
+    if (chat.messages.length) {
+      scrollBottom(false);
+    } else {
+      requestAnimationFrame(() => { els.conversation.scrollTop = 0; });
+    }
   }
 
   function renderMessageHTML(message, index) {
@@ -555,7 +627,14 @@
     const meta = message.meta || {};
     const adaptive = meta.adaptive || {};
     const evidence = adaptive.evidence || {};
-    const traceItems = [meta.model, meta.route, meta.complexity, meta.cached ? 'caché' : ''].filter(Boolean);
+    const traceItems = [
+      meta.model,
+      meta.route,
+      meta.workspace?.strategy,
+      meta.complexity,
+      meta.cached ? 'caché' : '',
+      Number(meta.latency_ms || 0) ? `${(Number(meta.latency_ms) / 1000).toFixed(1)} s` : ''
+    ].filter(Boolean);
     const evidenceItems = [
       Number(evidence.memory_hits||0) ? `Memoria ${Number(evidence.memory_hits)}` : '',
       Number(evidence.document_hits||0) ? `Documentos ${Number(evidence.document_hits)}` : '',
@@ -564,8 +643,10 @@
       adaptive.quality?.passed === true ? 'Control aprobado' : ''
     ].filter(Boolean);
     const traceHTML = role === 'assistant' && (traceItems.length || evidenceItems.length) ? `<details class="message-trace"><summary>Criterio y evidencia</summary><div>${[...evidenceItems,...traceItems].map(value => `<span>${escapeHTML(value)}</span>`).join('')}</div></details>` : '';
-    const actions = role === 'assistant' ? `<div class="message-actions"><button class="message-tool" data-copy-message="${index}" aria-label="Copiar respuesta" title="Copiar">${icon('copy')}<span>Copiar</span></button><button class="message-tool" data-speak-message="${index}" aria-label="Escuchar respuesta" title="Escuchar">${icon('volume')}<span>Escuchar</span></button><button class="message-tool" data-regenerate-message="${index}" aria-label="Regenerar respuesta" title="Regenerar">${icon('rotate')}<span>Regenerar</span></button></div>` : '';
-    if (role === 'user') return `<article class="message user"><div class="message-body">${formatContent(message.content)}</div></article>`;
+    const actions = role === 'assistant'
+      ? `<div class="message-actions"><button class="message-tool" data-copy-message="${index}" aria-label="Copiar respuesta" title="Copiar">${icon('copy')}<span>Copiar</span></button><button class="message-tool" data-speak-message="${index}" aria-label="Escuchar respuesta" title="Escuchar">${icon('volume')}<span>Escuchar</span></button><button class="message-tool" data-regenerate-message="${index}" aria-label="Regenerar respuesta" title="Regenerar">${icon('rotate')}<span>Regenerar</span></button><button class="message-tool" data-canvas-message="${index}" aria-label="Guardar en Canvas" title="Guardar en Canvas">${icon('canvas')}<span>Canvas</span></button><button class="message-tool" data-branch-message="${index}" aria-label="Ramificar conversación" title="Ramificar">${icon('branch')}<span>Ramificar</span></button><button class="message-tool" data-feedback-message="${index}" data-rating="1" aria-label="Buena respuesta" title="Buena respuesta">${icon('thumbs-up')}</button><button class="message-tool" data-feedback-message="${index}" data-rating="-1" aria-label="Mala respuesta" title="Mala respuesta">${icon('thumbs-down')}</button></div>`
+      : '';
+    if (role === 'user') return `<article class="message user"><div class="message-body">${formatContent(message.content)}<div class="message-actions user-actions"><button class="message-tool" data-edit-message="${index}" aria-label="Editar mensaje" title="Editar">${icon('edit')}<span>Editar</span></button><button class="message-tool" data-branch-message="${index}" aria-label="Ramificar conversación" title="Ramificar">${icon('branch')}<span>Ramificar</span></button></div></div></article>`;
     return `<article class="message assistant"><span class="message-avatar">J</span><div class="message-body ${meta.error ? 'message-error' : ''}">${formatContent(message.content)}${traceHTML}${actions}</div></article>`;
   }
 
@@ -626,7 +707,80 @@
       els.messageInput.value = previous.content;
       autoResize();
       await sendMessage();
+      return;
     }
+    const editButton = event.target.closest('[data-edit-message]');
+    if (editButton && !state.core.busy) {
+      const index = Number(editButton.dataset.editMessage);
+      const message = currentChat().messages[index];
+      if (!message || message.role !== 'user') return;
+      state.editingMessageIndex = index;
+      els.messageInput.value = message.content;
+      autoResize();
+      els.messageInput.focus();
+      toast('Edita el mensaje y envíalo para crear una nueva respuesta.');
+      return;
+    }
+    const branchButton = event.target.closest('[data-branch-message]');
+    if (branchButton && !state.core.busy) {
+      branchConversation(Number(branchButton.dataset.branchMessage));
+      return;
+    }
+    const canvasButton = event.target.closest('[data-canvas-message]');
+    if (canvasButton) {
+      const index = Number(canvasButton.dataset.canvasMessage);
+      const message = currentChat().messages[index];
+      if (!message) return;
+      window.dispatchEvent(new CustomEvent('jarvis:save-canvas', {
+        detail:{ title:`${currentChat().title || 'Respuesta'} · Canvas`, content:message.content, kind:'document' }
+      }));
+      return;
+    }
+    const feedbackButton = event.target.closest('[data-feedback-message]');
+    if (feedbackButton) {
+      const index = Number(feedbackButton.dataset.feedbackMessage);
+      const message = currentChat().messages[index];
+      const previous = [...currentChat().messages.slice(0,index)].reverse().find(item => item.role === 'user');
+      try {
+        await request('/api/feedback', {
+          method:'POST',
+          body:JSON.stringify({
+            session_id:backendSessionId(),
+            rating:Number(feedbackButton.dataset.rating),
+            prompt:previous?.content || '',
+            response:message?.content || ''
+          })
+        }, { attempts:1, timeoutMs:12000 });
+        feedbackButton.classList.add('selected');
+        toast('Gracias. La evaluación ayudará a mejorar las rutas.');
+      } catch (error) {
+        toast(explainError(error));
+      }
+    }
+  }
+
+  function branchConversation(index) {
+    const source = currentChat();
+    const messages = source.messages.slice(0, Math.max(0, index) + 1).map(item => ({
+      ...item,
+      meta:{ ...(item.meta || {}) }
+    }));
+    const id = uid('chat');
+    state.chats[id] = {
+      id,
+      title:`${source.title || 'Conversación'} · rama`.slice(0,58),
+      messages,
+      pinned:false,
+      createdAt:Date.now(),
+      updatedAt:Date.now()
+    };
+    state.activeChatId = id;
+    state.editingMessageIndex = -1;
+    persistChats();
+    renderChatList();
+    renderConversation();
+    openView('chat');
+    toast('Se creó una rama independiente.');
   }
 
   async function copyText(value) {
@@ -652,6 +806,13 @@
     if (!text && !state.files.length) return;
     const prompt = text || 'Analiza los archivos adjuntos.';
     const files = state.files.map(file => ({ file_name:file.name, file_b64:file.base64, mime_type:file.type || '' }));
+    if (state.editingMessageIndex >= 0) {
+      const chat = currentChat();
+      chat.messages.splice(state.editingMessageIndex);
+      chat.updatedAt = Date.now();
+      state.editingMessageIndex = -1;
+      persistChats();
+    }
     addMessage('user', prompt);
     els.messageInput.value = '';
     state.files = [];
@@ -671,24 +832,42 @@
         openAccount(true);
         return;
       }
-      const data = await request('/api/jarvis', {
-        method:'POST',
-        signal: state.abortController.signal,
-        body:JSON.stringify({
-          message:prompt,
-          session_id:backendSessionId(),
-          files,
-          mode:state.mode,
-          project_name:state.activeProject,
-          persona:state.settings.persona,
-          request_id:uid('request')
-        })
-      }, { attempts:2, timeoutMs:65000 });
+      const payload = {
+        message:prompt,
+        session_id:backendSessionId(),
+        files,
+        mode:state.mode,
+        project_name:state.activeProject,
+        persona:state.settings.persona,
+        request_id:uid('request')
+      };
+      document.body.classList.add('v100-streaming');
+      let data;
+      try {
+        data = await streamRequest(
+          '/api/jarvis/stream',
+          payload,
+          state.abortController.signal,
+          stage => {
+            els.thinkingDetail.textContent = stage;
+            window.dispatchEvent(new CustomEvent('jarvis:progress', { detail:{ stage } }));
+          }
+        );
+      } catch (streamError) {
+        if (state.abortController.signal.aborted || streamError?.status === 401) throw streamError;
+        els.thinkingDetail.textContent = 'Recuperando por la ruta compatible…';
+        data = await request('/api/jarvis', {
+          method:'POST',
+          signal:state.abortController.signal,
+          body:JSON.stringify(payload)
+        }, { attempts:1, timeoutMs:70000 });
+      }
       const reply = String(data.reply || data.response || '').trim();
       if (!reply) throw new ApiError('El núcleo respondió sin contenido.');
       addMessage('assistant', reply, {
         model:data.model || '', route:data.route || data.mode || '', cached:Boolean(data.cached),
-        complexity:data.intelligence?.complexity || '', adaptive:data.adaptive || {}
+        complexity:data.intelligence?.complexity || '', adaptive:data.adaptive || {},
+        latency_ms:Number(data.latency_ms || 0), workspace:data.workspace_v100 || {}
       });
       if (state.settings.voice_enabled && state.settings.auto_speak) {
         speakText(reply).catch(() => {});
@@ -706,6 +885,7 @@
         setStatus('Revisar conexión', 'error');
       }
     } finally {
+      document.body.classList.remove('v100-streaming');
       state.abortController = null;
       setBusy(false);
     }
@@ -1429,7 +1609,34 @@
 
   function registerServiceWorker() {
     if (!('serviceWorker' in navigator) || location.protocol === 'file:') return;
-    navigator.serviceWorker.register('./service-worker.js?v=93.0').catch(()=>{});
+    navigator.serviceWorker.register('./service-worker.js?v=100.0').catch(()=>{});
   }
+
+  window.JARVIS_APP = {
+    apiUrl,
+    request,
+    backendSessionId,
+    get project() { return state.activeProject; },
+    get token() { return state.token; },
+    get busy() { return state.core.busy; },
+    get messages() { return currentChat().messages.map(item => ({ ...item, meta:{ ...(item.meta || {}) } })); },
+    get currentTitle() { return currentChat().title; },
+    toast,
+    openView,
+    newChat,
+    sendMessage,
+    setMode(mode) {
+      if (![...els.modeSelect.options].some(option => option.value === mode)) return false;
+      state.mode = mode;
+      els.modeSelect.value = mode;
+      local.setItem(KEYS.mode, mode);
+      return true;
+    },
+    setPrompt(value, focus = true) {
+      els.messageInput.value = String(value || '');
+      autoResize();
+      if (focus) els.messageInput.focus();
+    }
+  };
 })();
 
