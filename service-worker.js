@@ -1,4 +1,4 @@
-const CACHE_NAME = 'jarvis-reliable-intelligence-v101-1';
+const CACHE_NAME = 'jarvis-modern-chat-v101-8';
 const APP_SHELL = [
   './',
   './index.html',
@@ -10,6 +10,9 @@ const APP_SHELL = [
   './static/v93.css?v=101.0',
   './static/v100.css?v=101.0',
   './static/v101.css?v=101.0',
+  './static/v101-chat.css?v=101.1',
+  './static/v101-pro-chat.css?v=101.2',
+  './static/v101-modern-chat.css?v=101.3.4',
   './static/app.js?v=101.0',
   './static/v76.js?v=101.0',
   './static/v100.js?v=101.0',
