@@ -1,7 +1,7 @@
 {
-  "name": "J.A.R.V.I.S. Conversation Interface v103",
+  "name": "J.A.R.V.I.S. Adaptive Intelligence Workspace v104",
   "short_name": "JARVIS",
-  "description": "Conversación, Canvas, investigación, memoria, voz y mejora supervisada en una experiencia confiable.",
+  "description": "Chat, búsqueda global, Canvas dividido, investigación, memoria explicable, voz y mejora supervisada.",
   "start_url": "../",
   "scope": "../",
   "display": "standalone",

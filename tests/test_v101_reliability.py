@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from pathlib import Path
 
@@ -108,7 +108,7 @@ def test_v101_api_report_diagnose_and_review():
         )
 
     assert status.status_code == 200
-    assert status.json()["version"] == "101.0.0"
+    assert status.json()["version"] == "104.0.0"
     assert status.json()["guardrails"]["modify_source"] is False
     assert status.json()["guardrails"]["human_approval_required"] is True
     assert reported.status_code == 200
@@ -135,18 +135,35 @@ def test_v101_rejects_invalid_mutation_states():
 def test_v101_frontend_contract_and_assets():
     html = Path("index.html").read_text(encoding="utf-8")
     css = Path("static/v101.css").read_text(encoding="utf-8")
+    chat_css = Path("static/v101-chat.css").read_text(encoding="utf-8")
+    pro_chat_css = Path("static/v101-pro-chat.css").read_text(encoding="utf-8")
+    modern_chat_css = Path("static/v101-modern-chat.css").read_text(encoding="utf-8")
     js = Path("static/v101.js").read_text(encoding="utf-8")
     worker = Path("service-worker.js").read_text(encoding="utf-8")
 
-    assert "Reliable Intelligence · v101" in html
+    assert "Inteligencia personal" in html
     assert "./static/v101.css?v=101.0" in html
+    assert "./static/v101-chat.css?v=101.1" in html
+    assert "./static/v101-pro-chat.css?v=101.2" in html
+    assert "./static/v101-modern-chat.css?v=101.3.4" in html
     assert "./static/v101.js?v=101.0" in html
     assert "Segoe UI Variable Text" in css
     assert "Cascadia Code" in css
+    assert "Aptos" in chat_css
+    assert "chat-message-enter" in chat_css
+    assert "orbit-lights" in chat_css
+    assert "prefers-reduced-motion" in chat_css
+    assert "Segoe UI Variable Text" in pro_chat_css
+    assert "pro-message-in" in pro_chat_css
+    assert "pro-orbit" in pro_chat_css
+    assert "prefers-reduced-motion" in pro_chat_css
+    assert "modern-message-in" in modern_chat_css
+    assert "modern-orbit" in modern_chat_css
+    assert "prefers-reduced-motion" in modern_chat_css
     assert "RELIABILITY & SELF-IMPROVEMENT" in js
     assert "unhandledrejection" in js
     assert "modify" not in js.lower() or "no se aplicó" in js.lower()
-    assert "jarvis-reliable-intelligence-v101-1" in worker
+    assert "jarvis-conversation-ui-v103-1" in worker
 
 
 def test_self_check_exposes_reliability_component():
@@ -154,3 +171,6 @@ def test_self_check_exposes_reliability_component():
         payload = client.get("/api/self-check").json()
     assert "reliability_core_v101" in payload["checks"]
     assert payload["checks"]["reliability_core_v101"]["ok"] is True
+
+
+

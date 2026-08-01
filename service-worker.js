@@ -1,4 +1,5 @@
-const CACHE_NAME = 'jarvis-conversation-ui-v103-1';
+const CACHE_NAME = 'jarvis-adaptive-workspace-v104-1';
+// Replaces jarvis-conversation-ui-v103-1 after a clean activation.
 const APP_SHELL = [
   './',
   './index.html',
@@ -15,11 +16,13 @@ const APP_SHELL = [
   './static/v101-modern-chat.css?v=101.3.4',
   './static/v102.css?v=102.0',
   './static/v103-conversation.css?v=103.0',
+  './static/v104-adaptive.css?v=104.0',
   './static/app.js?v=101.0',
   './static/v76.js?v=101.0',
   './static/v100.js?v=101.0',
   './static/v101.js?v=101.0',
   './static/v102.js?v=102.0',
+  './static/v104.js?v=104.0',
   './static/config.js?v=101.0',
   './static/manifest.webmanifest?v=101.0',
   './static/favicon-v46.svg',

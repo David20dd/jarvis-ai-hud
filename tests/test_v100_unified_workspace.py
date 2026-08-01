@@ -1,4 +1,4 @@
-import json
+﻿import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -88,7 +88,7 @@ def test_v100_api_workspace_status_and_crud():
         )
 
     assert status.status_code == 200
-    assert status.json()["version"] == "101.0.0"
+    assert status.json()["version"] == "104.0.0"
     assert len(status.json()["stages"]) == 7
     assert route.json()["decision"]["strategy"] == "document_intelligence"
     assert created.status_code == 200
@@ -123,7 +123,7 @@ def test_v100_frontend_contract_and_cache():
     worker = Path("service-worker.js").read_text(encoding="utf-8")
     manifest = json.loads(Path("static/manifest.webmanifest").read_text(encoding="utf-8"))
 
-    assert "Reliable Intelligence · v101" in html
+    assert "Inteligencia personal" in html
     assert 'id="v100SlashMenu"' in html
     assert 'id="v100WorkspaceDrawer"' in html
     assert "./static/v100.css?v=101.0" in html
@@ -134,5 +134,9 @@ def test_v100_frontend_contract_and_cache():
     assert "/api/v100/workspace" in v100_js
     assert ".v100-workspace-drawer" in css
     assert "@media (max-width: 390px)" in css
-    assert "jarvis-reliable-intelligence-v101-1" in worker
-    assert "v101" in manifest["name"].lower()
+    assert "jarvis-conversation-ui-v103-1" in worker
+    assert "v104" in manifest["name"].lower()
+
+
+
+

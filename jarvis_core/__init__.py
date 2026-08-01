@@ -38,6 +38,15 @@ from .v101 import (
     ALLOWED_PROPOSAL_STATES,
 )
 from .v102 import V102_VERSION, V102_NAME, V102_STAGES, V102_AREAS, build_area_status
+from .v104 import (
+    V104_VERSION,
+    V104_NAME,
+    V104_STAGES,
+    compact_snippet,
+    explain_memory,
+    lexical_score,
+    rank_results,
+)
 
 __all__ = [
     "RuntimeSupport", "compact_messages", "disk_status", "ToolDefinition", "ToolRegistry",
@@ -56,4 +65,6 @@ __all__ = [
     "ReliabilityCore", "V101_STAGES", "V101_VERSION",
     "ALLOWED_ISSUE_STATES", "ALLOWED_PROPOSAL_STATES",
     "V102_VERSION", "V102_NAME", "V102_STAGES", "V102_AREAS", "build_area_status",
+    "V104_VERSION", "V104_NAME", "V104_STAGES", "compact_snippet",
+    "explain_memory", "lexical_score", "rank_results",
 ]

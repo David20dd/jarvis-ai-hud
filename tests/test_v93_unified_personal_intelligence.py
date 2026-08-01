@@ -1,4 +1,4 @@
-import json
+﻿import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -37,7 +37,7 @@ def test_v93_status_personas_settings_and_projects():
 
     assert status.status_code == 200
     assert status.json()["version"] == 93
-    assert status.json()["app_version"] == "101.0.0"
+    assert status.json()["app_version"] == "104.0.0"
     assert len(personas.json()["personas"]) == 6
     assert settings.json()["settings"]["persona"] == "analytical"
     assert settings.json()["settings"]["auto_speak"] is True
@@ -102,7 +102,7 @@ def test_v93_frontend_contract_and_assets():
     worker = Path("service-worker.js").read_text(encoding="utf-8")
     manifest = json.loads(Path("static/manifest.webmanifest").read_text(encoding="utf-8"))
 
-    assert "Reliable Intelligence · v101" in html
+    assert "Inteligencia personal" in html
     assert 'id="projectSelect"' in html
     assert 'id="personaSelect"' in html
     assert "./static/v93.css?v=101.0" in html
@@ -112,8 +112,8 @@ def test_v93_frontend_contract_and_assets():
     assert "/api/v93/settings" in app and "/api/v93/projects" in app
     assert ".project-switcher" in css
     assert "@media (max-width: 390px)" in css
-    assert "jarvis-reliable-intelligence-v101-1" in worker
-    assert "v101" in manifest["name"].lower()
+    assert "jarvis-conversation-ui-v103-1" in worker
+    assert "v104" in manifest["name"].lower()
 
 
 def test_telegram_style_command_and_voice_status():
@@ -123,4 +123,8 @@ def test_telegram_style_command_and_voice_status():
     assert "Tutor" in changed["text"]
     assert "Tutor" in current["text"]
     assert {"speech", "transcription", "vision"} <= set(main.telegram_media_ai.status())
+
+
+
+
 

@@ -81,6 +81,11 @@ from jarvis_core import (
     V101_STAGES,
     V102_STAGES,
     build_area_status,
+    V104_STAGES,
+    compact_snippet,
+    explain_memory,
+    lexical_score,
+    rank_results,
     append_source_list,
     compact_messages,
     disk_status,
@@ -122,8 +127,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger("jarvis")
 
-APP_VERSION = "102.0.0"
-APP_EDITION = "Conversational Workspace"
+APP_VERSION = "104.0.0"
+APP_EDITION = "Adaptive Intelligence Workspace"
 
 DB_FILE = os.getenv("JARVIS_DB_FILE", "jarvis_memory.db").strip() or "jarvis_memory.db"
 BASE_DIR = Path(__file__).resolve().parent
@@ -7720,6 +7725,167 @@ def v102_hub(
             "autonomous_production_changes": False,
         },
     }
+
+
+@app.get("/api/v104/status")
+def v104_status(request: Request, session_id: str = "default_session"):
+    """Expose the adaptive workspace contract without returning credentials."""
+    sid = safe_session_id(session_id)
+    # v102_status applies the shared auth, rate-limit and origin guard once.
+    base = v102_status(request, sid)
+    return {
+        **base,
+        "version": 104,
+        "app_version": APP_VERSION,
+        "edition": APP_EDITION,
+        "stages": V104_STAGES,
+        "workspace": {
+            "global_search": True,
+            "split_canvas": True,
+            "adaptive_sidebar": True,
+            "explainable_memory": True,
+            "conversation_recovery": True,
+            "appearance_controls": True,
+        },
+        "guardrails": {
+            "session_isolation": True,
+            "human_approval_required": True,
+            "autonomous_production_changes": False,
+        },
+    }
+
+
+@app.get("/api/v104/search")
+def v104_global_search(
+    request: Request,
+    session_id: str = "default_session",
+    q: str = "",
+    project_name: str = "",
+    limit: int = 30,
+):
+    """Search memories, documents, projects and Canvas with session isolation."""
+    enforce_request_guard(request)
+    sid = safe_session_id(session_id)
+    query = re.sub(r"\s+", " ", str(q or "")).strip()[:500]
+    if len(query) < 2:
+        raise HTTPException(status_code=400, detail="Escribe al menos dos caracteres para buscar.")
+    project = re.sub(r"\s+", " ", str(project_name or "")).strip()[:120]
+    wanted_limit = max(1, min(int(limit), 50))
+    results: List[Dict[str, Any]] = []
+
+    try:
+        for memory in data_foundation.search_memory(sid, query, project_name=project, limit=20):
+            results.append({
+                "type": "memory", "id": memory.get("id"),
+                "title": memory.get("memory_type") or "Memoria",
+                "snippet": compact_snippet(memory.get("content", ""), query),
+                "score": float(memory.get("score") or 0),
+                "updated_at": memory.get("updated_at", 0),
+                "route": "knowledge", "project_name": memory.get("project_name") or "General",
+                "metadata": {
+                    "source": memory.get("source") or "usuario",
+                    "importance": int(memory.get("importance") or 3),
+                    "semantic_score": float(memory.get("semantic_score") or 0),
+                },
+            })
+    except Exception:
+        logger.exception("La búsqueda v104 de memoria semántica falló")
+
+    try:
+        for memory in memory_search(sid, query, 20):
+            results.append({
+                "type": "memory", "id": memory.get("id"),
+                "title": memory.get("category") or "Memoria",
+                "snippet": compact_snippet(memory.get("content", ""), query),
+                "score": max(0.25, lexical_score(query, memory.get("content", ""), memory.get("category", ""))),
+                "updated_at": memory.get("updated_at", 0), "route": "knowledge",
+                "project_name": "General", "metadata": {"source": "usuario", "legacy": True},
+            })
+    except Exception:
+        logger.exception("La búsqueda v104 de memoria compatible falló")
+
+    try:
+        for item in unified_workspace.list_items(sid, project_name=project, limit=120):
+            score = lexical_score(query, item.get("title", ""), item.get("content", ""), item.get("kind", ""))
+            if score:
+                results.append({
+                    "type": "artifact", "id": item.get("id"), "title": item.get("title") or "Artefacto",
+                    "snippet": compact_snippet(item.get("content", ""), query), "score": score,
+                    "updated_at": item.get("updated_at", 0), "route": "canvas",
+                    "project_name": item.get("project_name") or "General",
+                    "metadata": {"kind": item.get("kind") or "document", "version": int(item.get("version") or 1)},
+                })
+    except Exception:
+        logger.exception("La búsqueda v104 de Canvas falló")
+
+    try:
+        pattern = f"%{query}%"
+        with db_connection() as conn:
+            rows = conn.execute(
+                """SELECT id,file_name,file_type,extracted_text,created_at FROM documents
+                   WHERE session_id=? AND (file_name LIKE ? OR extracted_text LIKE ?)
+                   ORDER BY created_at DESC LIMIT 30""",
+                (sid, pattern, pattern),
+            ).fetchall()
+        for row in rows:
+            document = dict(row)
+            results.append({
+                "type": "document", "id": document.get("id"), "title": document.get("file_name") or "Documento",
+                "snippet": compact_snippet(document.get("extracted_text", ""), query),
+                "score": max(0.2, lexical_score(query, document.get("file_name", ""), document.get("extracted_text", ""))),
+                "updated_at": document.get("created_at", 0), "route": "knowledge",
+                "project_name": project or "General", "metadata": {"file_type": document.get("file_type") or ""},
+            })
+    except Exception:
+        logger.exception("La búsqueda v104 de documentos falló")
+
+    try:
+        for item in personal_os.list_projects(sid):
+            score = lexical_score(query, item.get("name", ""), item.get("description", ""), item.get("instructions", ""))
+            if score:
+                results.append({
+                    "type": "project", "id": item.get("id"), "title": item.get("name") or "Proyecto",
+                    "snippet": compact_snippet(item.get("description") or item.get("instructions") or "Espacio de proyecto", query),
+                    "score": score, "updated_at": item.get("updated_at", 0), "route": "project",
+                    "project_name": item.get("name") or "General", "metadata": {"color": item.get("color") or "cyan"},
+                })
+    except Exception:
+        logger.exception("La búsqueda v104 de proyectos falló")
+
+    deduplicated: Dict[str, Dict[str, Any]] = {}
+    for item in rank_results(results, 100):
+        key = f"{item.get('type')}:{item.get('id') or item.get('title')}"
+        if key not in deduplicated or float(item.get("score") or 0) > float(deduplicated[key].get("score") or 0):
+            deduplicated[key] = item
+    ranked = rank_results(deduplicated.values(), wanted_limit)
+    return {
+        "status": "ok", "query": query, "project": project or "Todos",
+        "count": len(ranked), "results": ranked,
+        "scopes": ["memory", "document", "artifact", "project"],
+    }
+
+
+@app.get("/api/v104/memory/{memory_id}/explain")
+def v104_memory_explain(
+    memory_id: str,
+    request: Request,
+    session_id: str = "default_session",
+    q: str = "",
+):
+    """Explain why a memory exists and how it matched, without cross-session access."""
+    enforce_request_guard(request)
+    sid = safe_session_id(session_id)
+    query = re.sub(r"\s+", " ", str(q or "")).strip()[:500]
+    try:
+        candidates = data_foundation.search_memory(sid, query, limit=50) if query else data_foundation.list_memories(sid, limit=200)
+    except Exception:
+        candidates = []
+    memory = next((item for item in candidates if str(item.get("id")) == memory_id), None)
+    if memory is None:
+        memory = next((item for item in memory_search(sid, query, 50) if str(item.get("id")) == memory_id), None)
+    if memory is None:
+        raise HTTPException(status_code=404, detail="Memoria no encontrada en esta sesión.")
+    return {"status": "ok", "explanation": explain_memory(memory, query=query)}
 
 
 @app.post("/api/v101/issues/report")

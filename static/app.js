@@ -1108,7 +1108,7 @@
     const memories = data.memories || [];
     els.panelContent.innerHTML = `
       <div class="panel-card"><h3>Guardar un recuerdo</h3><p>Conserva únicamente preferencias o información útil que quieras reutilizar.</p><div class="form-grid" style="margin-top:13px"><input class="text-input" id="memoryContent" placeholder="Ejemplo: Prefiero respuestas breves"/><select class="text-input" id="memoryCategory"><option value="preference">Preferencia</option><option value="project">Proyecto</option><option value="fact">Dato</option></select><button class="primary-btn" id="saveMemory">Guardar</button></div></div>
-      <section class="panel-section"><div class="panel-section-head"><h3>Recuerdos</h3><span class="status-tag">${memories.length}</span></div><div class="list-stack">${memories.length ? memories.map(item => `<article class="list-row"><div><strong>${escapeHTML(item.content)}</strong><small>${escapeHTML(item.category || 'memory')} · importancia ${Number(item.importance || 3)}</small></div><button class="danger-btn" data-delete-memory="${escapeHTML(item.id)}">Eliminar</button></article>`).join('') : '<div class="empty-state">JARVIS no ha guardado recuerdos todavía.</div>'}</div></section>`;
+      <section class="panel-section"><div class="panel-section-head"><h3>Recuerdos</h3><span class="status-tag">${memories.length}</span></div><div class="list-stack">${memories.length ? memories.map(item => `<article class="list-row"><div><strong>${escapeHTML(item.content)}</strong><small>${escapeHTML(item.category || 'memory')} · importancia ${Number(item.importance || 3)}</small></div><div class="button-row compact-row"><button class="soft-btn" data-memory-explain="${escapeHTML(item.id)}">Por qué</button><button class="danger-btn" data-delete-memory="${escapeHTML(item.id)}">Eliminar</button></div></article>`).join('') : '<div class="empty-state">JARVIS no ha guardado recuerdos todavía.</div>'}</div></section>`;
     $('#saveMemory').addEventListener('click', async () => {
       const content = $('#memoryContent').value.trim(); if (!content) return;
       await request('/api/memory', { method:'POST', body:JSON.stringify({ session_id:backendSessionId(), content, category:$('#memoryCategory').value, importance:3 }) });
@@ -1167,7 +1167,7 @@
         <div class="knowledge-columns">
           <div><span class="column-label">HECHOS VERIFICABLES</span><div class="list-stack">${facts.length ? facts.map(item => `<article class="list-row"><div><strong>${escapeHTML(item.subject)} · ${escapeHTML(item.predicate)}</strong><small>${escapeHTML(item.object_text)} · confianza ${Math.round(Number(item.confidence||0)*100)}%</small></div><button class="danger-btn" data-delete-fact="${escapeHTML(item.id)}">Eliminar</button></article>`).join('') : '<div class="empty-state">Añade el primer hecho útil.</div>'}</div></div>
           <div><span class="column-label">MEMORIA Y ARCHIVOS</span><div class="list-stack">${[
-            ...memories.slice(0,8).map(item => `<article class="list-row"><div><strong>${escapeHTML(item.content)}</strong><small>Memoria · ${escapeHTML(item.category||'contexto')}</small></div></article>`),
+            ...memories.slice(0,8).map(item => `<article class="list-row"><div><strong>${escapeHTML(item.content)}</strong><small>Memoria · ${escapeHTML(item.category||'contexto')}</small></div><button class="soft-btn" data-memory-explain="${escapeHTML(item.id)}">Por qué</button></article>`),
             ...docs.slice(0,8).map(item => `<article class="list-row"><div><strong>${escapeHTML(item.file_name||'Documento')}</strong><small>Archivo · ${escapeHTML(item.file_type||'')}</small></div></article>`)
           ].join('') || '<div class="empty-state">Todavía no hay memoria ni archivos.</div>'}</div></div>
         </div>
@@ -1609,7 +1609,7 @@
 
   function registerServiceWorker() {
     if (!('serviceWorker' in navigator) || location.protocol === 'file:') return;
-    navigator.serviceWorker.register('./service-worker.js?v=101.0').catch(()=>{});
+    navigator.serviceWorker.register('./service-worker.js?v=104.0').catch(()=>{});
   }
 
   window.JARVIS_APP = {

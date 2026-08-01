@@ -20,12 +20,14 @@
   <link rel="stylesheet" href="./static/v101-modern-chat.css?v=101.3.4" />
   <link rel="stylesheet" href="./static/v102.css?v=102.0" />
   <link rel="stylesheet" href="./static/v103-conversation.css?v=103.0" />
+  <link rel="stylesheet" href="./static/v104-adaptive.css?v=104.0" />
   <script defer src="./static/config.js?v=101.0"></script>
   <script defer src="./static/app.js?v=101.0"></script>
   <script defer src="./static/v76.js?v=101.0"></script>
   <script defer src="./static/v100.js?v=101.0"></script>
   <script defer src="./static/v101.js?v=101.0"></script>
   <script defer src="./static/v102.js?v=102.0"></script>
+  <script defer src="./static/v104.js?v=104.0"></script>
 </head>
 <body>
   <a class="skip-link" href="#messageInput">Saltar al mensaje</a>
@@ -113,6 +115,10 @@
           <div class="workspace-context"><strong id="contextTitle">Nueva conversación</strong><small id="contextSubtitle">Chat general</small></div>
         </div>
         <div class="topbar-actions">
+          <button class="icon-btn v104-sidebar-btn" id="v104SidebarBtn" type="button" aria-label="Cambiar tamaño del panel lateral" title="Panel lateral"><svg class="icon"><use href="#i-menu"></use></svg></button>
+          <button class="v104-search-trigger" id="v104GlobalSearchBtn" type="button" aria-label="Buscar en todo JARVIS" title="Buscar en memoria, archivos y Canvas">
+            <svg class="icon"><use href="#i-search"></use></svg><span>Buscar</span><kbd>Ctrl ⇧ K</kbd>
+          </button>
           <label class="project-switcher" title="Proyecto activo">
             <span>Proyecto</span>
             <select id="projectSelect" aria-label="Proyecto activo"><option value="General">General</option></select>
@@ -155,7 +161,7 @@
             </div>
           </section>
           <div class="messages" id="messages" aria-live="polite"></div>
-          <div class="thinking" id="thinking" role="status" aria-live="polite" hidden><span class="thinking-core"></span><div><strong id="thinkingTitle">JARVIS está trabajando</strong><small id="thinkingDetail">Analizando la solicitud…</small></div></div>
+          <div class="thinking" id="thinking" role="status" aria-live="polite" hidden><span class="thinking-core"></span><div class="thinking-copy"><strong id="thinkingTitle">JARVIS está trabajando</strong><small id="thinkingDetail">Analizando la solicitud…</small><div class="v104-progress" id="v104Progress" aria-label="Progreso"><i class="active">Comprender</i><i>Planear</i><i>Ejecutar</i><i>Verificar</i></div></div></div>
         </div>
 
         <div class="composer-zone">
@@ -281,6 +287,11 @@
           <button type="button" data-v102-action="theme"><svg class="icon"><use href="#i-sun"></use></svg><span>Cambiar apariencia</span></button>
           <button type="button" data-v102-action="focus"><svg class="icon"><use href="#i-focus"></use></svg><span>Modo enfoque</span></button>
         </section>
+        <section class="v104-preferences" aria-label="Preferencias de interfaz">
+          <div><span>Densidad</span><div class="v104-segmented" data-v104-setting="density"><button type="button" data-value="compact">Compacta</button><button type="button" data-value="comfortable">Cómoda</button></div></div>
+          <div><span>Texto</span><div class="v104-segmented" data-v104-setting="font"><button type="button" data-value="small">A−</button><button type="button" data-value="normal">A</button><button type="button" data-value="large">A+</button></div></div>
+          <button class="v104-split-button" id="v104SplitCanvas" type="button"><svg class="icon"><use href="#i-canvas"></use></svg><span><strong>Canvas dividido</strong><small>Chat y documento lado a lado</small></span></button>
+        </section>
         <p class="v102-guardrail"><span></span>Las acciones externas y sensibles requieren tu aprobación.</p>
       </div>
     </aside>
@@ -330,6 +341,15 @@
       <label for="v76CommandInput"><svg class="icon"><use href="#i-search"></use></svg><input id="v76CommandInput" autocomplete="off" placeholder="Buscar una función o acción…" /></label>
       <div class="v76-command-list" id="v76CommandList" role="listbox" aria-label="Comandos disponibles"></div>
       <footer><span>↑↓ para navegar</span><span>Enter para ejecutar</span><span>Esc para cerrar</span></footer>
+    </div>
+  </dialog>
+
+  <dialog class="v104-search-dialog" id="v104SearchDialog">
+    <div class="v104-search-shell">
+      <header><label for="v104SearchInput"><svg class="icon"><use href="#i-search"></use></svg><input id="v104SearchInput" autocomplete="off" placeholder="Busca en memoria, proyectos, documentos y Canvas…" /></label><button class="icon-btn" id="v104SearchClose" type="button" aria-label="Cerrar búsqueda"><svg class="icon"><use href="#i-x"></use></svg></button></header>
+      <div class="v104-search-filters" role="group" aria-label="Filtrar resultados"><button class="active" type="button" data-v104-filter="">Todo</button><button type="button" data-v104-filter="memory">Memoria</button><button type="button" data-v104-filter="document">Archivos</button><button type="button" data-v104-filter="artifact">Canvas</button><button type="button" data-v104-filter="project">Proyectos</button></div>
+      <div class="v104-search-results" id="v104SearchResults"><div class="v104-search-empty">Escribe para encontrar información de tu espacio de trabajo.</div></div>
+      <footer><span>Los resultados están aislados por sesión.</span><kbd>Esc para cerrar</kbd></footer>
     </div>
   </dialog>
 
