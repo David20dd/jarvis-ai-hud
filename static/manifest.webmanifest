@@ -1,5 +1,5 @@
 {
-  "name": "J.A.R.V.I.S. Adaptive Intelligence Workspace v104",
+  "name": "J.A.R.V.I.S. Production Intelligence Foundation v105",
   "short_name": "JARVIS",
   "description": "Chat, búsqueda global, Canvas dividido, investigación, memoria explicable, voz y mejora supervisada.",
   "start_url": "../",
@@ -23,3 +23,4 @@
     }
   ]
 }
+

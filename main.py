@@ -127,8 +127,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger("jarvis")
 
-APP_VERSION = "104.0.0"
-APP_EDITION = "Adaptive Intelligence Workspace"
+APP_VERSION = "105.0.0"
+APP_EDITION = "Production Intelligence Foundation"
 
 DB_FILE = os.getenv("JARVIS_DB_FILE", "jarvis_memory.db").strip() or "jarvis_memory.db"
 BASE_DIR = Path(__file__).resolve().parent
@@ -190,6 +190,7 @@ CIRCUIT_RECOVERY_SECONDS = max(5, min(int(os.getenv("JARVIS_CIRCUIT_RECOVERY_SEC
 JOB_WORKERS = max(1, min(int(os.getenv("JARVIS_JOB_WORKERS", "2")), 12))
 JOB_MAX_ATTEMPTS = max(1, min(int(os.getenv("JARVIS_JOB_MAX_ATTEMPTS", "3")), 10))
 JOB_RETRY_BASE_SECONDS = max(1, min(int(os.getenv("JARVIS_JOB_RETRY_BASE_SECONDS", "4")), 120))
+EXTERNAL_WORKER_ENABLED = os.getenv("JARVIS_EXTERNAL_WORKER", "false").strip().lower() in {"1", "true", "yes", "on"}
 METRICS_SAMPLES = max(50, min(int(os.getenv("JARVIS_METRICS_SAMPLES", "500")), 5000))
 TELEMETRY_SAMPLE_RATE = max(0.0, min(float(os.getenv("JARVIS_TELEMETRY_SAMPLE_RATE", "0.25")), 1.0))
 MAINTENANCE_INTERVAL_SECONDS = max(30, min(int(os.getenv("JARVIS_MAINTENANCE_INTERVAL_SECONDS", "300")), 3600))
@@ -199,6 +200,8 @@ MCP_SERVERS_JSON = os.getenv("JARVIS_MCP_SERVERS_JSON", "").strip()
 AUTH_REQUIRED = os.getenv("JARVIS_AUTH_REQUIRED", "false").strip().lower() not in {"0", "false", "no", "off"}
 REGISTRATION_ENABLED = os.getenv("JARVIS_REGISTRATION_ENABLED", "false").strip().lower() not in {"0", "false", "no", "off"}
 AUTH_SESSION_DAYS = max(1, min(int(os.getenv("JARVIS_AUTH_SESSION_DAYS", "30")), 90))
+SECURITY_HSTS_ENABLED = os.getenv("JARVIS_SECURITY_HSTS", "true").strip().lower() not in {"0", "false", "no", "off"}
+BACKUP_POLICY = os.getenv("JARVIS_BACKUP_POLICY", "provider-managed").strip().lower()[:80]
 OWNER_EMAIL = os.getenv("JARVIS_OWNER_EMAIL", "").strip().lower()
 OWNER_NAME = os.getenv("JARVIS_OWNER_NAME", "").strip()
 OWNER_PASSWORD = os.getenv("JARVIS_OWNER_PASSWORD", "")
@@ -243,7 +246,7 @@ automation_store = AutomationStore(DB_FILE)
 evaluation_store = EvaluationStore(DB_FILE)
 code_lab = CodeLab(CODE_LAB_ENABLED, CODE_LAB_TIMEOUT_SECONDS)
 mcp_manager = MCPManager(MCP_SERVERS_JSON)
-identity_store = IdentityStore(DB_FILE, AUTH_SESSION_DAYS)
+identity_store = IdentityStore(DB_FILE, AUTH_SESSION_DAYS, database_url=DATABASE_URL)
 channel_store = ChannelStore(DB_FILE)
 telegram_channel = TelegramChannel(
     TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET, TELEGRAM_ALLOWED_CHAT_IDS,
@@ -285,7 +288,7 @@ def persistence_status() -> Dict[str, Any]:
             "DATABASE_URL no está configurada; la capa v82 usa SQLite compatible."
         )
     return {
-        "engine": "sqlite",
+        "engine": "postgresql" if DATABASE_URL else "sqlite",
         "v82_engine": "postgresql" if DATABASE_URL else "sqlite",
         "persistent": persistent,
         "storage_mode": "persistent" if persistent else "ephemeral_or_unverified",
@@ -808,12 +811,13 @@ async def lifespan(_: FastAPI):
     _stop_maintenance()
     JOB_EXECUTOR.shutdown(wait=False, cancel_futures=True)
     provider_gateway.close()
+    identity_store.close()
     data_foundation.close()
     logger.info("J.A.R.V.I.S. v%s detenido", APP_VERSION)
 
 
 app = FastAPI(
-    title=f"J.A.R.V.I.S. {APP_EDITION} v102",
+    title=f"J.A.R.V.I.S. {APP_EDITION}",
     version=APP_VERSION,
     lifespan=lifespan,
 )
@@ -952,6 +956,15 @@ async def request_observability(request: Request, call_next):
         response.headers.setdefault("X-Frame-Options", "DENY")
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         response.headers.setdefault("Permissions-Policy", "camera=(), geolocation=(), microphone=(self)")
+        response.headers.setdefault(
+            "Content-Security-Policy",
+            "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; "
+            "img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self' data:; "
+            "style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https: wss:; "
+            "form-action 'self'; upgrade-insecure-requests",
+        )
+        if SECURITY_HSTS_ENABLED and request.url.scheme == "https":
+            response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
         if request.url.path.startswith("/api/"):
             response.headers.setdefault("Cache-Control", "no-store")
         return response
@@ -1376,6 +1389,12 @@ class V101ProposalDecisionInput(BaseModel):
     decision: str = Field(pattern="^(reviewed|approved|rejected)$")
 
 
+class ConversationUpdateInput(BaseModel):
+    title: str = Field(default="", max_length=120)
+    project_name: str = Field(default="", max_length=120)
+    client_id: str = Field(default="", max_length=180)
+
+
 # -----------------------------------------------------------------------------
 # UTILIDADES
 # -----------------------------------------------------------------------------
@@ -1690,6 +1709,16 @@ def record_usage_dict(session_id: str, model: str, usage: Dict[str, Any], cached
 
 def _enforce_rate_limit(request: Request) -> None:
     client_ip = _request_ip(request)
+    shared = runtime.redis.fixed_window_limit(client_ip, REQUESTS_PER_MINUTE, 60)
+    if shared.get("available"):
+        if not shared.get("allowed"):
+            retry_after = max(1, int(shared.get("retry_after") or 60))
+            raise HTTPException(
+                status_code=429,
+                detail=f"Demasiadas solicitudes. Intenta nuevamente en {retry_after} segundos.",
+                headers={"Retry-After": str(retry_after)},
+            )
+        return
     now = time.time()
     cutoff = now - 60
     with _rate_lock:
@@ -7888,6 +7917,89 @@ def v104_memory_explain(
     return {"status": "ok", "explanation": explain_memory(memory, query=query)}
 
 
+def _conversation_owner(request: Request, client_id: str = "") -> str:
+    identity = _identity_for_request(request)
+    if identity and identity.get("id"):
+        return str(identity["id"])[:160]
+    clean = re.sub(r"[^a-zA-Z0-9_.:-]", "_", client_id or "anonymous")[:160]
+    return clean or "anonymous"
+
+
+@app.get("/api/conversations")
+def api_conversations(request: Request, client_id: str = "", limit: int = 100):
+    owner = _conversation_owner(request, client_id)
+    return {
+        "status": "ok",
+        "owner": owner,
+        "conversations": data_foundation.list_conversations(owner, limit=limit),
+        "storage": data_foundation.driver,
+    }
+
+
+@app.get("/api/conversations/{conversation_id}")
+def api_conversation(conversation_id: str, request: Request, client_id: str = "", limit: int = 500):
+    owner = _conversation_owner(request, client_id)
+    messages = data_foundation.conversation_messages(owner, conversation_id, limit=limit)
+    if not messages:
+        raise HTTPException(status_code=404, detail="Conversación no encontrada o todavía vacía.")
+    return {"status": "ok", "conversation_id": conversation_id, "messages": messages}
+
+
+@app.put("/api/conversations/{conversation_id}")
+def api_update_conversation(conversation_id: str, data: ConversationUpdateInput, request: Request):
+    owner = _conversation_owner(request, data.client_id)
+    changed = data_foundation.update_conversation(
+        owner, conversation_id, title=data.title, project_name=data.project_name,
+    )
+    if not changed:
+        raise HTTPException(status_code=404, detail="Conversación no encontrada o sin cambios.")
+    return {"status": "ok", "updated": True}
+
+
+@app.delete("/api/conversations/{conversation_id}")
+def api_delete_conversation(conversation_id: str, request: Request, client_id: str = ""):
+    owner = _conversation_owner(request, client_id)
+    deleted = data_foundation.delete_conversation(owner, conversation_id)
+    return {"status": "ok", "deleted": deleted}
+
+
+@app.get("/api/v105/status")
+def api_v105_status(request: Request):
+    identity = _identity_for_request(request)
+    foundation = data_foundation.status()
+    redis = runtime.redis.ping()
+    explicit_origins = bool(ALLOWED_ORIGINS and "*" not in ALLOWED_ORIGINS)
+    gateway = provider_gateway.snapshot()
+    configured_providers = gateway.get("configured") or gateway.get("configured_providers") or []
+    checks = {
+        "durable_database": bool(foundation.get("durable")),
+        "native_vector_index": bool(foundation.get("vector_index")),
+        "shared_rate_limit": bool(redis.get("configured") and redis.get("ok")),
+        "private_authentication": bool(AUTH_REQUIRED),
+        "restricted_cors": explicit_origins,
+        "provider_available": bool(configured_providers),
+        "telegram_configured": bool(TELEGRAM_BOT_TOKEN and TELEGRAM_WEBHOOK_SECRET),
+        "asset_bundle_present": (STATIC_DIR / "jarvis-ui.css").exists() and (STATIC_DIR / "jarvis-app.js").exists(),
+    }
+    required = (
+        "durable_database", "private_authentication", "restricted_cors",
+        "provider_available", "asset_bundle_present",
+    )
+    production_ready = all(checks[item] for item in required)
+    return {
+        "status": "ready" if production_ready else "needs_configuration",
+        "version": APP_VERSION,
+        "edition": APP_EDITION,
+        "authenticated": bool(identity),
+        "checks": checks,
+        "foundation": foundation,
+        "redis": redis,
+        "backup_policy": BACKUP_POLICY,
+        "production_ready": production_ready,
+        "next_actions": [label for label, ok in checks.items() if not ok],
+    }
+
+
 @app.post("/api/v101/issues/report")
 def v101_issue_report(data: V101IssueInput, request: Request):
     enforce_request_guard(request)
@@ -8302,9 +8414,9 @@ def v82_task_create(data: V82TaskInput, request: Request, background_tasks: Back
         priority=data.priority,
         max_attempts=data.max_attempts,
     )
-    if data.run_now:
+    if data.run_now and not EXTERNAL_WORKER_ENABLED:
         background_tasks.add_task(data_foundation.run_maintenance_task, sid, task["id"])
-    return {"status": "queued", "task": task, "run_now": data.run_now}
+    return {"status": "queued", "task": task, "run_now": data.run_now, "external_worker": EXTERNAL_WORKER_ENABLED}
 
 
 @app.post("/api/v82/tasks/{task_id}/run")

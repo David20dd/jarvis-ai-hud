@@ -15,7 +15,7 @@ services:
       - key: GROQ_FALLBACK_MODELS
         value: llama-3.1-8b-instant
       - key: JARVIS_PUBLIC_MODE
-        value: "true"
+        value: "false"
       - key: JARVIS_ACCESS_KEY
         sync: false
       - key: JARVIS_ALLOWED_ORIGINS
@@ -54,6 +54,10 @@ services:
         sync: false
       - key: JARVIS_PERSISTENT_STORAGE
         value: "false"
+      - key: JARVIS_SECURITY_HSTS
+        value: "true"
+      - key: JARVIS_BACKUP_POLICY
+        value: provider-managed
       - key: JARVIS_MAX_RESOLUTION_ATTEMPTS
         value: "5"
       - key: JARVIS_WEB_SEARCH_ATTEMPTS
@@ -102,6 +106,8 @@ services:
         value: "3"
       - key: JARVIS_JOB_RETRY_BASE_SECONDS
         value: "4"
+      - key: JARVIS_EXTERNAL_WORKER
+        value: "false"
       - key: JARVIS_METRICS_SAMPLES
         value: "500"
       - key: JARVIS_REDIS_URL

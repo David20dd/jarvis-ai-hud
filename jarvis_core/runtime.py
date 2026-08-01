@@ -88,7 +88,7 @@ class MemoryTTLCache:
 class RedisLayer:
     """Optional Redis L2. It disables itself temporarily after failures."""
 
-    def __init__(self, url: str, namespace: str = "jarvis:v47", failure_cooldown: int = 30) -> None:
+    def __init__(self, url: str, namespace: str = "jarvis:v105", failure_cooldown: int = 30) -> None:
         self.url = (url or "").strip()
         self.namespace = namespace
         self.failure_cooldown = max(5, int(failure_cooldown))
@@ -180,6 +180,42 @@ class RedisLayer:
             client.delete(self._key(key))
         except Exception:
             self.errors += 1
+
+    def fixed_window_limit(self, key: str, limit: int, window_seconds: int = 60) -> Dict[str, Any]:
+        """Atomically enforce a shared fixed-window limit when Redis is available.
+
+        Returning ``available=False`` lets callers fall back to an in-process
+        limiter without turning an optional Redis outage into an application
+        outage.
+        """
+        client = self._connect()
+        if client is None:
+            return {"available": False, "allowed": True, "remaining": max(0, int(limit))}
+        safe_limit = max(1, int(limit))
+        safe_window = max(1, int(window_seconds))
+        redis_key = self._key(f"rate:{key}")
+        try:
+            pipe = client.pipeline(transaction=True)
+            pipe.incr(redis_key)
+            pipe.ttl(redis_key)
+            count, ttl = pipe.execute()
+            if int(count) == 1 or int(ttl) < 0:
+                client.expire(redis_key, safe_window)
+                ttl = safe_window
+            allowed = int(count) <= safe_limit
+            return {
+                "available": True,
+                "allowed": allowed,
+                "count": int(count),
+                "remaining": max(0, safe_limit - int(count)),
+                "retry_after": max(1, int(ttl or safe_window)),
+            }
+        except Exception as exc:
+            self.errors += 1
+            self._last_error = str(exc)[:300]
+            self._disabled_until = time.time() + self.failure_cooldown
+            self._client = None
+            return {"available": False, "allowed": True, "remaining": safe_limit}
 
     def ping(self) -> Dict[str, Any]:
         started = time.perf_counter()

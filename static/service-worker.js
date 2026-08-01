@@ -1,30 +1,12 @@
-const CACHE_NAME = 'jarvis-adaptive-workspace-v104-1';
-// Replaces jarvis-conversation-ui-v103-1 after a clean activation.
+const CACHE_NAME = 'jarvis-production-foundation-v105-1';
 const APP_SHELL = [
   './',
   './index.html',
   './404.html',
-  './static/styles.css?v=101.0',
-  './static/v76.css?v=101.0',
-  './static/v77.css?v=101.0',
-  './static/v82.css?v=101.0',
-  './static/v93.css?v=101.0',
-  './static/v100.css?v=101.0',
-  './static/v101.css?v=101.0',
-  './static/v101-chat.css?v=101.1',
-  './static/v101-pro-chat.css?v=101.2',
-  './static/v101-modern-chat.css?v=101.3.4',
-  './static/v102.css?v=102.0',
-  './static/v103-conversation.css?v=103.0',
-  './static/v104-adaptive.css?v=104.0',
-  './static/app.js?v=101.0',
-  './static/v76.js?v=101.0',
-  './static/v100.js?v=101.0',
-  './static/v101.js?v=101.0',
-  './static/v102.js?v=102.0',
-  './static/v104.js?v=104.0',
-  './static/config.js?v=101.0',
-  './static/manifest.webmanifest?v=101.0',
+  './static/jarvis-ui.css?v=105.0',
+  './static/config.js?v=105.0',
+  './static/jarvis-app.js?v=105.0',
+  './static/manifest.webmanifest?v=105.0',
   './static/favicon-v46.svg',
   './static/jarvis-reactor-v46.svg'
 ];

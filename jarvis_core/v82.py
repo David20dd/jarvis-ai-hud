@@ -363,6 +363,15 @@ class DataFoundation:
             ]
             for statement in statements:
                 conn.execute(statement)
+            if self._vector_available:
+                dimensions = max(1, int(self.embeddings.dimensions))
+                conn.execute(
+                    f"ALTER TABLE v82_memory ADD COLUMN IF NOT EXISTS embedding_vector vector({dimensions})"
+                )
+                conn.execute(
+                    """CREATE INDEX IF NOT EXISTS idx_v82_memory_embedding_hnsw
+                    ON v82_memory USING hnsw (embedding_vector vector_cosine_ops)"""
+                )
 
     def close(self) -> None:
         if self._pool is not None:
@@ -405,6 +414,7 @@ class DataFoundation:
             "connected": connected,
             "durable": self.driver == "postgresql" or self.persistent_declared,
             "vector_extension": self._vector_available,
+            "vector_index": bool(self.driver == "postgresql" and self._vector_available),
             "schema_ready": self._schema_ready,
             "counts": counts,
             "embedding": self.embeddings.status(),
@@ -423,21 +433,33 @@ class DataFoundation:
         now = _now()
         conversation_id = hashlib.sha256(f"v82:{session_id}".encode("utf-8")).hexdigest()[:32]
         message_id = str(uuid.uuid4())
+        owner_id = session_id.split(":", 2)[1] if session_id.startswith("web:") and session_id.count(":") >= 2 else ""
+        suggested_title = re.sub(r"\s+", " ", content or "").strip()[:80] if role == "user" else ""
         p = self._placeholder()
         with self.connection() as conn:
             if self.driver == "postgresql":
                 conn.execute(
-                    """INSERT INTO v82_conversations(id, session_id, project_name, title, created_at, updated_at)
-                    VALUES (%s,%s,%s,%s,%s,%s)
-                    ON CONFLICT(session_id) DO UPDATE SET project_name=EXCLUDED.project_name, updated_at=EXCLUDED.updated_at""",
-                    (conversation_id, session_id, project_name, "Nueva conversación", now, now),
+                    """INSERT INTO v82_conversations(id, owner_id, session_id, project_name, title, created_at, updated_at)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s)
+                    ON CONFLICT(session_id) DO UPDATE SET
+                        owner_id=CASE WHEN v82_conversations.owner_id='' THEN EXCLUDED.owner_id ELSE v82_conversations.owner_id END,
+                        project_name=EXCLUDED.project_name,
+                        title=CASE WHEN v82_conversations.title='Nueva conversación' AND EXCLUDED.title<>'Nueva conversación'
+                            THEN EXCLUDED.title ELSE v82_conversations.title END,
+                        updated_at=EXCLUDED.updated_at""",
+                    (conversation_id, owner_id, session_id, project_name, suggested_title or "Nueva conversación", now, now),
                 )
             else:
                 conn.execute(
-                    """INSERT INTO v82_conversations(id, session_id, project_name, title, created_at, updated_at)
-                    VALUES (?,?,?,?,?,?)
-                    ON CONFLICT(session_id) DO UPDATE SET project_name=excluded.project_name, updated_at=excluded.updated_at""",
-                    (conversation_id, session_id, project_name, "Nueva conversación", now, now),
+                    """INSERT INTO v82_conversations(id, owner_id, session_id, project_name, title, created_at, updated_at)
+                    VALUES (?,?,?,?,?,?,?)
+                    ON CONFLICT(session_id) DO UPDATE SET
+                        owner_id=CASE WHEN v82_conversations.owner_id='' THEN excluded.owner_id ELSE v82_conversations.owner_id END,
+                        project_name=excluded.project_name,
+                        title=CASE WHEN v82_conversations.title='Nueva conversación' AND excluded.title<>'Nueva conversación'
+                            THEN excluded.title ELSE v82_conversations.title END,
+                        updated_at=excluded.updated_at""",
+                    (conversation_id, owner_id, session_id, project_name, suggested_title or "Nueva conversación", now, now),
                 )
             metadata_value = self._json_value(metadata or {})
             conn.execute(
@@ -446,6 +468,79 @@ class DataFoundation:
                 (message_id, conversation_id, session_id, role, content, metadata_value, now),
             )
         return {"id": message_id, "conversation_id": conversation_id}
+
+    def list_conversations(self, owner_id: str, *, limit: int = 100) -> List[Dict[str, Any]]:
+        """Return server-synchronised conversations without exposing other owners."""
+        p = self._placeholder()
+        owner = str(owner_id or "").strip()[:160]
+        with self.connection() as conn:
+            rows = self._dict_rows(
+                conn.execute(
+                    f"""SELECT c.id,c.owner_id,c.session_id,c.project_name,c.title,c.created_at,c.updated_at,
+                        COUNT(m.id) AS message_count
+                    FROM v82_conversations c LEFT JOIN v82_messages m ON m.conversation_id=c.id
+                    WHERE c.owner_id={p} OR (c.owner_id='' AND c.session_id LIKE {p})
+                    GROUP BY c.id,c.owner_id,c.session_id,c.project_name,c.title,c.created_at,c.updated_at
+                    ORDER BY c.updated_at DESC LIMIT {p}""",
+                    (owner, f"web:{owner}:%", max(1, min(int(limit), 250))),
+                )
+            )
+        return rows
+
+    def conversation_messages(self, owner_id: str, conversation_id: str, *, limit: int = 500) -> List[Dict[str, Any]]:
+        p = self._placeholder()
+        owner = str(owner_id or "").strip()[:160]
+        with self.connection() as conn:
+            allowed = conn.execute(
+                f"""SELECT id FROM v82_conversations
+                WHERE id={p} AND (owner_id={p} OR (owner_id='' AND session_id LIKE {p}))""",
+                (conversation_id, owner, f"web:{owner}:%"),
+            ).fetchone()
+            if not allowed:
+                return []
+            rows = self._dict_rows(
+                conn.execute(
+                    f"""SELECT id,role,content,metadata_json,created_at FROM v82_messages
+                    WHERE conversation_id={p} ORDER BY created_at ASC LIMIT {p}""",
+                    (conversation_id, max(1, min(int(limit), 2000))),
+                )
+            )
+        for row in rows:
+            row["metadata"] = _safe_json(row.pop("metadata_json", {}), {})
+        return rows
+
+    def update_conversation(self, owner_id: str, conversation_id: str, *, title: str = "", project_name: str = "") -> bool:
+        p = self._placeholder()
+        values: List[Any] = []
+        updates: List[str] = []
+        if title:
+            updates.append(f"title={p}")
+            values.append(re.sub(r"\s+", " ", title).strip()[:120])
+        if project_name:
+            updates.append(f"project_name={p}")
+            values.append(re.sub(r"\s+", " ", project_name).strip()[:120])
+        if not updates:
+            return False
+        updates.append(f"updated_at={p}")
+        values.append(_now())
+        values.extend([conversation_id, owner_id, f"web:{owner_id}:%"])
+        with self.connection() as conn:
+            cursor = conn.execute(
+                f"""UPDATE v82_conversations SET {','.join(updates)}
+                WHERE id={p} AND (owner_id={p} OR (owner_id='' AND session_id LIKE {p}))""",
+                tuple(values),
+            )
+            return bool(cursor.rowcount)
+
+    def delete_conversation(self, owner_id: str, conversation_id: str) -> bool:
+        p = self._placeholder()
+        with self.connection() as conn:
+            cursor = conn.execute(
+                f"""DELETE FROM v82_conversations
+                WHERE id={p} AND (owner_id={p} OR (owner_id='' AND session_id LIKE {p}))""",
+                (conversation_id, owner_id, f"web:{owner_id}:%"),
+            )
+            return bool(cursor.rowcount)
 
     def save_memory(
         self,
@@ -468,17 +563,28 @@ class DataFoundation:
         p = self._placeholder()
         embedding_value = self._json_value(vector)
         with self.connection() as conn:
-            conn.execute(
-                f"""INSERT INTO v82_memory(
-                    id,session_id,project_name,memory_type,content,source,importance,confidence,
-                    expires_at,embedding_json,embedding_signature,created_at,updated_at)
-                    VALUES ({','.join([p] * 13)})""",
-                (
-                    memory_id, session_id, project_name[:120], memory_type[:60], clean, source[:120],
-                    max(1, min(int(importance), 5)), max(0.0, min(float(confidence), 1.0)),
-                    max(0.0, float(expires_at or 0)), embedding_value, self.embeddings.signature, now, now,
-                ),
+            values = (
+                memory_id, session_id, project_name[:120], memory_type[:60], clean, source[:120],
+                max(1, min(int(importance), 5)), max(0.0, min(float(confidence), 1.0)),
+                max(0.0, float(expires_at or 0)), embedding_value, self.embeddings.signature, now, now,
             )
+            if self.driver == "postgresql" and self._vector_available:
+                vector_literal = "[" + ",".join(f"{float(item):.10g}" for item in vector) + "]"
+                conn.execute(
+                    """INSERT INTO v82_memory(
+                    id,session_id,project_name,memory_type,content,source,importance,confidence,
+                    expires_at,embedding_json,embedding_signature,created_at,updated_at,embedding_vector)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::vector)""",
+                    (*values, vector_literal),
+                )
+            else:
+                conn.execute(
+                    f"""INSERT INTO v82_memory(
+                        id,session_id,project_name,memory_type,content,source,importance,confidence,
+                        expires_at,embedding_json,embedding_signature,created_at,updated_at)
+                        VALUES ({','.join([p] * 13)})""",
+                    values,
+                )
         return {
             "id": memory_id,
             "content": clean,
@@ -513,6 +619,30 @@ class DataFoundation:
         wanted = set(_tokens(query))
         vector = self.embeddings.embed(query)
         p = self._placeholder()
+        if self.driver == "postgresql" and self._vector_available:
+            vector_literal = "[" + ",".join(f"{float(item):.10g}" for item in vector) + "]"
+            filters = "session_id=%s AND (expires_at=0 OR expires_at>%s) AND embedding_vector IS NOT NULL AND embedding_signature=%s"
+            params: List[Any] = [vector_literal, query, session_id, _now(), self.embeddings.signature]
+            if project_name:
+                filters += " AND project_name=%s"
+                params.append(project_name)
+            params.append(max(1, min(int(limit), 50)))
+            sql = f"""SELECT id,project_name,memory_type,content,source,importance,confidence,updated_at,
+                GREATEST(0, 1 - (embedding_vector <=> %s::vector)) AS semantic_score,
+                ts_rank_cd(to_tsvector('simple', content), plainto_tsquery('simple', %s)) AS lexical_score,
+                (GREATEST(0, 1 - (embedding_vector <=> %s::vector)) * 0.62 +
+                 LEAST(1, ts_rank_cd(to_tsvector('simple', content), plainto_tsquery('simple', %s)) * 4) * 0.28 +
+                 (importance::double precision / 5.0) * 0.10) AS score
+                FROM v82_memory WHERE {filters}
+                ORDER BY score DESC, updated_at DESC LIMIT %s"""
+            pg_params = [vector_literal, query, vector_literal, query, *params[2:]]
+            with self.connection() as conn:
+                rows = self._dict_rows(conn.execute(sql, tuple(pg_params)))
+            for row in rows:
+                row["score"] = round(float(row.get("score") or 0), 5)
+                row["lexical_score"] = round(float(row.get("lexical_score") or 0), 5)
+                row["semantic_score"] = round(float(row.get("semantic_score") or 0), 5)
+            return rows
         sql = f"""SELECT id,project_name,memory_type,content,source,importance,confidence,
             embedding_json,embedding_signature,updated_at FROM v82_memory
             WHERE session_id={p} AND (expires_at=0 OR expires_at>{p})"""
@@ -609,20 +739,75 @@ class DataFoundation:
             )
             return bool(cursor.rowcount)
 
+    def claim_next_task(self, worker_id: str, *, lease_seconds: int = 90) -> Optional[Dict[str, Any]]:
+        """Lease one due task so multiple workers cannot execute it twice."""
+        now = _now()
+        lease_until = now + max(15, int(lease_seconds))
+        with self.connection() as conn:
+            if self.driver == "postgresql":
+                row = conn.execute(
+                    """SELECT id,session_id FROM v82_tasks
+                    WHERE status IN ('queued','retrying') AND next_run_at<=%s AND lease_until<=%s
+                    ORDER BY priority DESC, created_at ASC
+                    FOR UPDATE SKIP LOCKED LIMIT 1""",
+                    (now, now),
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    """SELECT id,session_id FROM v82_tasks
+                    WHERE status IN ('queued','retrying') AND next_run_at<=? AND lease_until<=?
+                    ORDER BY priority DESC, created_at ASC LIMIT 1""",
+                    (now, now),
+                ).fetchone()
+            if not row:
+                return None
+            task_id = row["id"] if isinstance(row, (dict, sqlite3.Row)) else row[0]
+            session_id = row["session_id"] if isinstance(row, (dict, sqlite3.Row)) else row[1]
+            p = self._placeholder()
+            changed = conn.execute(
+                f"""UPDATE v82_tasks SET status='running',lease_until={p},attempt=attempt+1,
+                error='',updated_at={p} WHERE id={p} AND status IN ('queued','retrying')""",
+                (lease_until, now, task_id),
+            ).rowcount
+            if not changed:
+                return None
+        task = self.get_task(str(session_id), str(task_id))
+        if task is not None:
+            task["worker_id"] = str(worker_id)[:120]
+        return task
+
+    def fail_task(self, session_id: str, task_id: str, error: str, *, retry_delay: int = 15) -> Dict[str, Any]:
+        task = self.get_task(session_id, task_id)
+        if not task:
+            raise KeyError("Tarea no encontrada.")
+        retry = int(task.get("attempt") or 0) < int(task.get("max_attempts") or 1)
+        p = self._placeholder()
+        with self.connection() as conn:
+            conn.execute(
+                f"""UPDATE v82_tasks SET status={p},error={p},next_run_at={p},lease_until=0,updated_at={p}
+                WHERE id={p} AND session_id={p}""",
+                (
+                    "retrying" if retry else "failed", str(error or "")[:2000],
+                    _now() + max(1, int(retry_delay)) if retry else 0, _now(), task_id, session_id,
+                ),
+            )
+        return self.get_task(session_id, task_id) or {}
+
     def run_maintenance_task(self, session_id: str, task_id: str) -> Dict[str, Any]:
         task = self.get_task(session_id, task_id)
         if not task:
             raise KeyError("Tarea no encontrada.")
-        if task["status"] not in {"queued", "retrying"}:
+        if task["status"] not in {"queued", "retrying", "running"}:
             return task
         task_type = str(task.get("task_type") or "")
         p = self._placeholder()
         now = _now()
-        with self.connection() as conn:
-            conn.execute(
-                f"UPDATE v82_tasks SET status='running',progress=15,attempt=attempt+1,updated_at={p} WHERE id={p}",
-                (now, task_id),
-            )
+        if task["status"] != "running":
+            with self.connection() as conn:
+                conn.execute(
+                    f"UPDATE v82_tasks SET status='running',progress=15,attempt=attempt+1,updated_at={p} WHERE id={p}",
+                    (now, task_id),
+                )
         result: Dict[str, Any]
         if task_type == "memory_consolidation":
             result = self.consolidate_memories(session_id)
@@ -633,7 +818,7 @@ class DataFoundation:
         with self.connection() as conn:
             stored = self._json_value(result)
             conn.execute(
-                f"""UPDATE v82_tasks SET status='completed',progress=100,result_json={p},error='',updated_at={p}
+                f"""UPDATE v82_tasks SET status='completed',progress=100,result_json={p},error='',lease_until=0,updated_at={p}
                     WHERE id={p}""",
                 (stored, _now(), task_id),
             )
