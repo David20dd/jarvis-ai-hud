@@ -79,6 +79,8 @@ from jarvis_core import (
     V100_STAGES,
     ReliabilityCore,
     V101_STAGES,
+    V102_STAGES,
+    build_area_status,
     append_source_list,
     compact_messages,
     disk_status,
@@ -120,8 +122,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger("jarvis")
 
-APP_VERSION = "101.0.0"
-APP_EDITION = "Reliable Intelligence"
+APP_VERSION = "102.0.0"
+APP_EDITION = "Conversational Workspace"
 
 DB_FILE = os.getenv("JARVIS_DB_FILE", "jarvis_memory.db").strip() or "jarvis_memory.db"
 BASE_DIR = Path(__file__).resolve().parent
@@ -806,7 +808,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(
-    title=f"J.A.R.V.I.S. {APP_EDITION} v101",
+    title=f"J.A.R.V.I.S. {APP_EDITION} v102",
     version=APP_VERSION,
     lifespan=lifespan,
 )
@@ -7641,6 +7643,81 @@ def v101_status(request: Request, session_id: str = "default_session"):
             "modify_source": False,
             "deploy": False,
             "human_approval_required": True,
+        },
+    }
+
+
+@app.get("/api/v102/status")
+def v102_status(request: Request, session_id: str = "default_session"):
+    enforce_request_guard(request)
+    sid = safe_session_id(session_id)
+    foundation = data_foundation.status()
+    workspace = unified_workspace.status(sid)
+    reliability = reliability_core.status(sid)
+    voice = telegram_media_ai.status()
+    providers = provider_gateway.configured_names()
+    web_configured = bool(GOOGLE_SEARCH_API_KEY or (GEMINI_API_KEY and GOOGLE_GROUNDING_ENABLED) or providers)
+    areas = build_area_status(
+        workspace_connected=bool(workspace.get("connected")),
+        memory_connected=bool(foundation.get("connected")),
+        generative_configured=bool(providers),
+        web_configured=web_configured,
+        voice_input=bool(voice.get("transcription")) or True,
+        voice_output=bool(voice.get("speech")) or True,
+        telegram_configured=telegram_channel.configured,
+        reliability_connected=bool(reliability.get("connected")),
+    )
+    essential = ("chat", "knowledge", "canvas", "missions", "quality")
+    ready = all(areas[name]["available"] or areas[name]["degraded"] for name in essential)
+    return {
+        "status": "ok" if ready else "degraded", "version": 102,
+        "edition": "Conversational Workspace", "app_version": APP_VERSION,
+        "stages": V102_STAGES, "areas": areas, "providers": providers,
+        "project_context": True, "human_approval_required": True,
+        "autonomous_production_changes": False,
+    }
+
+
+@app.get("/api/v102/hub")
+def v102_hub(
+    request: Request,
+    session_id: str = "default_session",
+    project_name: str = "General",
+):
+    """Compact project snapshot. Individual stores may degrade independently."""
+    enforce_request_guard(request)
+    sid = safe_session_id(session_id)
+    project = re.sub(r"\s+", " ", project_name).strip()[:120] or "General"
+    workspace_items: List[Dict[str, Any]] = []
+    memories: List[Dict[str, Any]] = []
+    tasks: List[Dict[str, Any]] = []
+    try:
+        workspace_items = unified_workspace.list_items(sid, project_name=project, limit=12)
+    except Exception:
+        pass
+    try:
+        memories = data_foundation.list_memories(sid, limit=12)
+    except Exception:
+        pass
+    try:
+        tasks = data_foundation.list_tasks(sid, limit=12)
+    except Exception:
+        pass
+    reliability = reliability_core.status(sid)
+    issues = reliability.get("issues") if isinstance(reliability.get("issues"), dict) else {}
+    return {
+        "status": "ok", "project": project,
+        "counts": {
+            "artifacts": len(workspace_items), "memories": len(memories),
+            "tasks": len(tasks), "open_issues": int(issues.get("open", 0)),
+        },
+        "recent": {
+            "artifacts": workspace_items[:5], "memories": memories[:5], "tasks": tasks[:5],
+        },
+        "reliability": {
+            "connected": bool(reliability.get("connected")),
+            "supervised": bool(reliability.get("supervised", True)),
+            "autonomous_production_changes": False,
         },
     }
 

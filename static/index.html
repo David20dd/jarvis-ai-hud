@@ -18,11 +18,13 @@
   <link rel="stylesheet" href="./static/v101-chat.css?v=101.1" />
   <link rel="stylesheet" href="./static/v101-pro-chat.css?v=101.2" />
   <link rel="stylesheet" href="./static/v101-modern-chat.css?v=101.3.4" />
+  <link rel="stylesheet" href="./static/v102.css?v=102.0" />
   <script defer src="./static/config.js?v=101.0"></script>
   <script defer src="./static/app.js?v=101.0"></script>
   <script defer src="./static/v76.js?v=101.0"></script>
   <script defer src="./static/v100.js?v=101.0"></script>
   <script defer src="./static/v101.js?v=101.0"></script>
+  <script defer src="./static/v102.js?v=102.0"></script>
 </head>
 <body>
   <a class="skip-link" href="#messageInput">Saltar al mensaje</a>
@@ -60,6 +62,9 @@
     <symbol id="i-canvas" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3" /><path d="M8 8h8M8 12h8M8 16h5" /></symbol>
     <symbol id="i-thumbs-up" viewBox="0 0 24 24"><path d="M7 10v11H3V10zM7 19h10.5a2 2 0 0 0 2-1.6l1.3-7A2 2 0 0 0 18.8 8H14l1-4a2 2 0 0 0-3.5-1.7L7 8z" /></symbol>
     <symbol id="i-thumbs-down" viewBox="0 0 24 24"><path d="M7 14V3H3v11zM7 5h10.5a2 2 0 0 1 2 1.6l1.3 7a2 2 0 0 1-2 2.4H14l1 4a2 2 0 0 1-3.5 1.7L7 16z" /></symbol>
+    <symbol id="i-tools" viewBox="0 0 24 24"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z" /></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.65 17.65l1.42 1.42M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.65 6.35l1.42-1.42" /></symbol>
+    <symbol id="i-focus" viewBox="0 0 24 24"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5" /></symbol>
   </svg>
 
   <div class="app" id="app">
@@ -115,6 +120,7 @@
             <svg class="icon"><use href="#i-search"></use></svg><span>Comandos</span><kbd>Ctrl K</kbd>
           </button>
           <button class="status-button checking" id="statusButton"><i></i><span id="statusText">Conectando…</span></button>
+          <button class="icon-btn v102-tools-trigger" id="v102TopToolsBtn" type="button" aria-label="Abrir herramientas" title="Herramientas"><svg class="icon"><use href="#i-tools"></use></svg></button>
           <button class="workspace-button" id="v100WorkspaceBtn" type="button" aria-label="Abrir espacio de trabajo" title="Canvas y artefactos">
             <svg class="icon"><use href="#i-canvas"></use></svg><span>Espacio</span>
           </button>
@@ -161,6 +167,7 @@
             </div>
             <div class="composer-toolbar">
               <div class="composer-tools">
+                <button type="button" class="composer-icon v102-tools-trigger" id="v102ComposerToolsBtn" aria-label="Abrir herramientas" title="Herramientas"><svg class="icon"><use href="#i-plus"></use></svg></button>
                 <button type="button" class="composer-icon" id="attachBtn" aria-label="Adjuntar archivo" title="Adjuntar"><svg class="icon"><use href="#i-paperclip"></use></svg></button>
                 <select id="modeSelect" class="mode-select" aria-label="Modo de respuesta">
                   <option value="auto">Automático</option>
@@ -244,6 +251,36 @@
             <button class="primary-btn" type="submit">Guardar</button>
           </div>
         </form>
+      </div>
+    </aside>
+
+    <aside class="v102-tools-drawer" id="v102ToolsDrawer" aria-label="Centro de herramientas" aria-hidden="true">
+      <header class="v102-tools-head">
+        <div><p>ESPACIO UNIFICADO</p><h2>Herramientas</h2><small id="v102ProjectLabel">Proyecto General</small></div>
+        <button class="icon-btn" id="v102ToolsClose" type="button" aria-label="Cerrar herramientas"><svg class="icon"><use href="#i-x"></use></svg></button>
+      </header>
+      <div class="v102-tools-body">
+        <section class="v102-tool-grid" aria-label="Herramientas principales">
+          <button type="button" data-v102-action="research"><svg class="icon"><use href="#i-search"></use></svg><span><strong>Investigar</strong><small>Web, fuentes y citas</small></span><i data-v102-state="research"></i></button>
+          <button type="button" data-v102-action="upload"><svg class="icon"><use href="#i-file"></use></svg><span><strong>Analizar archivo</strong><small>PDF, datos, imagen o audio</small></span></button>
+          <button type="button" data-v102-action="canvas"><svg class="icon"><use href="#i-canvas"></use></svg><span><strong>Canvas</strong><small>Documentos, código y artefactos</small></span><i data-v102-state="canvas"></i></button>
+          <button type="button" data-v102-action="knowledge"><svg class="icon"><use href="#i-knowledge"></use></svg><span><strong>Memoria</strong><small>Recuerdos y conocimiento</small></span><i data-v102-state="knowledge"></i></button>
+          <button type="button" data-v102-action="missions"><svg class="icon"><use href="#i-target"></use></svg><span><strong>Misión</strong><small>Plan, ejecución y aprobación</small></span><i data-v102-state="missions"></i></button>
+          <button type="button" data-v102-action="voice"><svg class="icon"><use href="#i-mic"></use></svg><span><strong>Voz</strong><small>Dictar y escuchar</small></span><i data-v102-state="voice"></i></button>
+        </section>
+        <section class="v102-project-summary">
+          <div><span>Artefactos</span><strong id="v102ArtifactCount">—</strong></div>
+          <div><span>Memorias</span><strong id="v102MemoryCount">—</strong></div>
+          <div><span>Tareas</span><strong id="v102TaskCount">—</strong></div>
+          <div><span>Alertas</span><strong id="v102IssueCount">—</strong></div>
+        </section>
+        <section class="v102-secondary-actions">
+          <button type="button" data-v102-action="quality"><svg class="icon"><use href="#i-cpu"></use></svg><span>Calidad y diagnóstico</span></button>
+          <button type="button" data-v102-action="telegram"><svg class="icon"><use href="#i-telegram"></use></svg><span>Telegram</span></button>
+          <button type="button" data-v102-action="theme"><svg class="icon"><use href="#i-sun"></use></svg><span>Cambiar apariencia</span></button>
+          <button type="button" data-v102-action="focus"><svg class="icon"><use href="#i-focus"></use></svg><span>Modo enfoque</span></button>
+        </section>
+        <p class="v102-guardrail"><span></span>Las acciones externas y sensibles requieren tu aprobación.</p>
       </div>
     </aside>
   </div>

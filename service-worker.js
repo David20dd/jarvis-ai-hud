@@ -1,4 +1,4 @@
-const CACHE_NAME = 'jarvis-modern-chat-v101-8';
+const CACHE_NAME = 'jarvis-conversational-workspace-v102-1';
 const APP_SHELL = [
   './',
   './index.html',
@@ -13,10 +13,12 @@ const APP_SHELL = [
   './static/v101-chat.css?v=101.1',
   './static/v101-pro-chat.css?v=101.2',
   './static/v101-modern-chat.css?v=101.3.4',
+  './static/v102.css?v=102.0',
   './static/app.js?v=101.0',
   './static/v76.js?v=101.0',
   './static/v100.js?v=101.0',
   './static/v101.js?v=101.0',
+  './static/v102.js?v=102.0',
   './static/config.js?v=101.0',
   './static/manifest.webmanifest?v=101.0',
   './static/favicon-v46.svg',

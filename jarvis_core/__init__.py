@@ -37,6 +37,7 @@ from .v101 import (
     ALLOWED_ISSUE_STATES,
     ALLOWED_PROPOSAL_STATES,
 )
+from .v102 import V102_VERSION, V102_NAME, V102_STAGES, V102_AREAS, build_area_status
 
 __all__ = [
     "RuntimeSupport", "compact_messages", "disk_status", "ToolDefinition", "ToolRegistry",
@@ -54,4 +55,5 @@ __all__ = [
     "UnifiedWorkspace", "V100_STAGES", "V100_VERSION", "WORKSPACE_KINDS",
     "ReliabilityCore", "V101_STAGES", "V101_VERSION",
     "ALLOWED_ISSUE_STATES", "ALLOWED_PROPOSAL_STATES",
+    "V102_VERSION", "V102_NAME", "V102_STAGES", "V102_AREAS", "build_area_status",
 ]
